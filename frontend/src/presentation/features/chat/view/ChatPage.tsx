@@ -225,6 +225,12 @@ export function ChatPage() {
             <span className={chatPageStyles.sampleButtonIcon}>▦</span>
             상태관리 비교 예제
           </Link>
+          {session.isAdmin ? (
+            <Link className={chatPageStyles.sampleButton} to="/admin/accounts">
+              <span className={chatPageStyles.sampleButtonIcon}>⚙</span>
+              운영 콘솔
+            </Link>
+          ) : null}
         </div>
 
         <div className={chatPageStyles.popularQuestions}>

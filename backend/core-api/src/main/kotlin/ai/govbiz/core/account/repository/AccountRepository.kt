@@ -2,6 +2,8 @@ package ai.govbiz.core.account.repository
 
 import ai.govbiz.core.account.domain.Account
 import ai.govbiz.core.account.domain.AccountCredential
+import ai.govbiz.core.account.domain.AccountPage
+import ai.govbiz.core.account.domain.AccountRole
 import ai.govbiz.core.account.domain.Company
 import ai.govbiz.core.account.domain.NewAccount
 import ai.govbiz.core.account.domain.NewAccountSession
@@ -43,21 +45,23 @@ class AccountRepository(
             accountMapper.findCompanyByBusinessNumber(newAccount.company.businessNumber),
         ) { "company row was not created" }
 
+        // DB 기본값은 MySQL 서버 시간대를 따르므로 다른 시각 컬럼처럼 서울 기준 앱 시계로 기록합니다.
         val accountRow = AccountDbRow(
             email = newAccount.email,
             passwordHash = newAccount.passwordHash,
             companyId = company.id,
             termsAgreedAt = newAccount.termsAgreedAt,
+            createdAt = LocalDateTime.now(clock),
         )
         check(accountMapper.insertAccount(accountRow) == 1) { "account row was not created" }
         insertSession(accountRow.id, session)
 
-        return Account(
-            id = accountRow.id,
-            email = newAccount.email,
-            company = company.toCompany(),
-        )
+        return requireNotNull(accountMapper.findAccountById(accountRow.id)) { "account row was not readable" }
+            .toAccount()
     }
+
+    fun findById(accountId: Long): Account? =
+        accountMapper.findAccountById(accountId)?.toAccount()
 
     /** 정규화된(소문자) 이메일로 계정을 조회합니다. */
     fun findByEmail(email: String): Account? =
@@ -68,6 +72,20 @@ class AccountRepository(
         accountMapper.findAccountByEmail(email)?.let { row ->
             AccountCredential(account = row.toAccount(), passwordHash = row.passwordHash)
         }
+
+    /** 어드민 회원 목록입니다. 이메일 부분 일치로 거르고 최근 가입순으로 페이지를 나눕니다. */
+    fun findPage(emailKeyword: String?, page: Int, size: Int): AccountPage {
+        require(page >= 0) { "page must not be negative" }
+        require(size in 1..MAX_PAGE_SIZE) { "size must be between 1 and $MAX_PAGE_SIZE" }
+        val keyword = emailKeyword?.trim()?.takeIf(String::isNotEmpty)
+        val rows = accountMapper.findAccountPage(keyword, page * size, size)
+        return AccountPage(
+            accounts = java.util.List.copyOf(rows.map { it.toAccount() }),
+            page = page,
+            size = size,
+            totalCount = accountMapper.countAccounts(keyword),
+        )
+    }
 
     /** 로그인 성공 시 새 세션을 저장하고 같은 계정의 만료 세션을 정리합니다. */
     @Transactional
@@ -85,6 +103,11 @@ class AccountRepository(
     fun deleteSessionByTokenHash(tokenHash: String): Boolean =
         accountMapper.deleteSessionByTokenHash(tokenHash) == 1
 
+    /** 운영자가 계정의 모든 세션을 종료합니다. 삭제한 세션 수를 돌려줍니다. */
+    @Transactional
+    fun deleteSessionsByAccountId(accountId: Long): Int =
+        accountMapper.deleteSessionsByAccountId(accountId)
+
     private fun insertSession(accountId: Long, session: NewAccountSession) {
         val inserted = accountMapper.insertSession(
             AccountSessionDbRow(
@@ -100,23 +123,18 @@ class AccountRepository(
         Account(
             id = id,
             email = email,
+            role = AccountRole.valueOf(role),
             company = Company(
                 id = companyId,
                 businessNumber = companyBusinessNumber,
                 companyName = companyName,
                 businessStatus = companyBusinessStatus,
             ),
-        )
-
-    private fun CompanyDbRow.toCompany(): Company =
-        Company(
-            id = id,
-            businessNumber = businessNumber,
-            companyName = companyName,
-            businessStatus = businessStatus,
+            createdAt = requireNotNull(createdAt) { "account createdAt must not be null" },
         )
 
     private companion object {
         const val BIZNO_VERIFIED_SOURCE = "BIZNO"
+        const val MAX_PAGE_SIZE = 100
     }
 }

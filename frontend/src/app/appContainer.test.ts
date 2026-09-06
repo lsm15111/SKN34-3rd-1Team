@@ -60,6 +60,7 @@ describe('Awilix application container and Service Locator', () => {
   it('injects a memory token storage so the account repository restores a session without localStorage', async () => {
     const account = {
       email: 'manager@company.co.kr',
+      role: 'USER' as const,
       company: { businessNumber: '1248100998', companyName: '삼성전자(주)', businessStatus: '계속사업자' },
     }
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ account }), {

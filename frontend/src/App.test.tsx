@@ -41,7 +41,7 @@ const sampleCompany = {
   companyName: '삼성전자(주)',
   businessStatus: '계속사업자',
 }
-const sampleAccount = { email: 'manager@company.co.kr', company: sampleCompany }
+const sampleAccount = { email: 'manager@company.co.kr', role: 'USER' as const, company: sampleCompany }
 const sampleSession = {
   sessionToken: 'session-token',
   expiresAt: '2026-10-06T12:00:00+09:00',
@@ -225,6 +225,58 @@ describe('Account sign-up and login', () => {
     await screen.findByText('현재 접수 중인 관련 공고 1건을 찾았습니다. 공고를 선택하면 자세한 조건과 원문을 확인할 수 있어요.')
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
+  it('관리자는 운영 콘솔에서 회원을 검색하고 세션을 종료할 수 있다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'admin-token')
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
+    const adminAccount = { ...sampleAccount, email: 'admin@govbiz.test', role: 'ADMIN' as const }
+    const listPage = {
+      items: [{ id: 12, ...sampleAccount, createdAt: '2026-09-06T12:00:00+09:00' }],
+      page: 0,
+      size: 20,
+      totalCount: 1,
+    }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ account: adminAccount }))
+      .mockResolvedValueOnce(jsonResponse(listPage))
+      .mockResolvedValueOnce(jsonResponse({ ...listPage, items: [], totalCount: 0 }))
+      .mockResolvedValueOnce(jsonResponse(listPage))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore())
+
+    fireEvent.click(await screen.findByRole('link', { name: /운영 콘솔/ }))
+
+    expect(await screen.findByRole('heading', { name: '회원·기업' })).toBeTruthy()
+    await screen.findByText('manager@company.co.kr')
+    expect(screen.getByText('삼성전자(주)')).toBeTruthy()
+    expect(screen.getByText('124-81-00998')).toBeTruthy()
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ headers: { Authorization: 'Bearer admin-token' } })
+
+    fireEvent.change(screen.getByRole('searchbox', { name: '이메일 검색' }), { target: { value: 'nobody' } })
+    fireEvent.submit(screen.getByRole('search'))
+    await screen.findByText('조건에 맞는 회원이 없습니다.')
+    expect(new URL(String(fetchMock.mock.calls[2]?.[0])).searchParams.get('email')).toBe('nobody')
+
+    fireEvent.change(screen.getByRole('searchbox', { name: '이메일 검색' }), { target: { value: '' } })
+    fireEvent.submit(screen.getByRole('search'))
+    fireEvent.click(await screen.findByRole('button', { name: '세션 종료' }))
+
+    expect((await screen.findByRole('status')).textContent).toBe('manager@company.co.kr 계정의 모든 세션을 종료했습니다.')
+    const revokeCall = fetchMock.mock.calls.find((call) => String(call[0]).endsWith('/sessions/revoke'))
+    expect(new URL(String(revokeCall?.[0])).pathname).toBe('/api/v1/admin/accounts/12/sessions/revoke')
+  })
+
+  it('일반 회원은 운영 콘솔 대신 홈으로 이동한다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'user-token')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ account: sampleAccount })))
+
+    renderApp(createAppStore(), '/admin/accounts')
+
+    await screen.findByRole('heading', { name: 'GovBiz에게 물어보세요' })
+    expect(screen.queryByRole('link', { name: /운영 콘솔/ })).toBeNull()
   })
 
   it('로그인한 상태에서는 로그인·회원가입 화면 대신 홈으로 보낸다', async () => {

@@ -14,6 +14,8 @@ interface AccountMapper {
 
     fun insertAccount(row: AccountDbRow): Int
 
+    fun findAccountById(@Param("id") id: Long): AccountDbRow?
+
     fun findAccountByEmail(@Param("email") email: String): AccountDbRow?
 
     fun findAccountBySessionTokenHash(
@@ -21,9 +23,19 @@ interface AccountMapper {
         @Param("now") now: LocalDateTime,
     ): AccountDbRow?
 
+    fun findAccountPage(
+        @Param("emailKeyword") emailKeyword: String?,
+        @Param("offset") offset: Int,
+        @Param("limit") limit: Int,
+    ): List<AccountDbRow>
+
+    fun countAccounts(@Param("emailKeyword") emailKeyword: String?): Long
+
     fun insertSession(row: AccountSessionDbRow): Int
 
     fun deleteSessionByTokenHash(@Param("tokenHash") tokenHash: String): Int
+
+    fun deleteSessionsByAccountId(@Param("accountId") accountId: Long): Int
 
     fun deleteExpiredSessionsByAccountId(
         @Param("accountId") accountId: Long,

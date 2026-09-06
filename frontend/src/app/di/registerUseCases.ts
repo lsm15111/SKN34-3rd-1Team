@@ -4,10 +4,12 @@ import { AskSupportProgramEvidenceQuestionUseCase } from '../../domain/usecases/
 import { GetCurrentAccountUseCase } from '../../domain/usecases/GetCurrentAccountUseCase'
 import { GetSupportProgramDetailUseCase } from '../../domain/usecases/GetSupportProgramDetailUseCase'
 import { GetSupportProgramSearchReadinessUseCase } from '../../domain/usecases/GetSupportProgramSearchReadinessUseCase'
+import { ListAdminAccountsUseCase } from '../../domain/usecases/ListAdminAccountsUseCase'
 import { LogInUseCase } from '../../domain/usecases/LogInUseCase'
 import { LogOutUseCase } from '../../domain/usecases/LogOutUseCase'
 import { LookupBusinessUseCase } from '../../domain/usecases/LookupBusinessUseCase'
 import { PrepareSampleItemUseCase } from '../../domain/usecases/PrepareSampleItemUseCase'
+import { RevokeAccountSessionsUseCase } from '../../domain/usecases/RevokeAccountSessionsUseCase'
 import { SearchSupportProgramsUseCase } from '../../domain/usecases/SearchSupportProgramsUseCase'
 import { SignUpUseCase } from '../../domain/usecases/SignUpUseCase'
 import type { AppContainer, AppCradle } from './types'
@@ -25,12 +27,14 @@ export function registerUseCases(container: AppContainer) {
     getSupportProgramSearchReadinessUseCase: asFunction(
       createGetSupportProgramSearchReadinessUseCase,
     ).singleton(),
+    listAdminAccountsUseCase: asFunction(createListAdminAccountsUseCase).singleton(),
     logInUseCase: asFunction(createLogInUseCase).singleton(),
     logOutUseCase: asFunction(createLogOutUseCase).singleton(),
     lookupBusinessUseCase: asFunction(createLookupBusinessUseCase).singleton(),
     prepareSampleItemUseCase: asFunction(
       createPrepareSampleItemUseCase,
     ).singleton(),
+    revokeAccountSessionsUseCase: asFunction(createRevokeAccountSessionsUseCase).singleton(),
     searchSupportProgramsUseCase: asFunction(
       createSearchSupportProgramsUseCase,
     ).singleton(),
@@ -60,6 +64,18 @@ function createGetSupportProgramSearchReadinessUseCase({
   supportProgramRepository,
 }: Pick<AppCradle, 'supportProgramRepository'>): GetSupportProgramSearchReadinessUseCase {
   return new GetSupportProgramSearchReadinessUseCase(supportProgramRepository)
+}
+
+function createListAdminAccountsUseCase({
+  adminRepository,
+}: Pick<AppCradle, 'adminRepository'>): ListAdminAccountsUseCase {
+  return new ListAdminAccountsUseCase(adminRepository)
+}
+
+function createRevokeAccountSessionsUseCase({
+  adminRepository,
+}: Pick<AppCradle, 'adminRepository'>): RevokeAccountSessionsUseCase {
+  return new RevokeAccountSessionsUseCase(adminRepository)
 }
 
 function createLogInUseCase({

@@ -14,8 +14,11 @@ export const businessLookupResponseDtoSchema = z.object({
   businesses: z.array(companyDtoSchema),
 })
 
+export const accountRoleSchema = z.enum(['USER', 'ADMIN'])
+
 export const accountDtoSchema = z.object({
   email: z.string().trim().min(1).max(320),
+  role: accountRoleSchema,
   company: companyDtoSchema,
 })
 
@@ -45,6 +48,7 @@ export function toCompany(dto: CompanyDto): Company {
 export function toAccount(dto: AccountDto): Account {
   return {
     email: dto.email,
+    role: dto.role,
     company: toCompany(dto.company),
   }
 }

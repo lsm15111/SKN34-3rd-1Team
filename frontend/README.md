@@ -49,6 +49,7 @@ pnpm dev
 | `/support-programs/detail?sourceCode=...&sourceProgramId=...` | 식별자로 상세 API를 조회해 공고 조건·출처 표시 |
 | `/signup` | 사업자등록번호 기업 확인 → 이메일·비밀번호로 간편 회원가입 |
 | `/login` | 이메일·비밀번호 로그인 |
+| `/admin/accounts` | 관리자 전용 운영 콘솔: 회원·기업 목록, 이메일 검색, 세션 강제 종료 |
 | `/examples/sample-item/hook` | React Hook Form·로컬 요청 상태 예제 |
 | `/examples/sample-item/redux` | Redux 상태 유지 예제 |
 
@@ -67,7 +68,8 @@ allowlist에 명시적으로 추가합니다. 테스트용 제공처는 producti
 회원가입은 사업자등록번호를 Core API의 Bizno 확인 endpoint로 검증한 뒤 이메일·비밀번호만 받습니다.
 가입·로그인 응답의 세션 토큰은 `localStorage`(`govbiz.sessionToken`)에 저장하고 앱 진입 시 `GET /api/v1/auth/me`로
 로그인 상태를 복원합니다. 채팅 헤더는 로그인 전에는 `로그인` 링크, 로그인 후에는 회사명과 `로그아웃`을
-보여 줍니다. 검색은 로그인 없이도 동작하지만, 비로그인 검색은 브라우저에 기록한 횟수 기준 3회까지이며
+보여 줍니다. 계정의 `role`이 `ADMIN`이면 사이드바에 운영 콘솔 링크가 나타나며, 운영 화면은 관리자가 아니면
+홈으로 보냅니다(실제 권한은 서버가 다시 확인). 검색은 로그인 없이도 동작하지만, 비로그인 검색은 브라우저에 기록한 횟수 기준 3회까지이며
 그 뒤에는 가입·로그인 안내 모달을 띄웁니다. 이 제한은 안내 목적이며 서버는 검색을 제한하지 않습니다.
 
 채팅 형태의 화면이지만 각 검색 요청에는 현재 입력한 검색어만 전달합니다. 이전 대화를 이해하는
@@ -80,6 +82,7 @@ src/
 ├── app/                         # Redux Store, typed hook, Awilix 조립·등록
 ├── presentation/features/chat/ # 검색·상세 View, ViewModel, chat slice
 ├── presentation/features/auth/ # 회원가입·로그인 View, ViewModel, 폼 검증, auth slice
+├── presentation/features/admin/ # 운영 콘솔 셸·회원 목록 View, ViewModel (관리자 role만 진입)
 ├── presentation/features/sample-item/ # 상태관리 비교 예제
 ├── presentation/shared/        # Core API 상태 표시
 ├── domain/                      # Entity, Repository 계약, UseCase

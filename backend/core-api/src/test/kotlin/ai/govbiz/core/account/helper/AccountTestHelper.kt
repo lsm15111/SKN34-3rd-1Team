@@ -2,10 +2,12 @@ package ai.govbiz.core.account.helper
 
 import ai.govbiz.core.account.config.AccountSessionProperties
 import ai.govbiz.core.account.domain.Account
+import ai.govbiz.core.account.domain.AccountRole
 import ai.govbiz.core.account.domain.Company
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneId
 import org.mockito.Mockito
 
@@ -29,8 +31,18 @@ object AccountTestHelper {
             businessStatus = "계속사업자",
         )
 
-    fun account(id: Long = 1L, email: String = "manager@company.co.kr"): Account =
-        Account(id = id, email = email, company = company())
+    fun account(
+        id: Long = 1L,
+        email: String = "manager@company.co.kr",
+        role: AccountRole = AccountRole.USER,
+    ): Account =
+        Account(
+            id = id,
+            email = email,
+            role = role,
+            company = company(),
+            createdAt = LocalDateTime.of(2026, 9, 6, 12, 0),
+        )
 
     /** Kotlin의 non-null 인자에 Mockito matcher를 넘길 수 있게 null을 T로 다룹니다. */
     @Suppress("UNCHECKED_CAST")

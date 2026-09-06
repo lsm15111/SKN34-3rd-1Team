@@ -1,5 +1,7 @@
 package ai.govbiz.core.account.domain
 
+import java.time.LocalDateTime
+
 /** Bizno로 확인해 저장한 기업입니다. 여러 담당자 계정이 같은 기업에 속할 수 있습니다. */
 data class Company(
     val id: Long,
@@ -13,15 +15,26 @@ data class Company(
     }
 }
 
+/** 관리자는 SQL로만 지정하며 가입 시에는 항상 USER입니다. */
+enum class AccountRole {
+    USER,
+    ADMIN,
+}
+
 /** 로그인 가능한 담당자 계정입니다. 비밀번호 해시는 포함하지 않습니다. */
 data class Account(
     val id: Long,
     val email: String,
+    val role: AccountRole,
     val company: Company,
+    val createdAt: LocalDateTime,
 ) {
     init {
         requireEmail(email)
     }
+
+    val isAdmin: Boolean
+        get() = role == AccountRole.ADMIN
 }
 
 /** 로그인 검증에만 쓰는 계정과 비밀번호 해시 조합입니다. 공개 계약으로 노출하지 않습니다. */
@@ -33,6 +46,14 @@ data class AccountCredential(
         require(passwordHash.isNotBlank()) { "passwordHash must not be blank" }
     }
 }
+
+/** 어드민 회원 목록 한 페이지입니다. */
+data class AccountPage(
+    val accounts: List<Account>,
+    val page: Int,
+    val size: Int,
+    val totalCount: Long,
+)
 
 internal fun requireBusinessNumber(businessNumber: String) {
     require(businessNumber.length == 10 && businessNumber.all(Char::isDigit)) {

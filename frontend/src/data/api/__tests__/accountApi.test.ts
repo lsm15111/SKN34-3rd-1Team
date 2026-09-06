@@ -16,7 +16,7 @@ afterEach(() => {
 })
 
 const company = { businessNumber: '1248100998', companyName: '삼성전자(주)', businessStatus: '계속사업자' }
-const account = { email: 'manager@company.co.kr', company }
+const account = { email: 'manager@company.co.kr', role: 'USER' as const, company }
 const sessionResponse = { sessionToken: 'session-token', expiresAt: '2026-10-06T12:00:00+09:00', account }
 
 describe('lookupBusinessApi', () => {

@@ -7,6 +7,7 @@ import type { LogOutUseCase } from '../../../../domain/usecases/LogOutUseCase'
 import {
   selectAuthStatus,
   selectCurrentAccount,
+  selectIsAdmin,
   selectIsAuthenticated,
   sessionRestored,
   signedOut,
@@ -49,6 +50,7 @@ export function useAuthSessionViewModel(
   const status = useAppSelector(selectAuthStatus)
   const account = useAppSelector(selectCurrentAccount)
   const isAuthenticated = useAppSelector(selectIsAuthenticated)
+  const isAdmin = useAppSelector(selectIsAdmin)
 
   async function logOut() {
     try {
@@ -62,6 +64,7 @@ export function useAuthSessionViewModel(
 
   return {
     account,
+    isAdmin,
     isAuthenticated,
     logOut,
     status,

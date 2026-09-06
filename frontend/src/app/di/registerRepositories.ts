@@ -1,6 +1,7 @@
 import { asClass } from 'awilix/browser'
 
 import { AccountRepositoryImpl } from '../../data/repositories/AccountRepositoryImpl'
+import { AdminRepositoryImpl } from '../../data/repositories/AdminRepositoryImpl'
 import { SampleItemRepositoryImpl } from '../../data/repositories/SampleItemRepositoryImpl'
 import { SupportProgramRepositoryImpl } from '../../data/repositories/SupportProgramRepositoryImpl'
 import type { AppContainer } from './types'
@@ -9,6 +10,7 @@ import type { AppContainer } from './types'
 export function registerRepositories(container: AppContainer) {
   container.register({
     accountRepository: asClass(AccountRepositoryImpl).singleton(),
+    adminRepository: asClass(AdminRepositoryImpl).singleton(),
     sampleItemRepository: asClass(SampleItemRepositoryImpl).singleton(),
     supportProgramRepository: asClass(SupportProgramRepositoryImpl).singleton(),
   })

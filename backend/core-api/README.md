@@ -100,6 +100,8 @@ capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 �
 | `POST /api/v1/auth/login` | 이메일·비밀번호 로그인, 세션 토큰 발급 |
 | `GET /api/v1/auth/me` | Bearer 세션 토큰으로 내 계정·기업 조회 |
 | `POST /api/v1/auth/logout` | Bearer 세션 토큰 삭제 |
+| `GET /api/v1/admin/accounts` | 관리자: 회원·기업 목록(이메일 검색, 페이지) |
+| `POST /api/v1/admin/accounts/{id}/sessions/revoke` | 관리자: 계정의 모든 세션 종료 |
 | `POST /api/v1/sample-items/prepare` | 계층 연결 학습용 예제 |
 
 - 검색: 필수 `query`는 최대 500자이며 빈 문자열을 허용합니다. `acceptingOnly`의 기본값은 `true`이고
@@ -129,7 +131,9 @@ capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 �
 - 계정: 가입은 `email`(최대 320자, 소문자 정규화), `password`(8~72자, 영문·숫자 포함), `businessNumber`만 받고 Bizno로
   기업을 다시 확인해 `company`에 UPSERT합니다. 가입·로그인 응답의 `sessionToken`은 DB에 SHA-256 해시만 저장되는
   불투명 토큰이며 `Authorization: Bearer`로 보냅니다. 유효 기간은 `ACCOUNT_SESSION_TTL`(기본 30일)입니다. 이메일 중복은
-  409, 미확인 사업자는 422, 자격 증명 불일치·세션 없음은 401입니다.
+  409, 미확인 사업자는 422, 자격 증명 불일치·세션 없음은 401입니다. `account.role`은 `USER`/`ADMIN`이며 관리자는 SQL로만
+  지정합니다. 로그인이 필요한 Controller는 `Account` 파라미터를 선언하고 `AuthenticatedAccountArgumentResolver`가 Bearer
+  세션으로 채웁니다. 관리자 API는 Service가 역할을 확인해 403 `ADMIN_REQUIRED`를 돌려줍니다.
 - 현재 수집기는 `BIZINFO` 한 제공처만 구현되어 있습니다. 전체 검색·색인·평가 fixture는 현재 MySQL의
   모든 제공처 공고를 다루며, 내부 식별자 `sourceCode:sourceProgramId`로 같은 원본 ID를 구분합니다.
   다른 제공처를 실제로 수집하려면 별도 Client·Facade·동기화 설정을 구현해야 합니다.
@@ -206,6 +210,8 @@ supportprogram/
 account/
 ├── controller            # 기업 확인·가입·로그인·세션 공개 HTTP 진입점
 │   └── dto               # 공개 요청·응답 계약
+├── admin                 # 관리자 전용 회원 목록·세션 종료 Controller·Service·dto
+├── web                   # Bearer 세션을 Controller의 Account 파라미터로 채우는 ArgumentResolver·설정
 ├── service               # Bizno 조회, 가입, 로그인, 세션 발급·확인·로그아웃
 │   ├── dto               # 세션 발급 결과
 │   └── exception         # 409·422·401로 변환되는 업무 예외
@@ -249,7 +255,8 @@ SQL은 기능별 [`SupportProgramMapper.xml`](src/main/resources/mybatis/support
   세대·지문·공고 수·색인 준비와 최근 동기화 결과를 만듭니다.
   [V5](src/main/resources/db/migration/V5__create_account.sql)는 회원 기업(`company`, 사업자등록번호 고유키),
   계정(`account`, 이메일 고유키·비밀번호 해시), 로그인 세션(`account_session`, 토큰 해시·만료 시각, 계정 삭제 시
-  함께 삭제)을 만듭니다. 적용된 migration은 수정하지 않고 새 버전을 추가합니다.
+  함께 삭제)을 만들고, [V6](src/main/resources/db/migration/V6__add_account_role.sql)는 `account.role`(`USER`/`ADMIN`,
+  기본 `USER`)을 추가합니다. 적용된 migration은 수정하지 않고 새 버전을 추가합니다.
 - 회원가입 저장은 기업 UPSERT → 계정 INSERT → 세션 INSERT를 하나의 짧은 transaction으로 묶습니다. Bizno 조회와
   비밀번호 해시는 transaction 밖에서 먼저 끝냅니다. 이메일 중복은 DB UNIQUE 제약(`utf8mb4_0900_ai_ci`, 대소문자 무시)이
   막고 Service가 409로 변환합니다.
@@ -299,6 +306,8 @@ Bizno 기업 확인 경계도 같은 형식으로 변환하며 요청 URL·API �
 | Bizno가 등록 사업자로 확인하지 못함 | 422 | `BUSINESS_NOT_FOUND` |
 | 이메일 또는 비밀번호 불일치 | 401 | `INVALID_CREDENTIALS` |
 | Bearer 세션 토큰 누락·형식 오류·만료·삭제 | 401 | `AUTHENTICATION_REQUIRED` (`WWW-Authenticate: Bearer`) |
+| 관리자 전용 API를 일반 계정이 호출 | 403 | `ADMIN_REQUIRED` |
+| 운영 대상 계정 없음 | 404 | `ACCOUNT_NOT_FOUND` |
 
 AI Service는 LLM 실행 실패와 색인 미준비·Qdrant 실패를 내부 503으로 반환하므로 일반적으로 공개 503이
 됩니다. Health API의 내부 408·504는 점수화 API와 달리 `UPSTREAM_ERROR`로 분류합니다.

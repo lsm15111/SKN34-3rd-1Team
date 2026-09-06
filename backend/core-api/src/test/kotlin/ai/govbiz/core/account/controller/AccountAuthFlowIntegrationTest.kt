@@ -66,6 +66,7 @@ class AccountAuthFlowIntegrationTest {
         )
             .andExpect(status().isCreated())
             .andExpect(jsonPath("$.account.email").value("manager@company.co.kr"))
+            .andExpect(jsonPath("$.account.role").value("USER"))
             .andExpect(jsonPath("$.account.company.companyName").value("삼성전자(주)"))
             .andReturn().response.contentAsString
         val sessionToken = objectMapper.readTree(signupBody).path("sessionToken").asString()

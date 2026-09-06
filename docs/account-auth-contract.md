@@ -110,6 +110,7 @@ Bizno가 확인한 기업 중 첫 항목을 저장하며, 사업자 상태(휴�
   "expiresAt": "2026-10-06T12:00:00+09:00",
   "account": {
     "email": "manager@company.co.kr",
+    "role": "USER",
     "company": {
       "businessNumber": "1248100998",
       "companyName": "삼성전자(주)",
@@ -149,7 +150,7 @@ Authorization: Bearer <sessionToken>
 ```
 
 ```json
-{ "account": { "email": "manager@company.co.kr", "company": { "businessNumber": "1248100998", "companyName": "삼성전자(주)", "businessStatus": "계속사업자" } } }
+{ "account": { "email": "manager@company.co.kr", "role": "USER", "company": { "businessNumber": "1248100998", "companyName": "삼성전자(주)", "businessStatus": "계속사업자" } } }
 ```
 
 ## 로그아웃
@@ -162,6 +163,45 @@ Authorization: Bearer <sessionToken>
 세션 행을 삭제하고 `204 No Content`를 돌려줍니다. 이미 없거나 만료된 토큰도 204이며, 헤더가 없거나 Bearer 형식이
 아니면 401입니다.
 
+`account.role`은 `USER` 또는 `ADMIN`이며 가입 시 항상 `USER`입니다. 관리자는 SQL로만 지정합니다
+(`UPDATE account SET role = 'ADMIN' WHERE email = '…'`). 세션 응답·내 계정 응답의 `account.role`로 화면이 운영 메뉴를 보여 줄지 정합니다.
+
+## 어드민 회원·기업
+
+관리자 세션(`role = ADMIN`)이 필요하며, 로그인은 했지만 관리자가 아니면 `403 ADMIN_REQUIRED`입니다.
+
+```http
+GET /api/v1/admin/accounts?email=manager&page=0&size=20
+Authorization: Bearer <sessionToken>
+```
+
+| Query parameter | 필수 | 설명 |
+|---|---|---|
+| `email` | 아니요 | 이메일 부분 일치(대소문자 무시). 최대 320자 |
+| `page` | 아니요 | 0부터. 기본 0 |
+| `size` | 아니요 | 1~100. 기본 20 |
+
+```json
+{
+  "items": [
+    { "id": 12, "email": "manager@company.co.kr", "role": "USER",
+      "company": { "businessNumber": "1248100998", "companyName": "삼성전자(주)", "businessStatus": "계속사업자" },
+      "createdAt": "2026-09-06T12:00:00+09:00" }
+  ],
+  "page": 0, "size": 20, "totalCount": 1
+}
+```
+
+최근 가입순입니다. 비밀번호 해시·세션 정보는 포함하지 않습니다.
+
+```http
+POST /api/v1/admin/accounts/{accountId}/sessions/revoke
+Authorization: Bearer <sessionToken>
+```
+
+대상 계정의 세션을 모두 삭제해 즉시 로그아웃시키고 `204`를 돌려줍니다. 계정이 없으면 `404 ACCOUNT_NOT_FOUND`.
+조치는 관리자 id·대상 id·삭제 수와 함께 서버 INFO 로그에 남깁니다.
+
 ## 계정 API 오류
 
 | 상황 | HTTP | `code` |
@@ -171,6 +211,8 @@ Authorization: Bearer <sessionToken>
 | Bizno가 등록 사업자로 확인하지 못함 | 422 | `BUSINESS_NOT_FOUND` |
 | 이메일 또는 비밀번호 불일치 | 401 | `INVALID_CREDENTIALS` |
 | 세션 토큰 누락·형식 오류·만료·삭제 | 401 | `AUTHENTICATION_REQUIRED` (`WWW-Authenticate: Bearer`) |
+| 관리자 전용 API를 일반 계정이 호출 | 403 | `ADMIN_REQUIRED` |
+| 운영 대상 계정 없음 | 404 | `ACCOUNT_NOT_FOUND` |
 | Bizno 미설정·장애 | 503/502/504 | 기업 확인과 같은 `BIZNO_*` |
 
 응답에는 비밀번호·해시·토큰 해시를 포함하지 않으며 요청 로그에도 비밀번호를 남기지 않습니다.

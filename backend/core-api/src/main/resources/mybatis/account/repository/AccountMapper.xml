@@ -19,8 +19,10 @@
         <id column="id" property="id" />
         <result column="email" property="email" />
         <result column="password_hash" property="passwordHash" />
+        <result column="role" property="role" />
         <result column="company_id" property="companyId" />
         <result column="terms_agreed_at" property="termsAgreedAt" />
+        <result column="created_at" property="createdAt" />
         <result column="company_business_number" property="companyBusinessNumber" />
         <result column="company_name" property="companyName" />
         <result column="company_business_status" property="companyBusinessStatus" />
@@ -30,11 +32,21 @@
         account.id,
         account.email,
         account.password_hash,
+        account.role,
         account.company_id,
         account.terms_agreed_at,
+        account.created_at,
         company.business_number AS company_business_number,
         company.company_name,
         company.business_status AS company_business_status
+    </sql>
+
+    <sql id="accountEmailKeywordFilter">
+        <where>
+            <if test="emailKeyword != null">
+                account.email LIKE CONCAT('%', #{emailKeyword}, '%')
+            </if>
+        </where>
     </sql>
 
     <insert id="upsertCompany"
@@ -79,14 +91,25 @@
             email,
             password_hash,
             company_id,
-            terms_agreed_at
+            terms_agreed_at,
+            created_at
         ) VALUES (
             #{email},
             #{passwordHash},
             #{companyId},
-            #{termsAgreedAt}
+            #{termsAgreedAt},
+            #{createdAt}
         )
     </insert>
+
+    <select id="findAccountById" resultMap="accountDbRow">
+        SELECT
+            <include refid="accountWithCompanyColumns" />
+        FROM account
+        INNER JOIN company
+            ON company.id = account.company_id
+        WHERE account.id = #{id}
+    </select>
 
     <select id="findAccountByEmail" resultMap="accountDbRow">
         SELECT
@@ -109,6 +132,23 @@
           AND session.expires_at &gt; #{now}
     </select>
 
+    <select id="findAccountPage" resultMap="accountDbRow">
+        SELECT
+            <include refid="accountWithCompanyColumns" />
+        FROM account
+        INNER JOIN company
+            ON company.id = account.company_id
+        <include refid="accountEmailKeywordFilter" />
+        ORDER BY account.created_at DESC, account.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countAccounts" resultType="long">
+        SELECT COUNT(*)
+        FROM account
+        <include refid="accountEmailKeywordFilter" />
+    </select>
+
     <insert id="insertSession"
             parameterType="ai.govbiz.core.account.repository.mapper.AccountSessionDbRow"
             useGeneratedKeys="true"
@@ -127,6 +167,11 @@
     <delete id="deleteSessionByTokenHash">
         DELETE FROM account_session
         WHERE token_hash = #{tokenHash}
+    </delete>
+
+    <delete id="deleteSessionsByAccountId">
+        DELETE FROM account_session
+        WHERE account_id = #{accountId}
     </delete>
 
     <delete id="deleteExpiredSessionsByAccountId">

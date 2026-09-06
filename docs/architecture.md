@@ -171,8 +171,19 @@ GET /api/v1/auth/me · POST /api/v1/auth/logout
 ```
 
 세션은 256비트 무작위 토큰이며 DB에는 SHA-256 해시와 만료 시각만 둡니다. Spring Security filter chain·JWT·쿠키는
-사용하지 않고 `spring-security-crypto`의 BCrypt만 씁니다. 보호 endpoint가 둘뿐이라 Interceptor·ArgumentResolver
-없이 Service 메서드 하나가 헤더를 검사합니다. 이메일 인증·비밀번호 재설정·로그인 시도 제한은 아직 없습니다.
+사용하지 않고 `spring-security-crypto`의 BCrypt만 씁니다. 로그인이 필요한 Controller는 `Account` 파라미터를 선언하고
+`account/web`의 `AuthenticatedAccountArgumentResolver`가 `AccountSessionService.requireAccount`로 채웁니다(로그아웃만
+삭제할 토큰이 필요해 헤더를 직접 받음). 이메일 인증·비밀번호 재설정·로그인 시도 제한은 아직 없습니다.
+
+```text
+GET /api/v1/admin/accounts · POST /api/v1/admin/accounts/{id}/sessions/revoke
+  → AdminAccountController (Account 파라미터 = 관리자 세션)
+    → AdminAccountService (role이 ADMIN이 아니면 403)
+      → AccountRepository.findPage / findById + deleteSessionsByAccountId
+```
+
+`account.role`은 V6 컬럼이며 가입 시 `USER`, 관리자는 SQL로만 지정합니다. 운영자 조치는 별도 감사 테이블 없이
+서버 INFO 로그(관리자 id·대상 id·결과)에 남깁니다.
 
 ## 검색 품질 평가 fixture 내보내기와 캡처
 

@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router'
 
+import { AdminAccountsPage } from './presentation/features/admin/view/AdminAccountsPage'
 import { LoginPage } from './presentation/features/auth/view/LoginPage'
 import { SignupPage } from './presentation/features/auth/view/SignupPage'
 import { useRestoreAuthSession } from './presentation/features/auth/viewmodel/useAuthSessionViewModel'
@@ -21,6 +22,8 @@ function App() {
         path="/support-programs/detail"
         element={<SupportProgramDetailPage />}
       />
+      <Route path="/admin" element={<Navigate replace to="/admin/accounts" />} />
+      <Route path="/admin/accounts" element={<AdminAccountsPage />} />
       <Route path="/examples/sample-item/hook" element={<SampleItemPage />} />
       <Route path="/examples/sample-item/redux" element={<ReduxSampleItemPage />} />
       <Route path="*" element={<Navigate replace to="/" />} />

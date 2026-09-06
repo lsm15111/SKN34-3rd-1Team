@@ -40,5 +40,7 @@ export const { sessionRestored, signedIn, signedOut } = authSlice.actions
 export const selectAuthStatus = (state: RootState) => state.auth.status
 export const selectCurrentAccount = (state: RootState) => state.auth.account
 export const selectIsAuthenticated = (state: RootState) => state.auth.status === 'authenticated'
+export const selectIsAdmin = (state: RootState) =>
+  state.auth.status === 'authenticated' && state.auth.account?.role === 'ADMIN'
 
 export default authSlice.reducer

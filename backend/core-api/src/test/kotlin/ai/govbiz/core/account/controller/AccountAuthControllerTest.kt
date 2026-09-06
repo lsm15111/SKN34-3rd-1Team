@@ -11,6 +11,7 @@ import ai.govbiz.core.account.service.exception.AuthenticationRequiredException
 import ai.govbiz.core.account.service.exception.BusinessNotFoundException
 import ai.govbiz.core.account.service.exception.EmailAlreadyRegisteredException
 import ai.govbiz.core.account.service.exception.InvalidCredentialsException
+import ai.govbiz.core.account.web.AuthenticatedAccountArgumentResolver
 import java.time.OffsetDateTime
 import org.hamcrest.Matchers.containsString
 import org.hamcrest.Matchers.not
@@ -53,6 +54,7 @@ class AccountAuthControllerTest {
     fun setUp() {
         mockMvc = MockMvcBuilders
             .standaloneSetup(AccountAuthController(signupService, loginService, sessionService))
+            .setCustomArgumentResolvers(AuthenticatedAccountArgumentResolver(sessionService))
             .setControllerAdvice(ApiExceptionHandler())
             .build()
     }
@@ -71,6 +73,7 @@ class AccountAuthControllerTest {
             .andExpect(jsonPath("$.sessionToken").value("session-token"))
             .andExpect(jsonPath("$.expiresAt").value("2026-10-06T12:00:00+09:00"))
             .andExpect(jsonPath("$.account.email").value("manager@company.co.kr"))
+            .andExpect(jsonPath("$.account.role").value("USER"))
             .andExpect(jsonPath("$.account.company.businessNumber").value("1248100998"))
             .andExpect(jsonPath("$.account.company.companyName").value("삼성전자(주)"))
             .andExpect(jsonPath("$.account.company.businessStatus").value("계속사업자"))
@@ -172,6 +175,7 @@ class AccountAuthControllerTest {
         mockMvc.perform(get(ME_PATH).header(HttpHeaders.AUTHORIZATION, "Bearer session-token"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.account.email").value("manager@company.co.kr"))
+            .andExpect(jsonPath("$.account.role").value("USER"))
             .andExpect(jsonPath("$.account.company.businessNumber").value("1248100998"))
     }
 

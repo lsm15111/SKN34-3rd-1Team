@@ -1,6 +1,7 @@
 package ai.govbiz.core.account.repository
 
 import ai.govbiz.core._common.test.MySqlTestContainerConfig
+import ai.govbiz.core.account.domain.AccountRole
 import ai.govbiz.core.account.domain.NewAccount
 import ai.govbiz.core.account.domain.NewAccountSession
 import ai.govbiz.core.account.domain.VerifiedCompany
@@ -153,6 +154,65 @@ class AccountRepositoryIntegrationTest {
 
         assertEquals(0, countRows("account_session"))
         assertEquals(1, countRows("company"))
+    }
+
+    @Test
+    fun storesNewAccountsAsUsersAndReadsAPromotedAdminRole() {
+        val created = repository.createAccount(newAccount(email = "role@company.co.kr"), session(TOKEN_HASH_A, FUTURE))
+
+        assertEquals(AccountRole.USER, created.role)
+        assertFalse(created.isAdmin)
+        assertEquals(created, repository.findById(created.id))
+        // 가입 시각은 DB 서버 시간대가 아니라 서울 기준 앱 시계로 기록됩니다.
+        val seoulNow = java.time.LocalDateTime.now(java.time.ZoneId.of("Asia/Seoul"))
+        assertTrue(java.time.Duration.between(created.createdAt, seoulNow).abs().toMinutes() < 5)
+
+        jdbcTemplate.update("UPDATE account SET role = 'ADMIN' WHERE id = ?", created.id)
+
+        assertEquals(AccountRole.ADMIN, requireNotNull(repository.findById(created.id)).role)
+        assertTrue(requireNotNull(repository.findAccountBySessionTokenHash(TOKEN_HASH_A)).isAdmin)
+        assertNull(repository.findById(created.id + 1_000))
+    }
+
+    @Test
+    fun pagesAccountsNewestFirstAndFiltersByEmailKeyword() {
+        repository.createAccount(newAccount(email = "alpha@company.co.kr"), session(TOKEN_HASH_A, FUTURE))
+        repository.createAccount(
+            newAccount(email = "beta@other.co.kr", businessNumber = "2208162517", companyName = "다른 기업"),
+            session(TOKEN_HASH_B, FUTURE),
+        )
+        repository.createAccount(newAccount(email = "gamma@company.co.kr"), session(TOKEN_HASH_C, FUTURE))
+
+        val firstPage = repository.findPage(emailKeyword = null, page = 0, size = 2)
+        assertEquals(3, firstPage.totalCount)
+        assertEquals(listOf("gamma@company.co.kr", "beta@other.co.kr"), firstPage.accounts.map { it.email })
+
+        val secondPage = repository.findPage(emailKeyword = "  ", page = 1, size = 2)
+        assertEquals(listOf("alpha@company.co.kr"), secondPage.accounts.map { it.email })
+
+        val filtered = repository.findPage(emailKeyword = "COMPANY.co", page = 0, size = 10)
+        assertEquals(2, filtered.totalCount)
+        assertEquals(listOf("gamma@company.co.kr", "alpha@company.co.kr"), filtered.accounts.map { it.email })
+        assertEquals("다른 기업", requireNotNull(repository.findByEmail("beta@other.co.kr")).company.companyName)
+
+        assertThrows(IllegalArgumentException::class.java) { repository.findPage(null, 0, 101) }
+    }
+
+    @Test
+    fun revokesEverySessionOfOneAccountOnly() {
+        val target = repository.createAccount(newAccount(email = "target@company.co.kr"), session(TOKEN_HASH_A, FUTURE))
+        repository.createSession(target.id, session(TOKEN_HASH_B, FUTURE))
+        val other = repository.createAccount(
+            newAccount(email = "other@company.co.kr", businessNumber = "2208162517", companyName = "다른 기업"),
+            session(TOKEN_HASH_C, FUTURE),
+        )
+
+        assertEquals(2, repository.deleteSessionsByAccountId(target.id))
+
+        assertNull(repository.findAccountBySessionTokenHash(TOKEN_HASH_A))
+        assertNull(repository.findAccountBySessionTokenHash(TOKEN_HASH_B))
+        assertEquals(other, repository.findAccountBySessionTokenHash(TOKEN_HASH_C))
+        assertEquals(0, repository.deleteSessionsByAccountId(target.id))
     }
 
     @Test

@@ -11,3 +11,9 @@ class InvalidCredentialsException : RuntimeException()
 
 /** Bearer 세션 토큰이 없거나 만료·삭제됐을 때 발생합니다. */
 class AuthenticationRequiredException : RuntimeException()
+
+/** 로그인은 했지만 관리자 역할이 아닐 때 발생합니다. */
+class AdminRequiredException : RuntimeException()
+
+/** 운영자가 지정한 계정이 없을 때 발생합니다. */
+class AccountNotFoundException : RuntimeException()

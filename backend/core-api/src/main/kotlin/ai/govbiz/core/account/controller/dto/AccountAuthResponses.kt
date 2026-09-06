@@ -1,6 +1,7 @@
 package ai.govbiz.core.account.controller.dto
 
 import ai.govbiz.core.account.domain.Account
+import ai.govbiz.core.account.domain.AccountRole
 import ai.govbiz.core.account.domain.Company
 import ai.govbiz.core.account.service.dto.AccountSessionResult
 import java.time.format.DateTimeFormatter
@@ -31,12 +32,14 @@ data class CurrentAccountResponse(
 
 data class AccountResponse(
     val email: String,
+    val role: AccountRole,
     val company: CompanyResponse,
 ) {
     companion object {
         fun from(account: Account): AccountResponse =
             AccountResponse(
                 email = account.email,
+                role = account.role,
                 company = CompanyResponse.from(account.company),
             )
     }

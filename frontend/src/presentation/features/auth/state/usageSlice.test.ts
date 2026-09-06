@@ -14,6 +14,7 @@ import {
 
 const account = {
   email: 'manager@company.co.kr',
+  role: 'USER' as const,
   company: { businessNumber: '1248100998', companyName: '삼성전자(주)', businessStatus: '계속사업자' },
 }
 

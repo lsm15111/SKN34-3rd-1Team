@@ -1,6 +1,8 @@
 package ai.govbiz.core._common.exception
 
 import ai.govbiz.core.account.client.bizno.exception.BiznoClientException
+import ai.govbiz.core.account.service.exception.AccountNotFoundException
+import ai.govbiz.core.account.service.exception.AdminRequiredException
 import ai.govbiz.core.account.service.exception.AuthenticationRequiredException
 import ai.govbiz.core.account.service.exception.BusinessNotFoundException
 import ai.govbiz.core.account.service.exception.EmailAlreadyRegisteredException
@@ -144,6 +146,36 @@ class ApiExceptionHandler {
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
             .body(response.body)
     }
+
+    @ExceptionHandler(AdminRequiredException::class)
+    fun handleAdminRequiredException(
+        request: HttpServletRequest,
+    ): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.FORBIDDEN,
+                URI.create("urn:govbiz:problem:admin-required"),
+                "Admin Required",
+                "This operation requires an administrator account.",
+                "ADMIN_REQUIRED",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(AccountNotFoundException::class)
+    fun handleAccountNotFoundException(
+        request: HttpServletRequest,
+    ): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.NOT_FOUND,
+                URI.create("urn:govbiz:problem:account-not-found"),
+                "Account Not Found",
+                "The requested account does not exist.",
+                "ACCOUNT_NOT_FOUND",
+            ),
+            request,
+        )
 
     @ExceptionHandler(BiznoClientException::class)
     fun handleBiznoClientException(

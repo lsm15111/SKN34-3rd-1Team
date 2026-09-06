@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { createElement, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import { Provider } from 'react-redux'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -16,6 +16,7 @@ afterEach(cleanup)
 
 const account = {
   email: 'manager@company.co.kr',
+  role: 'USER' as const,
   company: { businessNumber: '1248100998', companyName: '삼성전자(주)', businessStatus: '계속사업자' },
 }
 
@@ -81,6 +82,6 @@ describe('anonymous search limit in the chat view model', () => {
 
 function createWrapper(store: ReturnType<typeof createAppStore>) {
   return function Wrapper({ children }: { children: ReactNode }) {
-    return createElement(Provider, { store }, children)
+    return <Provider store={store}>{children}</Provider>
   }
 }
