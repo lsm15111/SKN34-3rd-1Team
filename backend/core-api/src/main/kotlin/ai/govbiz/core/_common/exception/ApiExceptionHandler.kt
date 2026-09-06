@@ -9,6 +9,11 @@ import ai.govbiz.core.account.service.exception.EmailAlreadyRegisteredException
 import ai.govbiz.core.account.service.exception.InvalidCredentialsException
 import ai.govbiz.core.recruitment.service.exception.ContactInTextException
 import ai.govbiz.core.recruitment.service.exception.NotPostOwnerException
+import ai.govbiz.core.recruitment.service.exception.NotProposalOwnerException
+import ai.govbiz.core.recruitment.service.exception.OwnPostProposalException
+import ai.govbiz.core.recruitment.service.exception.ProposalAlreadyExistsException
+import ai.govbiz.core.recruitment.service.exception.ProposalNotFoundException
+import ai.govbiz.core.recruitment.service.exception.ProposalNotPendingException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentClosesOnInvalidException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotFoundException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotOpenException
@@ -257,6 +262,71 @@ class ApiExceptionHandler {
                 "Contact Details Not Allowed",
                 "Email addresses and phone numbers must not be written in the text.",
                 "CONTACT_IN_TEXT",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(ProposalNotFoundException::class)
+    fun handleProposalNotFoundException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.NOT_FOUND,
+                URI.create("urn:govbiz:problem:proposal-not-found"),
+                "Proposal Not Found",
+                "The requested proposal does not exist.",
+                "PROPOSAL_NOT_FOUND",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(OwnPostProposalException::class)
+    fun handleOwnPostProposalException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.FORBIDDEN,
+                URI.create("urn:govbiz:problem:own-post"),
+                "Own Post",
+                "A company cannot send a proposal to its own recruitment post.",
+                "OWN_POST",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(NotProposalOwnerException::class)
+    fun handleNotProposalOwnerException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.FORBIDDEN,
+                URI.create("urn:govbiz:problem:not-proposal-owner"),
+                "Not Proposal Owner",
+                "Only the company that sent this proposal can withdraw it.",
+                "NOT_PROPOSAL_OWNER",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(ProposalAlreadyExistsException::class)
+    fun handleProposalAlreadyExistsException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.CONFLICT,
+                URI.create("urn:govbiz:problem:proposal-already-exists"),
+                "Proposal Already Exists",
+                "This company has already sent a proposal to this recruitment post.",
+                "PROPOSAL_ALREADY_EXISTS",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(ProposalNotPendingException::class)
+    fun handleProposalNotPendingException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.CONFLICT,
+                URI.create("urn:govbiz:problem:proposal-not-pending"),
+                "Proposal Not Pending",
+                "This proposal has already been decided, expired, or its recruitment post is closed.",
+                "PROPOSAL_NOT_PENDING",
             ),
             request,
         )

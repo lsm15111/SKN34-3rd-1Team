@@ -1,10 +1,14 @@
 package ai.govbiz.core.recruitment.helper
 
+import ai.govbiz.core.account.domain.Company
 import ai.govbiz.core.account.helper.AccountTestHelper
+import ai.govbiz.core.recruitment.domain.ProposalDecision
 import ai.govbiz.core.recruitment.domain.RecruitmentPost
 import ai.govbiz.core.recruitment.domain.RecruitmentPostDraft
+import ai.govbiz.core.recruitment.domain.RecruitmentProposal
 import ai.govbiz.core.recruitment.domain.RecruitmentRole
 import ai.govbiz.core.recruitment.repository.StoredRecruitmentPost
+import ai.govbiz.core.recruitment.repository.StoredRecruitmentProposal
 import ai.govbiz.core.supportprogram.domain.SupportProgram
 import ai.govbiz.core.supportprogram.domain.SupportProgramStatus
 import java.time.LocalDate
@@ -57,6 +61,36 @@ object RecruitmentTestHelper {
 
     fun stored(post: RecruitmentPost = post(), companyId: Long = post.companyId): StoredRecruitmentPost =
         StoredRecruitmentPost(post = post, company = AccountTestHelper.company(id = companyId))
+
+    /** 모집글 작성 기업(id 1)과 다른 제안 기업입니다. */
+    fun otherCompany(id: Long = 2L): Company =
+        Company(id = id, businessNumber = "2208162517", companyName = "비전솔루션", businessStatus = "계속사업자")
+
+    fun proposal(
+        id: Long = 1L,
+        postId: Long = 1L,
+        companyId: Long = 2L,
+        message: String = "공공 데이터 라벨링 운영 경험이 있는 참여기관입니다. 세부 비율은 협의하겠습니다.",
+        decision: ProposalDecision = ProposalDecision.PENDING,
+        decidedAt: LocalDateTime? = null,
+        createdAt: LocalDateTime = NOW,
+    ): RecruitmentProposal =
+        RecruitmentProposal(
+            id = id,
+            postId = postId,
+            companyId = companyId,
+            proposerAccountId = 2L,
+            message = message,
+            decision = decision,
+            decidedAt = decidedAt,
+            createdAt = createdAt,
+        )
+
+    fun storedProposal(
+        proposal: RecruitmentProposal = proposal(),
+        proposerEmail: String = "partner@vision.co.kr",
+    ): StoredRecruitmentProposal =
+        StoredRecruitmentProposal(proposal = proposal, company = otherCompany(proposal.companyId), proposerEmail = proposerEmail)
 
     fun program(
         status: SupportProgramStatus = SupportProgramStatus.OPEN,

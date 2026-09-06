@@ -104,6 +104,8 @@ capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 �
 | `POST /api/v1/admin/accounts/{id}/sessions/revoke` | 관리자: 계정의 모든 세션 종료 |
 | `GET /api/v1/recruitment-posts` · `/{id}` | 공고에 묶인 파트너 모집글 목록(모집 중, 마감 임박순)·상세. 로그인 선택 |
 | `POST /api/v1/recruitment-posts` · `PUT /{id}` · `POST /{id}/close` · `GET /mine` | 모집글 등록·수정·조기 마감·내 글. Bearer 필수 |
+| `POST /api/v1/recruitment-posts/{id}/proposals` · `GET …/proposals` | 참여 제안 보내기(다른 기업)·받은 제안(작성 기업). Bearer 필수 |
+| `POST /api/v1/recruitment-proposals/{id}/accept` · `/decline` · `/withdraw` · `GET …/sent` | 제안 수락·거절(작성 기업), 철회·보낸 제안(제안 기업). Bearer 필수 |
 | `POST /api/v1/sample-items/prepare` | 계층 연결 학습용 예제 |
 
 - 검색: 필수 `query`는 최대 500자이며 빈 문자열을 허용합니다. `acceptingOnly`의 기본값은 `true`이고
@@ -139,6 +141,10 @@ capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 �
 - 파트너 모집글: 현재 공개되고 접수가 끝나지 않은 공고 하나에 묶어 등록합니다. 상태(`OPEN`/`CLOSED`/`HIDDEN`)는
   저장하지 않고 읽을 때 계산하며, 모집 마감일은 오늘 이후·공고 마감 이하여야 합니다. 제목·본문의 이메일·전화번호는
   422로 거부합니다. 숨김·종료 글은 작성 기업만 봅니다. 계약은 [파트너 모집 API 계약](../../docs/partner-recruitment-contract.md)에 있습니다.
+- 참여 제안: 다른 기업의 `OPEN` 글에 기업당 한 번만 보냅니다(`(post_id, company_id)` UNIQUE, 철회·거절 뒤 재제안 불가).
+  상태는 저장값(`PENDING`/`ACCEPTED`/`DECLINED`/`WITHDRAWN`)에 7일 만료(`EXPIRED`)·모집글 종료(`CLOSED`)를 조회 시
+  계산해 얹습니다. 담당자 이메일은 `ACCEPTED`일 때만 상대 기업 응답에 넣고, 메시지의 연락처 문구는 모집글과 같은 규칙으로
+  거부합니다.
 - 현재 수집기는 `BIZINFO` 한 제공처만 구현되어 있습니다. 전체 검색·색인·평가 fixture는 현재 MySQL의
   모든 제공처 공고를 다루며, 내부 식별자 `sourceCode:sourceProgramId`로 같은 원본 ID를 구분합니다.
   다른 제공처를 실제로 수집하려면 별도 Client·Facade·동기화 설정을 구현해야 합니다.
@@ -228,14 +234,14 @@ account/
 └── client/
     └── bizno             # Bizno HTTP·응답 검증·등록 사업자 필터
 recruitment/
-├── controller            # 모집글 공개 HTTP 진입점
-│   └── dto               # 등록·수정 요청, 모집글·연결 공고 요약 응답
-├── service               # 공고 연결 검증, 소유·상태 확인, 목록·상세 조합
-│   ├── dto               # 상태·기업·공고를 채운 결과
+├── controller            # 모집글·참여 제안 공개 HTTP 진입점
+│   └── dto               # 등록·수정·제안 요청, 모집글·연결 공고 요약·제안 응답
+├── service               # 공고 연결 검증, 소유·상태 확인, 제안 결정·연락처 공개, 목록·상세 조합
+│   ├── dto               # 상태·기업·공고·제안 수를 채운 결과
 │   └── exception         # 403·404·409·422로 변환되는 업무 예외
-├── repository            # 모집글 저장·조회, 역량 JSON 변환
+├── repository            # 모집글·제안 저장·조회, 역량 JSON 변환, 제안 수 집계
 │   └── mapper            # MyBatis Mapper, DbRow
-└── domain                # 모집글·역할·상태 계산·연락처 패턴 규칙
+└── domain                # 모집글·제안·역할·상태 계산·연락처 패턴 규칙
 _health                    # Core API Health
 _health_ai_service         # AI Service Health의 Controller → Service → Client
 _sampleitem                # 학습 예제
@@ -272,7 +278,9 @@ SQL은 기능별 [`SupportProgramMapper.xml`](src/main/resources/mybatis/support
   함께 삭제)을 만들고, [V6](src/main/resources/db/migration/V6__add_account_role.sql)는 `account.role`(`USER`/`ADMIN`,
   기본 `USER`)을 추가합니다. [V7](src/main/resources/db/migration/V7__create_recruitment_post.sql)은 파트너 모집글
   (`recruitment_post`, 기업·작성 계정·공고 `(source_code, source_program_id)` FK, 역량 JSON, 모집 마감일, 조기 마감·숨김
-  시각)을 만듭니다. 모집 상태는 저장하지 않고 조회 시 계산합니다. 적용된 migration은 수정하지 않고 새 버전을 추가합니다.
+  시각)을, [V8](src/main/resources/db/migration/V8__create_recruitment_proposal.sql)은 참여 제안(`recruitment_proposal`,
+  모집글 FK ON DELETE CASCADE, 제안 기업·담당자 FK, 결정값·결정 시각, `(post_id, company_id)` UNIQUE)을 만듭니다. 모집·제안
+  상태는 저장하지 않고 조회 시 계산합니다. 적용된 migration은 수정하지 않고 새 버전을 추가합니다.
 - 회원가입 저장은 기업 UPSERT → 계정 INSERT → 세션 INSERT를 하나의 짧은 transaction으로 묶습니다. Bizno 조회와
   비밀번호 해시는 transaction 밖에서 먼저 끝냅니다. 이메일 중복은 DB UNIQUE 제약(`utf8mb4_0900_ai_ci`, 대소문자 무시)이
   막고 Service가 409로 변환합니다.
@@ -334,7 +342,12 @@ Bizno 기업 확인 경계도 같은 형식으로 변환하며 요청 URL·API �
 | 모집 중이 아닌 글 수정·마감 | 409 | `RECRUITMENT_POST_NOT_OPEN` |
 | 연결 공고 미공개·접수 종료 | 422 | `SUPPORT_PROGRAM_NOT_OPEN` |
 | 모집 마감일 범위 밖 | 422 | `RECRUITMENT_CLOSES_ON_INVALID` |
-| 제목·본문에 연락처 | 422 | `CONTACT_IN_TEXT` |
+| 제목·본문·제안 메시지에 연락처 | 422 | `CONTACT_IN_TEXT` |
+| 자기 글에 제안 | 403 | `OWN_POST` |
+| 제안 기업이 아닌데 철회 | 403 | `NOT_PROPOSAL_OWNER` |
+| 제안 없음 | 404 | `PROPOSAL_NOT_FOUND` |
+| 같은 글에 이미 제안함 | 409 | `PROPOSAL_ALREADY_EXISTS` |
+| 이미 결정·만료·마감된 제안 결정 | 409 | `PROPOSAL_NOT_PENDING` |
 
 AI Service는 LLM 실행 실패와 색인 미준비·Qdrant 실패를 내부 503으로 반환하므로 일반적으로 공개 503이
 됩니다. Health API의 내부 408·504는 점수화 API와 달리 `UPSTREAM_ERROR`로 분류합니다.

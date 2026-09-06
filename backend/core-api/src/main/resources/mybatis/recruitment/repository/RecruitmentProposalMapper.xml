@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="ai.govbiz.core.recruitment.repository.mapper.RecruitmentProposalMapper">
+
+    <resultMap id="recruitmentProposalDbRow"
+               type="ai.govbiz.core.recruitment.repository.mapper.RecruitmentProposalDbRow">
+        <id column="id" property="id" />
+        <result column="post_id" property="postId" />
+        <result column="company_id" property="companyId" />
+        <result column="proposer_account_id" property="proposerAccountId" />
+        <result column="message" property="message" />
+        <result column="decision" property="decision" />
+        <result column="decided_at" property="decidedAt" />
+        <result column="created_at" property="createdAt" />
+        <result column="company_business_number" property="companyBusinessNumber" />
+        <result column="company_name" property="companyName" />
+        <result column="company_business_status" property="companyBusinessStatus" />
+        <result column="proposer_email" property="proposerEmail" />
+    </resultMap>
+
+    <resultMap id="proposalCountDbRow"
+               type="ai.govbiz.core.recruitment.repository.mapper.ProposalCountDbRow">
+        <result column="post_id" property="postId" />
+        <result column="proposal_count" property="proposalCount" />
+    </resultMap>
+
+    <sql id="proposalWithCompanyColumns">
+        proposal.id,
+        proposal.post_id,
+        proposal.company_id,
+        proposal.proposer_account_id,
+        proposal.message,
+        proposal.decision,
+        proposal.decided_at,
+        proposal.created_at,
+        company.business_number AS company_business_number,
+        company.company_name,
+        company.business_status AS company_business_status,
+        account.email AS proposer_email
+    </sql>
+
+    <sql id="proposalWithCompanyJoins">
+        FROM recruitment_proposal proposal
+        INNER JOIN company
+            ON company.id = proposal.company_id
+        INNER JOIN account
+            ON account.id = proposal.proposer_account_id
+    </sql>
+
+    <insert id="insert"
+            parameterType="ai.govbiz.core.recruitment.repository.mapper.RecruitmentProposalDbRow"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO recruitment_proposal (
+            post_id,
+            company_id,
+            proposer_account_id,
+            message,
+            decision,
+            created_at
+        ) VALUES (
+            #{postId},
+            #{companyId},
+            #{proposerAccountId},
+            #{message},
+            #{decision},
+            #{createdAt}
+        )
+    </insert>
+
+    <update id="decide">
+        UPDATE recruitment_proposal
+        SET decision = #{decision},
+            decided_at = #{decidedAt}
+        WHERE id = #{id}
+          AND decision = 'PENDING'
+    </update>
+
+    <select id="findById" resultMap="recruitmentProposalDbRow">
+        SELECT
+            <include refid="proposalWithCompanyColumns" />
+        <include refid="proposalWithCompanyJoins" />
+        WHERE proposal.id = #{id}
+    </select>
+
+    <select id="findByPostId" resultMap="recruitmentProposalDbRow">
+        SELECT
+            <include refid="proposalWithCompanyColumns" />
+        <include refid="proposalWithCompanyJoins" />
+        WHERE proposal.post_id = #{postId}
+        ORDER BY proposal.created_at DESC, proposal.id DESC
+    </select>
+
+    <select id="findByCompanyId" resultMap="recruitmentProposalDbRow">
+        SELECT
+            <include refid="proposalWithCompanyColumns" />
+        <include refid="proposalWithCompanyJoins" />
+        WHERE proposal.company_id = #{companyId}
+        ORDER BY proposal.created_at DESC, proposal.id DESC
+    </select>
+
+    <select id="findByPostIdsAndCompanyId" resultMap="recruitmentProposalDbRow">
+        SELECT
+            <include refid="proposalWithCompanyColumns" />
+        <include refid="proposalWithCompanyJoins" />
+        WHERE proposal.company_id = #{companyId}
+          AND proposal.post_id IN
+          <foreach collection="postIds" item="postId" open="(" separator="," close=")">
+              #{postId}
+          </foreach>
+    </select>
+
+    <select id="countByPostIds" resultMap="proposalCountDbRow">
+        SELECT
+            post_id,
+            COUNT(*) AS proposal_count
+        FROM recruitment_proposal
+        WHERE decision &lt;&gt; 'WITHDRAWN'
+          AND post_id IN
+          <foreach collection="postIds" item="postId" open="(" separator="," close=")">
+              #{postId}
+          </foreach>
+        GROUP BY post_id
+    </select>
+</mapper>

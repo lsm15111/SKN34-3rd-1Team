@@ -9,8 +9,14 @@ Browser
   → POST/PUT /api/v1/recruitment-posts, POST …/{id}/close, GET …/mine      (Bearer 필수)
       → RecruitmentPostController → RecruitmentPostService
           → RecruitmentPostRepository → MySQL recruitment_post (+ company JOIN)
+          → RecruitmentProposalRepository (받은 제안 수, 조회 기업의 제안 상태)
           → SupportProgramRepository.findPresentBySourceAndProgramId (연결 공고 읽기)
           → RecruitmentPostStatusResolver (숨김 > 종료 > 모집 중, 저장하지 않음)
+  → POST/GET /api/v1/recruitment-posts/{id}/proposals, POST /api/v1/recruitment-proposals/{id}/accept|decline|withdraw,
+    GET /api/v1/recruitment-proposals/sent                                   (Bearer 필수)
+      → RecruitmentProposalController → RecruitmentProposalService
+          → RecruitmentProposalRepository → MySQL recruitment_proposal (+ company·account JOIN)
+          → ProposalStatusResolver (결정값 > 7일 만료 > 모집글 종료 > 대기, 저장하지 않음)
 ```
 
 ## 공통 규칙
@@ -18,8 +24,8 @@ Browser
 - 모집글은 현재 공개된 공고 `(sourceCode, sourceProgramId)` 하나에 묶이며 등록 뒤 공고는 바꾸지 않습니다.
 - 표시 상태 `status`는 읽을 때 계산합니다. `HIDDEN`(운영자 숨김) → `CLOSED`(작성자 조기 마감, 모집 마감일 경과,
   연결 공고 미공개 또는 접수 `CLOSED`) → 그 외 `OPEN`. 목록은 `OPEN`만, 작성 기업은 `/mine`에서 모든 상태를 봅니다.
-- 제목·본문에 이메일 주소나 한국 전화번호 형태가 있으면 `422 CONTACT_IN_TEXT`로 거부합니다. 담당자 연락처는 제안이
-  수락된 뒤 시스템이 공개합니다.
+- 제목·본문·제안 메시지에 이메일 주소나 한국 전화번호 형태가 있으면 `422 CONTACT_IN_TEXT`로 거부합니다. 담당자
+  연락처는 제안이 수락된 뒤 시스템이 상대 기업에게만 공개합니다.
 - `Authorization: Bearer` 헤더가 있으면 조회 API도 세션을 검증합니다(만료 토큰은 401). 헤더가 없으면 비로그인 조회입니다.
 
 ## 모집글 목록
@@ -65,8 +71,8 @@ GET /api/v1/recruitment-posts/{id}
     "targetDescription": "서울 소재 창업 7년 이내 AI 기업",
     "sourceUrl": "https://www.bizinfo.go.kr/…"
   },
-  "proposalCount": 0,
-  "viewer": { "isOwner": false }
+  "proposalCount": 3,
+  "viewer": { "isOwner": false, "myProposalStatus": "PENDING" }
 }
 ```
 
@@ -75,8 +81,9 @@ GET /api/v1/recruitment-posts/{id}
 | `ourRole` | 작성 기업의 역할. `LEAD`(주관기관) / `PARTICIPANT`(참여기관) |
 | `wantedRole` | 찾는 역할. `LEAD` / `PARTICIPANT` / `DEMAND`(수요처) |
 | `program` | 연결 공고 요약. 공고가 더 이상 공개되지 않으면 `null`이며 그때 `status`는 `CLOSED` |
-| `proposalCount` | 받은 제안 수. 제안 기능(P4) 전까지 항상 0 |
+| `proposalCount` | 받은 제안 수(철회 제외) |
 | `viewer.isOwner` | 요청 세션의 기업이 작성 기업인지 |
+| `viewer.myProposalStatus` | 요청 세션의 기업이 이 글에 보낸 제안의 상태. 비로그인·미제안이면 `null` |
 
 숨김·종료된 글은 작성 기업에게만 보이고 다른 사용자에게는 `404 RECRUITMENT_POST_NOT_FOUND`입니다.
 
@@ -129,7 +136,53 @@ Content-Type: application/json
 | 모집 마감일이 오늘 이전이거나 공고 마감 이후 | 422 | `RECRUITMENT_CLOSES_ON_INVALID` |
 | 제목·본문에 연락처 | 422 | `CONTACT_IN_TEXT` |
 
-## 참여 제안 (P4 예정)
+## 참여 제안
 
-제안 보내기·받은/보낸 제안·수락·거절·철회는 [파트너 모집 계획](partner-recruitment-plan.md) §4.2의 계약대로
-다음 단계에서 추가합니다.
+모든 제안 API는 `Authorization: Bearer` 세션이 필요합니다. 한 기업은 모집글 하나에 제안을 한 번만 보낼 수 있고,
+철회·거절 뒤에도 다시 보낼 수 없습니다(`(post_id, company_id)` UNIQUE). 자기 기업의 글에는 보낼 수 없습니다.
+
+| Method·Path | 누가 | 설명 |
+|---|---|---|
+| `POST /api/v1/recruitment-posts/{id}/proposals` | 다른 기업 | `{ "message": "1~500자" }`. `OPEN` 글에만. 성공 `201` |
+| `GET /api/v1/recruitment-posts/{id}/proposals` | 작성 기업 | 받은 제안 전체(최근순). `{ items: [Proposal] }` |
+| `POST /api/v1/recruitment-proposals/{id}/accept` · `/decline` | 작성 기업 | `PENDING` 제안만 수락·거절 |
+| `POST /api/v1/recruitment-proposals/{id}/withdraw` | 제안 기업 | `PENDING` 제안만 철회 |
+| `GET /api/v1/recruitment-proposals/sent` | 제안 기업 | 내 기업이 보낸 제안 전체(최근순). 대상 글이 종료돼도 남음 |
+
+```json
+{
+  "id": 5,
+  "postId": 12,
+  "status": "ACCEPTED",
+  "message": "공공 데이터 라벨링 운영 경험이 있는 참여기관입니다. 세부 비율은 협의하겠습니다.",
+  "createdAt": "2026-09-06T12:00:00+09:00",
+  "decidedAt": "2026-09-07T10:00:00+09:00",
+  "company": { "businessNumber": "2208162517", "companyName": "비전솔루션", "businessStatus": "계속사업자" },
+  "post": { "id": 12, "status": "OPEN", "title": "AI 실증 과제 데이터 구축·라벨링 참여기관 구합니다", "closesOn": "2026-09-20", "companyName": "데이터브릿지 주식회사" },
+  "contactEmail": "partner@vision.co.kr"
+}
+```
+
+| 필드 | 설명 |
+|---|---|
+| `status` | 저장값 `PENDING`/`ACCEPTED`/`DECLINED`/`WITHDRAWN`에 더해, 결정 없이 7일이 지난 제안은 `EXPIRED`, 모집글이 `OPEN`이 아니면 `CLOSED`로 계산 |
+| `company` | 제안 기업 |
+| `post` | 대상 모집글 요약. 전체는 모집글 상세 API |
+| `contactEmail` | `ACCEPTED`일 때만 상대 담당자 이메일(작성 기업에게는 제안 담당자, 제안 기업에게는 작성 담당자). 그 외 `null` |
+
+수락·거절·철회는 계산된 `status`가 `PENDING`일 때만 가능하며(만료·마감된 제안은 불가), 성공 시 바뀐 제안을 `200`으로 돌려줍니다.
+
+### 제안 오류
+
+| 상황 | HTTP | `code` |
+|---|---:|---|
+| `message` 검증 실패(빈 값, 500자 초과) | 400 | `REQUEST_VALIDATION_FAILED` |
+| 자기 기업의 글에 제안 | 403 | `OWN_POST` |
+| 작성 기업이 아닌데 받은 제안 조회·수락·거절 | 403 | `NOT_POST_OWNER` |
+| 제안 기업이 아닌데 철회 | 403 | `NOT_PROPOSAL_OWNER` |
+| 모집글 없음 | 404 | `RECRUITMENT_POST_NOT_FOUND` |
+| 제안 없음 | 404 | `PROPOSAL_NOT_FOUND` |
+| 같은 글에 이미 제안함 | 409 | `PROPOSAL_ALREADY_EXISTS` |
+| 모집 중이 아닌 글에 제안 | 409 | `RECRUITMENT_POST_NOT_OPEN` |
+| 이미 결정·만료·마감된 제안 | 409 | `PROPOSAL_NOT_PENDING` |
+| 메시지에 연락처 | 422 | `CONTACT_IN_TEXT` |

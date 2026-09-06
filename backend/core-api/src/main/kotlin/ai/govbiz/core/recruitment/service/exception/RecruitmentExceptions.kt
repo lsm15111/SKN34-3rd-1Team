@@ -17,3 +17,18 @@ class RecruitmentClosesOnInvalidException : RuntimeException()
 
 /** 본문에 이메일·전화번호 같은 연락처가 들어 있을 때 발생합니다. */
 class ContactInTextException : RuntimeException()
+
+/** 제안이 없거나 조회자와 무관한 제안일 때 발생합니다. */
+class ProposalNotFoundException : RuntimeException()
+
+/** 자기 기업이 쓴 모집글에 제안하려 할 때 발생합니다. */
+class OwnPostProposalException : RuntimeException()
+
+/** 제안 기업이 아닌 계정이 철회하려 할 때 발생합니다. */
+class NotProposalOwnerException : RuntimeException()
+
+/** 같은 기업이 같은 모집글에 이미 제안했을 때 발생합니다. 철회·거절 뒤에도 다시 제안할 수 없습니다. */
+class ProposalAlreadyExistsException : RuntimeException()
+
+/** 이미 결정됐거나 만료·마감으로 더 이상 PENDING이 아닌 제안을 수락·거절·철회하려 할 때 발생합니다. */
+class ProposalNotPendingException : RuntimeException()

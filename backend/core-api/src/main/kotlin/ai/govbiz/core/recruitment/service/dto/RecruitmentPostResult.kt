@@ -1,17 +1,24 @@
 package ai.govbiz.core.recruitment.service.dto
 
 import ai.govbiz.core.account.domain.Company
+import ai.govbiz.core.recruitment.domain.ProposalStatus
 import ai.govbiz.core.recruitment.domain.RecruitmentPost
 import ai.govbiz.core.recruitment.domain.RecruitmentPostStatus
 import ai.govbiz.core.supportprogram.domain.SupportProgram
 
-/** 상태·작성 기업·연결 공고·조회자 관계를 채운 모집글입니다. 연결 공고가 더 이상 공개되지 않으면 null입니다. */
+/**
+ * 상태·작성 기업·연결 공고·조회자 관계를 채운 모집글입니다. 연결 공고가 더 이상 공개되지 않으면 null입니다.
+ *
+ * [proposalCount]는 철회를 뺀 받은 제안 수, [myProposalStatus]는 조회 기업이 이 글에 보낸 제안의 표시 상태입니다.
+ */
 data class RecruitmentPostResult(
     val post: RecruitmentPost,
     val status: RecruitmentPostStatus,
     val company: Company,
     val program: SupportProgram?,
     val isOwner: Boolean,
+    val proposalCount: Int = 0,
+    val myProposalStatus: ProposalStatus? = null,
 )
 
 data class RecruitmentPostPageResult(

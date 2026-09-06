@@ -12,7 +12,7 @@
                        ├→ 공공데이터포털: 기업마당 전체 공고 수집
                        ├→ 기업마당 공식 HTTPS 상세 페이지: 명시적 원문 질문 시 HTML 수집
                        ├→ Bizno: 회원가입 전 사업자등록번호로 국세청 등록 기업 확인
-                       ├→ MySQL: 회원·기업·세션, 공고에 묶인 파트너 모집글
+                       ├→ MySQL: 회원·기업·세션, 공고에 묶인 파트너 모집글·참여 제안
                        └→ AI Service
                            ├→ OpenAI: 문서·질의 임베딩, 후보 점수화·근거 답변
                            └→ Qdrant: 공고 검색·원문 근거 청크의 분리된 벡터 컬렉션
@@ -203,10 +203,26 @@ GET /api/v1/recruitment-posts
   → 글마다 연결 공고를 읽어 RecruitmentPostStatusResolver로 상태 계산
 ```
 
+```text
+POST /api/v1/recruitment-posts/{id}/proposals
+  → RecruitmentProposalController (Account 파라미터 = 제안 담당자 세션)
+    → RecruitmentProposalService
+        1. 메시지 연락처 패턴 검사 → 422
+        2. RecruitmentPostRepository.findById → 없으면 404, 자기 기업 글이면 403, 계산 상태가 OPEN이 아니면 409
+        3. RecruitmentProposalRepository.create → (post_id, company_id) UNIQUE 위반이면 409
+    → 201 제안 상태·제안 기업·대상 글 요약
+
+POST /api/v1/recruitment-proposals/{id}/accept | decline | withdraw
+  → 제안·대상 글을 읽어 작성 기업(수락·거절) 또는 제안 기업(철회)인지 확인 → 아니면 403
+  → ProposalStatusResolver가 PENDING이라고 판정할 때만 decision='PENDING' 조건부 UPDATE → 0행이면 409
+  → ACCEPTED가 되면 응답의 contactEmail에 상대 담당자 이메일(AccountRepository 읽기)
+```
+
 `recruitment` 기능은 `account`의 `Account`·`Company`와 `supportprogram`의 `SupportProgram`을 읽기 전용으로
-사용하고, 다른 기능의 테이블에 쓰지 않습니다. 모집 상태는 저장하지 않으며 `RecruitmentPostStatusResolver`가 숨김 >
-조기 마감·마감일 경과·공고 미공개·공고 접수 종료 > 모집 중 순으로 판정합니다. `Account?`처럼 nullable 파라미터는
-헤더가 없으면 null(비로그인 조회), 헤더가 있으면 세션을 검증합니다.
+사용하고, 다른 기능의 테이블에 쓰지 않습니다. 모집·제안 상태는 저장하지 않으며 `RecruitmentPostStatusResolver`가 숨김 >
+조기 마감·마감일 경과·공고 미공개·공고 접수 종료 > 모집 중 순으로, `ProposalStatusResolver`가 결정값 > 7일 만료 >
+모집글 종료 > 대기 순으로 판정합니다. 모집글 응답의 받은 제안 수와 조회 기업의 제안 상태는 글 묶음 단위로 한 번에
+읽습니다. `Account?`처럼 nullable 파라미터는 헤더가 없으면 null(비로그인 조회), 헤더가 있으면 세션을 검증합니다.
 
 ## 검색 품질 평가 fixture 내보내기와 캡처
 

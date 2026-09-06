@@ -1,10 +1,12 @@
 package ai.govbiz.core.recruitment.service
 
 import ai.govbiz.core.account.helper.AccountTestHelper
+import ai.govbiz.core.recruitment.domain.ProposalStatus
 import ai.govbiz.core.recruitment.domain.RecruitmentPostStatus
 import ai.govbiz.core.recruitment.helper.RecruitmentTestHelper
 import ai.govbiz.core.recruitment.repository.RecruitmentPostPage
 import ai.govbiz.core.recruitment.repository.RecruitmentPostRepository
+import ai.govbiz.core.recruitment.repository.RecruitmentProposalRepository
 import ai.govbiz.core.recruitment.service.exception.ContactInTextException
 import ai.govbiz.core.recruitment.service.exception.NotPostOwnerException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentClosesOnInvalidException
@@ -37,6 +39,9 @@ class RecruitmentPostServiceTest {
     private lateinit var repository: RecruitmentPostRepository
 
     @Mock
+    private lateinit var proposalRepository: RecruitmentProposalRepository
+
+    @Mock
     private lateinit var supportProgramRepository: SupportProgramRepository
 
     private lateinit var service: RecruitmentPostService
@@ -48,7 +53,7 @@ class RecruitmentPostServiceTest {
 
     @BeforeEach
     fun setUp() {
-        service = RecruitmentPostService(repository, supportProgramRepository, AccountTestHelper.FIXED_CLOCK)
+        service = RecruitmentPostService(repository, proposalRepository, supportProgramRepository, AccountTestHelper.FIXED_CLOCK)
     }
 
     @Test
@@ -153,6 +158,25 @@ class RecruitmentPostServiceTest {
         assertFalse(anonymous.posts[0].isOwner)
         assertTrue(asOwner.posts[0].isOwner)
         assertEquals(RecruitmentPostStatus.OPEN, anonymous.posts[0].status)
+    }
+
+    @Test
+    fun attachesProposalCountsAndTheViewersOwnProposalStatus() {
+        doReturn(RecruitmentPostPage(listOf(RecruitmentTestHelper.stored()), 0, 20, 1))
+            .`when`(repository).findOpenPage(null, null, 0, 20)
+        stubProgram(RecruitmentTestHelper.program())
+        doReturn(mapOf(1L to 3)).`when`(proposalRepository).countByPostIds(listOf(1L))
+        doReturn(mapOf(1L to RecruitmentTestHelper.storedProposal()))
+            .`when`(proposalRepository).findByPostIdsAndCompanyId(listOf(1L), 2L)
+
+        val asProposer = service.listOpen(null, null, 0, 20, otherCompanyViewer).posts.single()
+        val anonymous = service.listOpen(null, null, 0, 20, null).posts.single()
+
+        assertEquals(3, asProposer.proposalCount)
+        assertEquals(ProposalStatus.PENDING, asProposer.myProposalStatus)
+        assertEquals(3, anonymous.proposalCount)
+        assertNull(anonymous.myProposalStatus)
+        verify(proposalRepository, never()).findByPostIdsAndCompanyId(listOf(1L), 1L)
     }
 
     @Test

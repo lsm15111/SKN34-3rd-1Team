@@ -2,10 +2,12 @@ package ai.govbiz.core.recruitment.service
 
 import ai.govbiz.core.account.domain.Account
 import ai.govbiz.core.recruitment.domain.ContactPatternPolicy
+import ai.govbiz.core.recruitment.domain.ProposalStatusResolver
 import ai.govbiz.core.recruitment.domain.RecruitmentPostDraft
 import ai.govbiz.core.recruitment.domain.RecruitmentPostStatus
 import ai.govbiz.core.recruitment.domain.RecruitmentPostStatusResolver
 import ai.govbiz.core.recruitment.repository.RecruitmentPostRepository
+import ai.govbiz.core.recruitment.repository.RecruitmentProposalRepository
 import ai.govbiz.core.recruitment.repository.StoredRecruitmentPost
 import ai.govbiz.core.recruitment.service.dto.RecruitmentPostPageResult
 import ai.govbiz.core.recruitment.service.dto.RecruitmentPostResult
@@ -20,17 +22,20 @@ import ai.govbiz.core.supportprogram.domain.SupportProgramStatus
 import ai.govbiz.core.supportprogram.repository.SupportProgramRepository
 import java.time.Clock
 import java.time.LocalDate
+import java.time.LocalDateTime
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 
 /**
  * 공식 공고에 묶인 파트너 모집글의 등록·수정·조기 마감·조회입니다.
  *
- * 연결 공고는 지원사업 Repository에서 읽기만 하며, 모집 상태는 저장하지 않고 조회 시 계산합니다.
+ * 연결 공고는 지원사업 Repository에서 읽기만 하며, 모집 상태는 저장하지 않고 조회 시 계산합니다. 받은 제안 수와 조회
+ * 기업의 제안 상태는 제안 Repository에서 글 묶음 단위로 읽어 붙입니다.
  */
 @Service
 class RecruitmentPostService(
     private val repository: RecruitmentPostRepository,
+    private val proposalRepository: RecruitmentProposalRepository,
     private val supportProgramRepository: SupportProgramRepository,
     @param:Qualifier("seoulClock") private val clock: Clock,
 ) {
@@ -54,7 +59,7 @@ class RecruitmentPostService(
             sourceProgramId = program.id,
             draft = draft,
         )
-        return stored.toResult(program, viewer = author)
+        return toResults(listOf(stored), viewer = author).single()
     }
 
     fun update(author: Account, postId: Long, draft: RecruitmentPostDraft): RecruitmentPostResult {
@@ -62,20 +67,20 @@ class RecruitmentPostService(
         val (stored, program) = requireOpenOwnedPost(author, postId)
         requireValidClosesOn(draft.closesOn, program)
 
-        return repository.update(postId, draft).toResult(program, viewer = author)
+        return toResults(listOf(repository.update(postId, draft)), viewer = author).single()
     }
 
     fun closeEarly(author: Account, postId: Long): RecruitmentPostResult {
-        val (_, program) = requireOpenOwnedPost(author, postId)
+        requireOpenOwnedPost(author, postId)
         check(repository.closeEarly(postId)) { "recruitment post was not closed" }
 
-        return requireNotNull(repository.findById(postId)).toResult(program, viewer = author)
+        return toResults(listOf(requireNotNull(repository.findById(postId))), viewer = author).single()
     }
 
     /** 숨김·종료된 글은 작성 기업에게만 보이고 다른 사용자에게는 없는 글입니다. */
     fun get(postId: Long, viewer: Account?): RecruitmentPostResult {
         val stored = repository.findById(postId) ?: throw RecruitmentPostNotFoundException()
-        val result = stored.toResult(findPresentProgram(stored.post.sourceCode, stored.post.sourceProgramId), viewer)
+        val result = toResults(listOf(stored), viewer).single()
         if (result.status != RecruitmentPostStatus.OPEN && !result.isOwner) {
             throw RecruitmentPostNotFoundException()
         }
@@ -91,9 +96,7 @@ class RecruitmentPostService(
     ): RecruitmentPostPageResult {
         val stored = repository.findOpenPage(sourceCode, sourceProgramId, page, size)
         return RecruitmentPostPageResult(
-            posts = java.util.List.copyOf(
-                stored.posts.map { it.toResult(findPresentProgram(it.post.sourceCode, it.post.sourceProgramId), viewer) },
-            ),
+            posts = toResults(stored.posts, viewer),
             page = stored.page,
             size = stored.size,
             totalCount = stored.totalCount,
@@ -102,10 +105,7 @@ class RecruitmentPostService(
 
     /** 작성 기업의 글은 상태와 무관하게 모두 보입니다. */
     fun listMine(author: Account): List<RecruitmentPostResult> =
-        java.util.List.copyOf(
-            repository.findByCompanyId(author.company.id)
-                .map { it.toResult(findPresentProgram(it.post.sourceCode, it.post.sourceProgramId), author) },
-        )
+        toResults(repository.findByCompanyId(author.company.id), author)
 
     private fun requireOpenOwnedPost(author: Account, postId: Long): Pair<StoredRecruitmentPost, SupportProgram?> {
         val stored = repository.findById(postId) ?: throw RecruitmentPostNotFoundException()
@@ -132,12 +132,29 @@ class RecruitmentPostService(
     private fun findPresentProgram(sourceCode: String, sourceProgramId: String): SupportProgram? =
         supportProgramRepository.findPresentBySourceAndProgramId(sourceCode, sourceProgramId)?.program
 
-    private fun StoredRecruitmentPost.toResult(program: SupportProgram?, viewer: Account?): RecruitmentPostResult =
-        RecruitmentPostResult(
-            post = post,
-            status = RecruitmentPostStatusResolver.resolve(post, program, LocalDate.now(clock)),
-            company = company,
-            program = program,
-            isOwner = viewer != null && post.isOwnedBy(viewer.company.id),
+    /** 글마다 연결 공고를 읽어 상태를 계산하고, 제안 수·조회 기업의 제안은 글 묶음으로 한 번에 읽습니다. */
+    private fun toResults(items: List<StoredRecruitmentPost>, viewer: Account?): List<RecruitmentPostResult> {
+        if (items.isEmpty()) return emptyList()
+        val postIds = items.map { it.post.id }
+        val proposalCounts = proposalRepository.countByPostIds(postIds)
+        val myProposals = viewer?.let { proposalRepository.findByPostIdsAndCompanyId(postIds, it.company.id) }.orEmpty()
+        val today = LocalDate.now(clock)
+        val now = LocalDateTime.now(clock)
+        return java.util.List.copyOf(
+            items.map { stored ->
+                val post = stored.post
+                val program = findPresentProgram(post.sourceCode, post.sourceProgramId)
+                val status = RecruitmentPostStatusResolver.resolve(post, program, today)
+                RecruitmentPostResult(
+                    post = post,
+                    status = status,
+                    company = stored.company,
+                    program = program,
+                    isOwner = viewer != null && post.isOwnedBy(viewer.company.id),
+                    proposalCount = proposalCounts[post.id] ?: 0,
+                    myProposalStatus = myProposals[post.id]?.let { ProposalStatusResolver.resolve(it.proposal, status, now) },
+                )
+            },
         )
+    }
 }

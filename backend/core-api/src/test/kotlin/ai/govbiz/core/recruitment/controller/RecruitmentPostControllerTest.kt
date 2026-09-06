@@ -5,6 +5,7 @@ import ai.govbiz.core.account.helper.AccountTestHelper
 import ai.govbiz.core.account.service.AccountSessionService
 import ai.govbiz.core.account.service.exception.AuthenticationRequiredException
 import ai.govbiz.core.account.web.AuthenticatedAccountArgumentResolver
+import ai.govbiz.core.recruitment.domain.ProposalStatus
 import ai.govbiz.core.recruitment.domain.RecruitmentPostStatus
 import ai.govbiz.core.recruitment.helper.RecruitmentTestHelper
 import ai.govbiz.core.recruitment.service.RecruitmentPostService
@@ -15,6 +16,7 @@ import ai.govbiz.core.recruitment.service.exception.NotPostOwnerException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotFoundException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotOpenException
 import ai.govbiz.core.recruitment.service.exception.SupportProgramNotOpenException
+import org.hamcrest.Matchers.nullValue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.extension.ExtendWith
@@ -76,8 +78,9 @@ class RecruitmentPostControllerTest {
             .andExpect(jsonPath("$.items[0].company.companyName").value("삼성전자(주)"))
             .andExpect(jsonPath("$.items[0].program.title").value("서울 AI 스타트업 실증 지원사업"))
             .andExpect(jsonPath("$.items[0].program.applicationEndDate").value("2026-09-30"))
-            .andExpect(jsonPath("$.items[0].proposalCount").value(0))
+            .andExpect(jsonPath("$.items[0].proposalCount").value(2))
             .andExpect(jsonPath("$.items[0].viewer.isOwner").value(false))
+            .andExpect(jsonPath("$.items[0].viewer.myProposalStatus").value("PENDING"))
 
         verifyNoInteractions(sessionService)
     }
@@ -91,6 +94,7 @@ class RecruitmentPostControllerTest {
         mockMvc.perform(get("$PATH/1").header(HttpHeaders.AUTHORIZATION, "Bearer token"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.viewer.isOwner").value(true))
+            .andExpect(jsonPath("$.viewer.myProposalStatus").value(nullValue()))
 
         mockMvc.perform(get("$PATH/1").header(HttpHeaders.AUTHORIZATION, "Bearer expired"))
             .andExpect(status().isUnauthorized())
@@ -200,6 +204,8 @@ class RecruitmentPostControllerTest {
             company = AccountTestHelper.company(),
             program = RecruitmentTestHelper.program(),
             isOwner = isOwner,
+            proposalCount = 2,
+            myProposalStatus = if (isOwner) null else ProposalStatus.PENDING,
         )
 
     private fun createBody(
