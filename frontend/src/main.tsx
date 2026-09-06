@@ -6,8 +6,9 @@ import { BrowserRouter } from 'react-router'
 import './index.css'
 import App from './App.tsx'
 import { createAppStore } from './app/store'
+import { createLocalAnonymousUsageStorage } from './data/storage/anonymousUsageStorage'
 
-const appStore = createAppStore()
+const appStore = createAppStore({ anonymousUsageStorage: createLocalAnonymousUsageStorage() })
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -9,6 +9,7 @@ import App from './App'
 import { appContainer } from './app/appContainer'
 import { createAppStore } from './app/store'
 import { supportPrograms } from './data/fixtures/supportPrograms'
+import { createMemoryAnonymousUsageStorage } from './data/storage/anonymousUsageStorage'
 
 vi.mock('./presentation/shared/core-api-status/CoreApiConnectionStatus', () => ({
   CoreApiConnectionStatus: () => null,
@@ -163,6 +164,69 @@ describe('Account sign-up and login', () => {
     expect(window.localStorage.getItem('govbiz.sessionToken')).toBeNull()
   })
 
+  it('비로그인 무료 검색을 모두 쓰면 검색 대신 가입 안내 모달을 띄운다', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const usageStorage = createMemoryAnonymousUsageStorage(3)
+
+    renderApp(createAppStore({ anonymousUsageStorage: usageStorage }))
+
+    await screen.findByText('무료 검색 0회 남음')
+    const chatInput = screen.getByRole('textbox', { name: '지원사업 검색어' })
+    fireEvent.change(chatInput, { target: { value: '서울 AI' } })
+    fireEvent.submit(chatInput.closest('form')!)
+
+    const dialog = await screen.findByRole('dialog', { name: '무료 검색 3회를 모두 사용했어요' })
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect((chatInput as HTMLTextAreaElement).value).toBe('서울 AI')
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(document.activeElement).toBe(chatInput)
+
+    fireEvent.submit(chatInput.closest('form')!)
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('link', { name: '간편 회원가입' }))
+    expect(screen.getByRole('heading', { name: '간편 회원가입' })).toBeTruthy()
+    expect(usageStorage.read()).toBe(3)
+    void dialog
+  })
+
+  it('비로그인 검색은 횟수를 저장하고 로그인하면 제한을 해제한다', async () => {
+    const usageStorage = createMemoryAnonymousUsageStorage(2)
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ query: '서울 AI', programs: [supportPrograms[0]] }))
+      .mockResolvedValueOnce(jsonResponse(sampleSession))
+      .mockResolvedValueOnce(jsonResponse({ query: '수출', programs: [supportPrograms[3]] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore({ anonymousUsageStorage: usageStorage }))
+
+    await screen.findByText('무료 검색 1회 남음')
+    const chatInput = screen.getByRole('textbox', { name: '지원사업 검색어' })
+    fireEvent.change(chatInput, { target: { value: '서울 AI' } })
+    fireEvent.submit(chatInput.closest('form')!)
+
+    await screen.findByText('무료 검색 0회 남음')
+    expect(usageStorage.read()).toBe(3)
+
+    fireEvent.click(screen.getByRole('link', { name: '로그인' }))
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'manager@company.co.kr' } })
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: 'password1' } })
+    fireEvent.click(screen.getByRole('button', { name: '로그인' }))
+
+    await screen.findByRole('button', { name: '로그아웃' })
+    expect(screen.queryByText(/무료 검색/)).toBeNull()
+    expect(usageStorage.read()).toBe(0)
+
+    const signedInInput = screen.getByRole('textbox', { name: '지원사업 검색어' })
+    fireEvent.change(signedInInput, { target: { value: '수출' } })
+    fireEvent.submit(signedInInput.closest('form')!)
+
+    await screen.findByText('현재 접수 중인 관련 공고 1건을 찾았습니다. 공고를 선택하면 자세한 조건과 원문을 확인할 수 있어요.')
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+  })
+
   it('로그인한 상태에서는 로그인·회원가입 화면 대신 홈으로 보낸다', async () => {
     window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ account: sampleAccount })))
@@ -192,7 +256,7 @@ describe('App navigation', () => {
     vi.stubGlobal('fetch', fetchMock)
     const appStore = createAppStore()
 
-    expect(Object.keys(appStore.getState())).toEqual(['chat', 'auth', 'sampleItem'])
+    expect(Object.keys(appStore.getState())).toEqual(['chat', 'auth', 'usage', 'sampleItem'])
 
     renderApp(appStore)
 

@@ -8,6 +8,7 @@ import {
   useSupportProgramChatViewModel,
 } from '../viewmodel/useSupportProgramChatViewModel'
 import { useSupportProgramSearchReadinessViewModel } from '../viewmodel/useSupportProgramSearchReadinessViewModel'
+import { AuthGateModal } from '../../auth/view/AuthGateModal'
 import { useAuthSessionViewModel } from '../../auth/viewmodel/useAuthSessionViewModel'
 import {
   chatBackdropClassName,
@@ -35,9 +36,13 @@ export function ChatPage() {
     startNewConversation,
     submitMessage,
     updateDraft,
+    closeAuthGate,
+    isAuthGateOpen,
+    remainingAnonymousSearches,
   } = useSupportProgramChatViewModel()
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const isComposingInput = useRef(false)
+  const composerInputRef = useRef<HTMLTextAreaElement>(null)
   const menuButtonRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
   const sidebarPrimaryActionRef = useRef<HTMLButtonElement>(null)
@@ -154,6 +159,11 @@ export function ChatPage() {
   function openSidebar() {
     shouldRestoreMenuFocusRef.current = false
     setIsSidebarOpen(true)
+  }
+
+  function handleCloseAuthGate() {
+    closeAuthGate()
+    composerInputRef.current?.focus()
   }
 
   function closeSidebar() {
@@ -282,6 +292,11 @@ export function ChatPage() {
             <span className={chatPageStyles.sourceBadge}>
               기업마당 공식 데이터
             </span>
+            {remainingAnonymousSearches !== null ? (
+              <span className={chatPageStyles.sourceBadge}>
+                무료 검색 {remainingAnonymousSearches}회 남음
+              </span>
+            ) : null}
             {session.isAuthenticated && session.account ? (
               <>
                 <span className={chatPageStyles.accountBadge} title={session.account.email}>
@@ -398,6 +413,7 @@ export function ChatPage() {
             </div>
           ) : null}
           <textarea
+            ref={composerInputRef}
             className={chatPageStyles.composerInput}
             aria-label="지원사업 검색어"
             aria-describedby="support-program-search-readiness"
@@ -447,6 +463,7 @@ export function ChatPage() {
           </small>
         </form>
       </section>
+      {isAuthGateOpen ? <AuthGateModal onClose={handleCloseAuthGate} /> : null}
     </main>
   )
 }

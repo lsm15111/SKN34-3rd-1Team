@@ -17,7 +17,7 @@ describe('sampleItemSlice', () => {
   it('validates fields and derives whether the request is ready', () => {
     const store = createAppStore()
 
-    expect(Object.keys(store.getState())).toEqual(['chat', 'auth', 'sampleItem'])
+    expect(Object.keys(store.getState())).toEqual(['chat', 'auth', 'usage', 'sampleItem'])
     expect(selectIsSampleItemReady(store.getState())).toBe(false)
     store.dispatch(nameChanged('Redux 예제'))
     expect(selectIsSampleItemReady(store.getState())).toBe(true)

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { appContainer } from '../../../../app/appContainer'
 import { useAppDispatch, useAppSelector } from '../../../../app/hooks'
@@ -23,6 +23,12 @@ import {
   selectIsChatSearching,
   selectIsReadyToSubmit,
 } from '../state/chatSlice'
+import { selectAuthStatus, selectIsAuthenticated } from '../../auth/state/authSlice'
+import {
+  anonymousSearchCompleted,
+  selectIsAnonymousSearchLimitReached,
+  selectRemainingAnonymousSearches,
+} from '../../auth/state/usageSlice'
 
 export const supportProgramChatSuggestions = [
   '서울 AI 창업지원 사업 찾아줘',
@@ -52,6 +58,10 @@ export function useSupportProgramChatViewModel(
   const messages = useAppSelector(selectChatMessages)
   const canRetrySearch = useAppSelector(selectCanRetryChatSearch)
   const searchError = useAppSelector(selectChatSearchError)
+  const authStatus = useAppSelector(selectAuthStatus)
+  const remainingAnonymousSearches = useAppSelector(selectRemainingAnonymousSearches)
+  const [isAuthGateOpen, setIsAuthGateOpen] = useState(false)
+  const closeAuthGate = useCallback(() => setIsAuthGateOpen(false), [])
 
   useEffect(() => () => {
     const currentRequest = activeSearchRequest.current
@@ -112,6 +122,11 @@ export function useSupportProgramChatViewModel(
         dispatchAction(searchValidationFailed({ queryLength: searchQuery.length }))
         return
       }
+      // 브라우저에 기록한 횟수 기준의 안내이며, 로그인하면 제한하지 않습니다.
+      if (!selectIsAuthenticated(currentState) && selectIsAnonymousSearchLimitReached(currentState)) {
+        setIsAuthGateOpen(true)
+        return
+      }
 
       const searchStartedAction = searchStarted(searchQuery)
       const requestController = new AbortController()
@@ -145,6 +160,9 @@ export function useSupportProgramChatViewModel(
           requestId,
         })
         dispatchAction(searchSucceededAction)
+        if (!selectIsAuthenticated(readCurrentState())) {
+          dispatchAction(anonymousSearchCompleted())
+        }
       } catch {
         if (requestController.signal.aborted) return
 
@@ -164,6 +182,10 @@ export function useSupportProgramChatViewModel(
 
   return {
     conversationCount,
+    closeAuthGate,
+    isAuthGateOpen,
+    /** 로그인 여부를 아직 모르는 동안은 남은 횟수를 표시하지 않습니다. */
+    remainingAnonymousSearches: authStatus === 'anonymous' ? remainingAnonymousSearches : null,
     canRetrySearch,
     draft,
     isReadyToSubmit,
