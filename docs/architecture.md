@@ -11,6 +11,7 @@
                        ├→ MySQL: 현재 공개 공고 카탈로그·공고별 공식 원문
                        ├→ 공공데이터포털: 기업마당 전체 공고 수집
                        ├→ 기업마당 공식 HTTPS 상세 페이지: 명시적 원문 질문 시 HTML 수집
+                       ├→ Bizno: 회원가입 전 사업자등록번호로 국세청 등록 기업 확인
                        └→ AI Service
                            ├→ OpenAI: 문서·질의 임베딩, 후보 점수화·근거 답변
                            └→ Qdrant: 공고 검색·원문 근거 청크의 분리된 벡터 컬렉션
@@ -21,7 +22,7 @@ Core가 전달한 공고 문서·원문 청크의 색인·검색·점수화·근
 
 브라우저는 Core API의 `/api`만 호출합니다. Compose에서 Vite는 `/api`를 `core-api:8080`으로 프록시하며,
 AI Service는 호스트에 포트를 게시하지 않습니다. MySQL·Qdrant·Core API·Web의 개발용 포트는
-`127.0.0.1`에 바인딩합니다. 기업마당 키는 Core API에, OpenAI 키는 AI Service에만 주입합니다.
+`127.0.0.1`에 바인딩합니다. 기업마당 키와 Bizno 키는 Core API에, OpenAI 키는 AI Service에만 주입합니다.
 이는 개발 환경의 서비스 배치이며 운영 인증·접근 제어가 구현됐다는 의미는 아닙니다.
 
 ## 검색·상세 조회·원문 근거 질문
@@ -133,6 +134,20 @@ POST /api/v1/support-programs/detail/answers
 첨부파일·PDF·OCR·다른 제공처 원문 수집은 이 흐름에 포함하지 않습니다. 공고 목록 검색의 Qdrant 후보 선정·AI
 점수화와도 별도 사용 사례이므로, 원문 질문을 하지 않으면 기업마당 상세 HTML을 수집하거나 evidence 컬렉션을
 사용하지 않습니다.
+
+## 회원가입 전 기업 확인
+
+```text
+GET /api/v1/auth/businesses/lookup?businessNumber=124-81-00998
+  → BiznoBusinessController (형식 검증: 숫자 10자리, 하이픈 선택)
+    → BiznoBusinessService (하이픈 제거)
+      → BiznoClient → Bizno /api/fapi (gb=1, type=json)
+        → resultCode 확인 → items의 null 칸 제거 → 요청 번호와 같고 사업자 상태 코드가 있는 항목만 반환
+```
+
+`account` 기능은 Facade 없이 Service가 Client를 직접 사용합니다. 조회 결과는 저장하지 않고, DB 접근도
+없습니다. Bizno가 미등록 번호에도 임의 상호를 돌려주기 때문에 등록 여부는 사업자 상태 코드로만 판단합니다.
+계정·기업·세션 저장과 가입·로그인 흐름은 [계정·인증 계획](account-auth-plan.md)의 다음 단계입니다.
 
 ## 검색 품질 평가 fixture 내보내기와 캡처
 
@@ -294,6 +309,8 @@ AI Service의 LLM 실행 실패·색인 미준비·Qdrant 실패는 내부 503�
 `503 AI_SERVICE_UNAVAILABLE`로 변환합니다. Core가 관측한 연결·읽기 timeout 및 점수화·색인 API의
 내부 408·504는 504, 예상하지 않은 HTTP 상태나 잘못된 응답 계약은 502로 분류합니다.
 공개 응답은 `application/problem+json`이며 내부 URL·원본 라이브러리 예외를 노출하지 않습니다.
+Bizno 기업 확인도 같은 규칙으로 키 미설정·연결 불가는 503, 시간 초과는 504, 예상하지 않은 상태·`resultCode`·
+잘못된 응답은 502로 분류하며 요청 URL에 담긴 API 키를 응답·원인 예외에 남기지 않습니다.
 
 Core의 Health는 프로세스 상태, AI Health는 AI Service의 정해진 Health 응답을 확인하는 기능입니다.
 이들이 성공했다고 MySQL·Qdrant·OpenAI를 포함한 실제 검색 전체가 준비됐음을 보장하지 않습니다.

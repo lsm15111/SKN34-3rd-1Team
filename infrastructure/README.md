@@ -54,6 +54,10 @@ OPENAI_API_KEY=발급받은_OpenAI_API_키
 | `BIZINFO_SYNC_ENABLED` | `true` | `false`이면 기업마당 공고 자동 동기화를 실행하지 않음 |
 | `BIZINFO_SYNC_INITIAL_DELAY` | `PT0S` | 앱 시작 시 스케줄러의 첫 동기화까지의 ISO-8601 기간. 기본값은 즉시 실행 |
 | `BIZINFO_SYNC_FIXED_DELAY` | `PT6H` | 이전 동기화가 끝난 뒤 다음 동기화까지의 ISO-8601 기간 |
+| `BIZNO_API_KEY` | 빈 값 | 회원가입 전 사업자등록번호 기업 확인에 쓰는 Bizno 키. 비어 있으면 기업 조회 요청만 503 |
+| `BIZNO_URL` | `https://bizno.net/api/fapi` | Bizno 조회 endpoint. 경로는 `/api/fapi`로 고정 |
+| `BIZNO_API_CONNECT_TIMEOUT` | `2s` | Bizno 연결 제한시간 |
+| `BIZNO_API_READ_TIMEOUT` | `10s` | Bizno 응답 제한시간 |
 | `OPENAI_API_KEY` | 없음(필수) | AI Service만 사용하는 OpenAI 인증키 |
 | `OPENAI_MODEL` | `gpt-5.6-luna` | 현재 Compose에 설정된 Agent의 Structured Output 모델 |
 | `LLM_MODEL_TIMEOUT_SECONDS` | `8.0` | OpenAI 모델 호출 한 번의 제한시간(초) |

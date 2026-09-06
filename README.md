@@ -176,6 +176,7 @@ Docker 이미지·의존성을 처음 내려받을 때는 네트워크가 필요
 | [구현 현황](docs/implementation-status.md) | 구현된 기능, 현재 제약, 검증 범위와 다음 개발 과제 |
 | [아키텍처](docs/architecture.md) | 코드 계층, 호출 흐름, 의존성 규칙 |
 | [검색·상세 API 계약](docs/support-program-search-contract.md) | 공개 API와 내부 AI 요청·응답 |
+| [계정·인증 API 계약](docs/account-auth-contract.md) | 사업자등록번호 기업 확인과 계정 API |
 | [실행·컨테이너 안내](infrastructure/README.md) | 환경변수, 서비스별 접속, 검증·초기화 방법 |
 | 서비스별 안내 | [Frontend](frontend/README.md) · [Core API](backend/core-api/README.md) · [AI Service](backend/ai-service/README.md) |
 | [검색 평가 자료](evaluation/support-program-search/README.md) | 가상 공고 회귀 평가와 실제 검색 흐름 캡처·실데이터 평가 준비 |

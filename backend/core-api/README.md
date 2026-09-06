@@ -95,6 +95,7 @@ capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 �
 | `GET /api/v1/support-programs/search` | 현재 MySQL 공고 카탈로그의 검색 또는 최신 목록 |
 | `GET /api/v1/support-programs/detail` | 제공처 코드와 원본 ID로 현재 공고 상세 조회 |
 | `POST /api/v1/support-programs/detail/answers` | 특정 공고의 공식 원문 근거 질문·답변 |
+| `GET /api/v1/auth/businesses/lookup` | 회원가입 전 사업자등록번호로 국세청 등록 기업 확인(Bizno) |
 | `POST /api/v1/sample-items/prepare` | 계층 연결 학습용 예제 |
 
 - 검색: 필수 `query`는 최대 500자이며 빈 문자열을 허용합니다. `acceptingOnly`의 기본값은 `true`이고
@@ -117,12 +118,16 @@ capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 �
   상세 URL의 리디렉션은 매번 공식 HTTPS 호스트와 같은 `pblancId`인지 검증하며 최대 3회 따릅니다.
   HTML은 jsoup `1.23.2`로 파싱하고 `.support_project_detail`의 제목이 요청한 공고와 일치할 때
   `.view_cont` 본문만 추출합니다. 인용에는 검색된 청크 전체를 반환하며 청크당 최대 1,500 UTF-16 코드 단위입니다.
+- 기업 확인: 필수 `businessNumber`는 숫자 10자리이며 `000-00-00000` 형식의 하이픈을 허용합니다. Bizno가 국세청
+  등록 사업자로 확인한 항목(사업자 상태 코드가 있는 항목)만 `businesses` 배열로 반환하고, 없으면 빈 배열입니다.
+  Bizno는 미등록 번호에도 임의 상호를 돌려주므로 회사명만으로 등록 여부를 판단하지 않습니다. 이 endpoint는
+  사용자가 요청할 때만 Bizno를 호출하며 결과를 저장하지 않습니다.
 - 현재 수집기는 `BIZINFO` 한 제공처만 구현되어 있습니다. 전체 검색·색인·평가 fixture는 현재 MySQL의
   모든 제공처 공고를 다루며, 내부 식별자 `sourceCode:sourceProgramId`로 같은 원본 ID를 구분합니다.
   다른 제공처를 실제로 수집하려면 별도 Client·Facade·동기화 설정을 구현해야 합니다.
 
-요청·응답 JSON과 상세 오류 계약은 [지원사업 API 계약](../../docs/support-program-search-contract.md),
-SampleItem 예제는 [별도 계약](../../docs/sample-item-contract.md)에 있습니다.
+요청·응답 JSON과 상세 오류 계약은 [지원사업 API 계약](../../docs/support-program-search-contract.md)과
+[계정·인증 API 계약](../../docs/account-auth-contract.md), SampleItem 예제는 [별도 계약](../../docs/sample-item-contract.md)에 있습니다.
 
 ## 설정
 
@@ -144,6 +149,10 @@ Compose는 일부 주소·CORS 값을 내부 네트워크에 맞게 덮어씁니
 | `BIZINFO_SYNC_ENABLED` | `true` | 기업마당 수집·색인 준비·DB 공개 작업 실행 여부 |
 | `BIZINFO_SYNC_INITIAL_DELAY` | `PT0S` | 첫 수집 작업까지의 지연 |
 | `BIZINFO_SYNC_FIXED_DELAY` | `PT6H` | 이전 수집 작업 종료 후 다음 실행까지의 지연 |
+| `BIZNO_API_KEY` | 빈 값 | 회원가입 전 기업 확인용 Bizno 키. 비어 있으면 기업 조회 요청만 503 |
+| `BIZNO_URL` | `https://bizno.net/api/fapi` | Bizno 조회 endpoint. 경로는 `/api/fapi`로 고정 |
+| `BIZNO_API_CONNECT_TIMEOUT` | `2s` | Bizno 연결 제한시간 |
+| `BIZNO_API_READ_TIMEOUT` | `10s` | Bizno 응답 제한시간 |
 | `AI_SERVICE_BASE_URL` | `http://127.0.0.1:8000` | 내부 AI Service 주소 |
 | `AI_SERVICE_CONNECT_TIMEOUT` | `1s` | AI Service 연결 제한시간 |
 | `AI_SERVICE_READ_TIMEOUT` | `12s` | Health·점수화 응답 제한시간 |
@@ -185,6 +194,12 @@ supportprogram/
 ├── domain                 # 업무 모델·서울 날짜 기준 접수 상태 규칙
 ├── helper                 # 지원사업 하위 흐름이 함께 쓰는 보조 작업
 └── config                 # 지원사업 공용 시계 설정
+account/
+├── controller            # 계정·기업 확인 공개 HTTP 진입점
+│   └── dto               # 공개 응답 계약
+├── service               # 사업자등록번호 정규화와 Bizno 조회 흐름
+└── client/
+    └── bizno             # Bizno HTTP·응답 검증·등록 사업자 필터
 _health                    # Core API Health
 _health_ai_service         # AI Service Health의 Controller → Service → Client
 _sampleitem                # 학습 예제
@@ -242,6 +257,16 @@ AI 경계의 실패는 `application/problem+json`으로 변환합니다. 내부 
 | 잘못된 JSON·빈 body·응답 계약 위반 | 502 | `AI_SERVICE_INVALID_RESPONSE` |
 | 공식 원문 제공처 수집·HTML 검증 실패 | 503 | `SUPPORT_PROGRAM_EVIDENCE_UNAVAILABLE` |
 | 현재 공고 제공처가 원문 근거 질문을 지원하지 않음 | 422 | `SUPPORT_PROGRAM_EVIDENCE_NOT_SUPPORTED` |
+
+Bizno 기업 확인 경계도 같은 형식으로 변환하며 요청 URL·API 키·원본 예외를 공개하지 않습니다.
+
+| Bizno 호출에서 관측한 상황 | 공개 HTTP | `code` |
+|---|---:|---|
+| `BIZNO_API_KEY`가 비어 있어 요청하지 않음 | 503 | `BIZNO_NOT_CONFIGURED` |
+| 연결 불가 | 503 | `BIZNO_UNAVAILABLE` |
+| 연결·읽기 시간 초과 | 504 | `BIZNO_TIMEOUT` |
+| 200이 아닌 HTTP 상태 또는 `resultCode`가 0이 아님(키 미등록 등) | 502 | `BIZNO_UPSTREAM_ERROR` |
+| 잘못된 JSON·빈 body·`items`가 배열이 아님·항목에 `bno`/`company` 없음 | 502 | `BIZNO_INVALID_RESPONSE` |
 
 AI Service는 LLM 실행 실패와 색인 미준비·Qdrant 실패를 내부 503으로 반환하므로 일반적으로 공개 503이
 됩니다. Health API의 내부 408·504는 점수화 API와 달리 `UPSTREAM_ERROR`로 분류합니다.
