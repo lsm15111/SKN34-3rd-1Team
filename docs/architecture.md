@@ -147,7 +147,32 @@ GET /api/v1/auth/businesses/lookup?businessNumber=124-81-00998
 
 `account` 기능은 Facade 없이 Service가 Client를 직접 사용합니다. 조회 결과는 저장하지 않고, DB 접근도
 없습니다. Bizno가 미등록 번호에도 임의 상호를 돌려주기 때문에 등록 여부는 사업자 상태 코드로만 판단합니다.
-계정·기업·세션 저장과 가입·로그인 흐름은 [계정·인증 계획](account-auth-plan.md)의 다음 단계입니다.
+
+## 회원가입·로그인·세션
+
+```text
+POST /api/v1/auth/signup
+  → AccountAuthController (이메일·비밀번호·사업자등록번호 형식 검증)
+    → AccountSignupService
+        1. 이메일 정규화(소문자) → AccountRepository.findByEmail 중복이면 409
+        2. BiznoBusinessService → BiznoClient (DB transaction 밖) → 등록 사업자 없으면 422
+        3. BCrypt 해시 → AccountSessionService.issue()로 토큰·해시·만료 생성
+        4. AccountRepository.createAccount: 기업 UPSERT → 계정 INSERT → 세션 INSERT (짧은 transaction 하나)
+    → 201 sessionToken · expiresAt · account
+
+POST /api/v1/auth/login
+  → AccountAuthController → AccountLoginService
+        findCredentialByEmail → BCrypt 비교(계정 없을 때도 한 번 비교) → 실패는 모두 401
+        → AccountSessionService.issue() → AccountRepository.createSession (만료 세션 정리 포함)
+
+GET /api/v1/auth/me · POST /api/v1/auth/logout
+  → AccountAuthController → AccountSessionService
+        Authorization: Bearer 파싱 → SHA-256 해시 → 미만료 세션의 계정 조회 (없으면 401) / 세션 삭제 (204)
+```
+
+세션은 256비트 무작위 토큰이며 DB에는 SHA-256 해시와 만료 시각만 둡니다. Spring Security filter chain·JWT·쿠키는
+사용하지 않고 `spring-security-crypto`의 BCrypt만 씁니다. 보호 endpoint가 둘뿐이라 Interceptor·ArgumentResolver
+없이 Service 메서드 하나가 헤더를 검사합니다. 이메일 인증·비밀번호 재설정·로그인 시도 제한은 아직 없습니다.
 
 ## 검색 품질 평가 fixture 내보내기와 캡처
 
@@ -318,6 +343,8 @@ AI Service의 LLM 실행 실패·색인 미준비·Qdrant 실패는 내부 503�
 공개 응답은 `application/problem+json`이며 내부 URL·원본 라이브러리 예외를 노출하지 않습니다.
 Bizno 기업 확인도 같은 규칙으로 키 미설정·연결 불가는 503, 시간 초과는 504, 예상하지 않은 상태·`resultCode`·
 잘못된 응답은 502로 분류하며 요청 URL에 담긴 API 키를 응답·원인 예외에 남기지 않습니다.
+계정 API는 이메일 중복 409, 미확인 사업자 422, 자격 증명 불일치와 세션 없음·만료 401(`WWW-Authenticate: Bearer`)로
+답하고, 비밀번호·해시·토큰 해시는 어떤 응답에도 넣지 않습니다.
 
 Core의 Health는 프로세스 상태, AI Health는 AI Service의 정해진 Health 응답을 확인하는 기능입니다.
 이들이 성공했다고 MySQL·Qdrant·OpenAI를 포함한 실제 검색 전체가 준비됐음을 보장하지 않습니다.

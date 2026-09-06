@@ -47,6 +47,8 @@ dependencies {
     implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:4.0.0'
     implementation 'tools.jackson.module:jackson-module-kotlin'
     implementation 'org.jsoup:jsoup:1.23.2'
+    // 회원 비밀번호 BCrypt 해시 전용. Security filter chain·자동 설정은 사용하지 않는다.
+    implementation 'org.springframework.security:spring-security-crypto'
 
     runtimeOnly 'com.mysql:mysql-connector-j'
     runtimeOnly 'org.flywaydb:flyway-mysql'

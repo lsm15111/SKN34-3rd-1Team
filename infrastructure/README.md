@@ -58,6 +58,7 @@ OPENAI_API_KEY=발급받은_OpenAI_API_키
 | `BIZNO_URL` | `https://bizno.net/api/fapi` | Bizno 조회 endpoint. 경로는 `/api/fapi`로 고정 |
 | `BIZNO_API_CONNECT_TIMEOUT` | `2s` | Bizno 연결 제한시간 |
 | `BIZNO_API_READ_TIMEOUT` | `10s` | Bizno 응답 제한시간 |
+| `ACCOUNT_SESSION_TTL` | `P30D` | 가입·로그인 세션 토큰의 ISO-8601 유효 기간 |
 | `OPENAI_API_KEY` | 없음(필수) | AI Service만 사용하는 OpenAI 인증키 |
 | `OPENAI_MODEL` | `gpt-5.6-luna` | 현재 Compose에 설정된 Agent의 Structured Output 모델 |
 | `LLM_MODEL_TIMEOUT_SECONDS` | `8.0` | OpenAI 모델 호출 한 번의 제한시간(초) |

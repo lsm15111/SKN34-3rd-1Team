@@ -96,6 +96,10 @@ capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 �
 | `GET /api/v1/support-programs/detail` | 제공처 코드와 원본 ID로 현재 공고 상세 조회 |
 | `POST /api/v1/support-programs/detail/answers` | 특정 공고의 공식 원문 근거 질문·답변 |
 | `GET /api/v1/auth/businesses/lookup` | 회원가입 전 사업자등록번호로 국세청 등록 기업 확인(Bizno) |
+| `POST /api/v1/auth/signup` | 이메일·비밀번호·사업자등록번호로 가입, 세션 토큰 발급 |
+| `POST /api/v1/auth/login` | 이메일·비밀번호 로그인, 세션 토큰 발급 |
+| `GET /api/v1/auth/me` | Bearer 세션 토큰으로 내 계정·기업 조회 |
+| `POST /api/v1/auth/logout` | Bearer 세션 토큰 삭제 |
 | `POST /api/v1/sample-items/prepare` | 계층 연결 학습용 예제 |
 
 - 검색: 필수 `query`는 최대 500자이며 빈 문자열을 허용합니다. `acceptingOnly`의 기본값은 `true`이고
@@ -122,6 +126,10 @@ capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 �
   등록 사업자로 확인한 항목(사업자 상태 코드가 있는 항목)만 `businesses` 배열로 반환하고, 없으면 빈 배열입니다.
   Bizno는 미등록 번호에도 임의 상호를 돌려주므로 회사명만으로 등록 여부를 판단하지 않습니다. 이 endpoint는
   사용자가 요청할 때만 Bizno를 호출하며 결과를 저장하지 않습니다.
+- 계정: 가입은 `email`(최대 320자, 소문자 정규화), `password`(8~72자, 영문·숫자 포함), `businessNumber`만 받고 Bizno로
+  기업을 다시 확인해 `company`에 UPSERT합니다. 가입·로그인 응답의 `sessionToken`은 DB에 SHA-256 해시만 저장되는
+  불투명 토큰이며 `Authorization: Bearer`로 보냅니다. 유효 기간은 `ACCOUNT_SESSION_TTL`(기본 30일)입니다. 이메일 중복은
+  409, 미확인 사업자는 422, 자격 증명 불일치·세션 없음은 401입니다.
 - 현재 수집기는 `BIZINFO` 한 제공처만 구현되어 있습니다. 전체 검색·색인·평가 fixture는 현재 MySQL의
   모든 제공처 공고를 다루며, 내부 식별자 `sourceCode:sourceProgramId`로 같은 원본 ID를 구분합니다.
   다른 제공처를 실제로 수집하려면 별도 Client·Facade·동기화 설정을 구현해야 합니다.
@@ -153,6 +161,7 @@ Compose는 일부 주소·CORS 값을 내부 네트워크에 맞게 덮어씁니
 | `BIZNO_URL` | `https://bizno.net/api/fapi` | Bizno 조회 endpoint. 경로는 `/api/fapi`로 고정 |
 | `BIZNO_API_CONNECT_TIMEOUT` | `2s` | Bizno 연결 제한시간 |
 | `BIZNO_API_READ_TIMEOUT` | `10s` | Bizno 응답 제한시간 |
+| `ACCOUNT_SESSION_TTL` | `P30D` | 가입·로그인 세션 토큰의 ISO-8601 유효 기간 |
 | `AI_SERVICE_BASE_URL` | `http://127.0.0.1:8000` | 내부 AI Service 주소 |
 | `AI_SERVICE_CONNECT_TIMEOUT` | `1s` | AI Service 연결 제한시간 |
 | `AI_SERVICE_READ_TIMEOUT` | `12s` | Health·점수화 응답 제한시간 |
@@ -195,12 +204,16 @@ supportprogram/
 ├── helper                 # 지원사업 하위 흐름이 함께 쓰는 보조 작업
 └── config                 # 지원사업 공용 시계 설정
 account/
-├── controller            # 계정·기업 확인 공개 HTTP 진입점
-│   └── dto               # 공개 응답 계약
-├── service               # 사업자등록번호 정규화와 Bizno 조회 흐름
+├── controller            # 기업 확인·가입·로그인·세션 공개 HTTP 진입점
+│   └── dto               # 공개 요청·응답 계약
+├── service               # Bizno 조회, 가입, 로그인, 세션 발급·확인·로그아웃
+│   ├── dto               # 세션 발급 결과
+│   └── exception         # 409·422·401로 변환되는 업무 예외
 ├── repository            # 기업 UPSERT·계정·세션 저장과 조회, DbRow 변환
 │   └── mapper            # MyBatis Mapper, DbRow
 ├── domain                # 계정·기업·세션 업무 모델
+├── helper                # 세션 토큰 생성·해시
+├── config                # BCrypt 인코더, 세션 유효 기간 설정
 └── client/
     └── bizno             # Bizno HTTP·응답 검증·등록 사업자 필터
 _health                    # Core API Health
@@ -277,6 +290,15 @@ Bizno 기업 확인 경계도 같은 형식으로 변환하며 요청 URL·API �
 | 연결·읽기 시간 초과 | 504 | `BIZNO_TIMEOUT` |
 | 200이 아닌 HTTP 상태 또는 `resultCode`가 0이 아님(키 미등록 등) | 502 | `BIZNO_UPSTREAM_ERROR` |
 | 잘못된 JSON·빈 body·`items`가 배열이 아님·항목에 `bno`/`company` 없음 | 502 | `BIZNO_INVALID_RESPONSE` |
+
+계정 API의 업무 예외도 같은 형식입니다.
+
+| 상황 | 공개 HTTP | `code` |
+|---|---:|---|
+| 이미 가입된 이메일(선조회 또는 DB UNIQUE 위반) | 409 | `EMAIL_ALREADY_REGISTERED` |
+| Bizno가 등록 사업자로 확인하지 못함 | 422 | `BUSINESS_NOT_FOUND` |
+| 이메일 또는 비밀번호 불일치 | 401 | `INVALID_CREDENTIALS` |
+| Bearer 세션 토큰 누락·형식 오류·만료·삭제 | 401 | `AUTHENTICATION_REQUIRED` (`WWW-Authenticate: Bearer`) |
 
 AI Service는 LLM 실행 실패와 색인 미준비·Qdrant 실패를 내부 503으로 반환하므로 일반적으로 공개 503이
 됩니다. Health API의 내부 408·504는 점수화 API와 달리 `UPSTREAM_ERROR`로 분류합니다.

@@ -11,7 +11,18 @@ Browser
           → BiznoBusinessController → BiznoBusinessService → BiznoClient
               → Bizno GET /api/fapi?key=…&gb=1&q=<숫자 10자리>&type=json
           → 국세청 등록 사업자(bsttcd 있음)만 골라 반환. 저장하지 않음
+  → POST /api/v1/auth/signup · /login · /logout, GET /api/v1/auth/me
+      → AccountAuthController → AccountSignupService · AccountLoginService · AccountSessionService
+          → AccountRepository → MySQL (company, account, account_session)
 ```
+
+| Method·Path | 인증 | 성공 |
+|---|---|---|
+| `GET /api/v1/auth/businesses/lookup` | 없음 | 200 기업 목록 |
+| `POST /api/v1/auth/signup` | 없음 | 201 세션 응답 |
+| `POST /api/v1/auth/login` | 없음 | 200 세션 응답 |
+| `GET /api/v1/auth/me` | Bearer | 200 계정 |
+| `POST /api/v1/auth/logout` | Bearer | 204 |
 
 ## 사업자등록번호 기업 확인
 
@@ -72,7 +83,92 @@ Bizno는 미등록 번호에도 `resultCode: 0`과 임의 상호가 담긴 항�
 }
 ```
 
-## 회원가입·로그인 (예정)
+## 회원가입
 
-가입·로그인·로그아웃·내 계정 조회 endpoint는 [계정·인증 계획](account-auth-plan.md) §3.4의 계약대로
-다음 단계에서 추가합니다. 이 문서는 해당 endpoint가 구현될 때 함께 갱신합니다.
+```http
+POST /api/v1/auth/signup
+Content-Type: application/json
+
+{ "email": "Manager@Company.co.kr", "password": "password1", "businessNumber": "124-81-00998" }
+```
+
+| 필드 | 규칙 |
+|---|---|
+| `email` | 이메일 형식, 최대 320자. Core가 앞뒤 공백 제거·소문자로 정규화해 저장 |
+| `password` | 8~72자, 영문과 숫자 각 1자 이상, 제어 문자 없음. BCrypt 해시만 저장 |
+| `businessNumber` | 사업자등록번호. 형식은 기업 확인과 같으며 Core가 Bizno로 다시 확인 |
+
+처리 순서는 이메일 중복 확인 → Bizno 기업 확인(DB transaction 밖) → 비밀번호 해시 → 기업 UPSERT·계정·세션
+저장(짧은 transaction 하나)입니다. 담당자 이름·소재지·업종은 받지 않습니다. 약관 동의 시각은 요청 시각으로 기록합니다.
+Bizno가 확인한 기업 중 첫 항목을 저장하며, 사업자 상태(휴업·폐업)는 저장·표시만 하고 가입을 막지 않습니다.
+
+성공 시 `201 Created`로 아래 세션 응답을 돌려줍니다.
+
+```json
+{
+  "sessionToken": "Qm9v…(base64url 43자)",
+  "expiresAt": "2026-10-06T12:00:00+09:00",
+  "account": {
+    "email": "manager@company.co.kr",
+    "company": {
+      "businessNumber": "1248100998",
+      "companyName": "삼성전자(주)",
+      "businessStatus": "계속사업자"
+    }
+  }
+}
+```
+
+## 로그인
+
+```http
+POST /api/v1/auth/login
+Content-Type: application/json
+
+{ "email": "manager@company.co.kr", "password": "password1" }
+```
+
+성공 시 `200 OK`로 회원가입과 같은 세션 응답을 돌려주고, 같은 계정의 만료된 세션을 정리합니다. 계정이 없거나
+비밀번호가 틀린 경우 모두 `401 INVALID_CREDENTIALS` 하나로 답하며, 계정이 없을 때도 비밀번호 비교를 한 번
+수행해 응답 시간으로 가입 여부가 드러나지 않게 합니다.
+
+## 세션 토큰
+
+- `sessionToken`은 256비트 무작위 값이며 서버는 SHA-256 해시만 저장합니다. 브라우저가 보관하고
+  `Authorization: Bearer <sessionToken>` 헤더로 보냅니다.
+- 유효 기간은 `ACCOUNT_SESSION_TTL`(기본 30일)이며 `expiresAt`은 서울 오프셋 ISO-8601 문자열입니다.
+- 쿠키·CSRF 토큰·refresh 토큰은 없습니다. 만료·로그아웃된 토큰은 `401 AUTHENTICATION_REQUIRED`가 됩니다.
+
+## 내 계정 조회
+
+```http
+GET /api/v1/auth/me
+Authorization: Bearer <sessionToken>
+```
+
+```json
+{ "account": { "email": "manager@company.co.kr", "company": { "businessNumber": "1248100998", "companyName": "삼성전자(주)", "businessStatus": "계속사업자" } } }
+```
+
+## 로그아웃
+
+```http
+POST /api/v1/auth/logout
+Authorization: Bearer <sessionToken>
+```
+
+세션 행을 삭제하고 `204 No Content`를 돌려줍니다. 이미 없거나 만료된 토큰도 204이며, 헤더가 없거나 Bearer 형식이
+아니면 401입니다.
+
+## 계정 API 오류
+
+| 상황 | HTTP | `code` |
+|---|---:|---|
+| 요청 필드 검증 실패 | 400 | `REQUEST_VALIDATION_FAILED` (`errors[].field`) |
+| 이미 가입된 이메일 | 409 | `EMAIL_ALREADY_REGISTERED` |
+| Bizno가 등록 사업자로 확인하지 못함 | 422 | `BUSINESS_NOT_FOUND` |
+| 이메일 또는 비밀번호 불일치 | 401 | `INVALID_CREDENTIALS` |
+| 세션 토큰 누락·형식 오류·만료·삭제 | 401 | `AUTHENTICATION_REQUIRED` (`WWW-Authenticate: Bearer`) |
+| Bizno 미설정·장애 | 503/502/504 | 기업 확인과 같은 `BIZNO_*` |
+
+응답에는 비밀번호·해시·토큰 해시를 포함하지 않으며 요청 로그에도 비밀번호를 남기지 않습니다.

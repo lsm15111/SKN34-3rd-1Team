@@ -1,11 +1,16 @@
 package ai.govbiz.core._common.exception
 
 import ai.govbiz.core.account.client.bizno.exception.BiznoClientException
+import ai.govbiz.core.account.service.exception.AuthenticationRequiredException
+import ai.govbiz.core.account.service.exception.BusinessNotFoundException
+import ai.govbiz.core.account.service.exception.EmailAlreadyRegisteredException
+import ai.govbiz.core.account.service.exception.InvalidCredentialsException
 import ai.govbiz.core.supportprogram.service.detail.exception.SupportProgramNotFoundException
 import ai.govbiz.core.supportprogram.service.evidence.exception.SupportProgramEvidenceNotSupportedException
 import ai.govbiz.core.supportprogram.service.evidence.exception.SupportProgramEvidenceUnavailableException
 import jakarta.servlet.http.HttpServletRequest
 import java.net.URI
+import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
 import org.springframework.http.MediaType
@@ -75,6 +80,71 @@ class ApiExceptionHandler {
     ): ResponseEntity<ProblemDetail> =
         problemResponse(definitionFor(exception.failure), request)
 
+    @ExceptionHandler(EmailAlreadyRegisteredException::class)
+    fun handleEmailAlreadyRegisteredException(
+        request: HttpServletRequest,
+    ): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.CONFLICT,
+                URI.create("urn:govbiz:problem:email-already-registered"),
+                "Email Already Registered",
+                "An account with this email already exists.",
+                "EMAIL_ALREADY_REGISTERED",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(BusinessNotFoundException::class)
+    fun handleBusinessNotFoundException(
+        request: HttpServletRequest,
+    ): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                URI.create("urn:govbiz:problem:business-not-found"),
+                "Business Not Found",
+                "The business registration number is not a registered business.",
+                "BUSINESS_NOT_FOUND",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(InvalidCredentialsException::class)
+    fun handleInvalidCredentialsException(
+        request: HttpServletRequest,
+    ): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.UNAUTHORIZED,
+                URI.create("urn:govbiz:problem:invalid-credentials"),
+                "Invalid Credentials",
+                "The email or password is incorrect.",
+                "INVALID_CREDENTIALS",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(AuthenticationRequiredException::class)
+    fun handleAuthenticationRequiredException(
+        request: HttpServletRequest,
+    ): ResponseEntity<ProblemDetail> {
+        val response = problemResponse(
+            ProblemDefinition(
+                HttpStatus.UNAUTHORIZED,
+                URI.create("urn:govbiz:problem:authentication-required"),
+                "Authentication Required",
+                "A valid session token is required.",
+                "AUTHENTICATION_REQUIRED",
+            ),
+            request,
+        )
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+            .header(HttpHeaders.WWW_AUTHENTICATE, "Bearer")
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(response.body)
+    }
+
     @ExceptionHandler(BiznoClientException::class)
     fun handleBiznoClientException(
         exception: BiznoClientException,
@@ -88,7 +158,7 @@ class ApiExceptionHandler {
         request: HttpServletRequest,
     ): ResponseEntity<ProblemDetail> {
         val errors = java.util.List.copyOf(
-            exception.bindingResult.fieldErrors.map(::toValidationError),
+            exception.bindingResult.fieldErrors.map(::toValidationError).distinct(),
         )
 
         return validationProblem(
