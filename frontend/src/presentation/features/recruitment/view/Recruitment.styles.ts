@@ -91,7 +91,27 @@ export const recruitmentStyles = {
   searchResultTitle: 'text-[0.9rem] font-bold text-app-ink',
   searchResultMeta: 'text-[0.74rem] text-[#7883a3]',
   formActions: 'flex flex-wrap items-center justify-end gap-2',
+  tabs: 'mb-5 flex gap-2 border-b border-[#e1e6f4]',
+  tab: classes(
+    'cursor-pointer border-0 border-b-2 border-transparent bg-transparent px-1 pb-3 text-sm font-bold text-[#6d7898] no-underline',
+    'hover:text-[#504ebd]',
+  ),
+  tabActive: 'border-[#5e5fc8] text-[#504ebd]',
+  proposalMessage: 'mt-3 mb-0 whitespace-pre-line text-[0.9rem] leading-[1.65] text-[#293454]',
+  contactBox: 'mt-3 mb-0 rounded-xl bg-[#eaf7ee] px-4 py-3 text-[0.82rem] font-bold text-[#2f7d4f]',
+  contactLink: 'text-[#2f7d4f] underline',
+  cardActions: 'mt-4 flex flex-wrap gap-2',
+  proposalPending: 'bg-[#fff4e0] text-[#9a6412]',
+  proposalAccepted: 'bg-[#eaf7ee] text-[#2f7d4f]',
+  proposalEnded: 'bg-[#f4f6fc] text-[#6d7898]',
 } as const
+
+export function proposalStatusClassName(status: 'PENDING' | 'ACCEPTED' | 'DECLINED' | 'WITHDRAWN' | 'EXPIRED' | 'CLOSED') {
+  const variant = status === 'PENDING'
+    ? recruitmentStyles.proposalPending
+    : status === 'ACCEPTED' ? recruitmentStyles.proposalAccepted : recruitmentStyles.proposalEnded
+  return `${recruitmentStyles.statusBadge} ${variant}`
+}
 
 export function recruitmentStatusClassName(status: 'OPEN' | 'CLOSED' | 'HIDDEN') {
   const variant = status === 'OPEN'

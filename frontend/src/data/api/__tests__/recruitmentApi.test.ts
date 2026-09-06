@@ -37,7 +37,7 @@ const postDto = {
     sourceUrl: program.sourceUrl,
   },
   proposalCount: 0,
-  viewer: { isOwner: false },
+  viewer: { isOwner: false, myProposalStatus: null },
 }
 const draft = {
   title: postDto.title,
@@ -124,7 +124,7 @@ describe('RecruitmentRepositoryImpl', () => {
 
   it('returns the saved post and closes early with the mapped outcomes', async () => {
     vi.stubGlobal('fetch', vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ ...postDto, viewer: { isOwner: true } }, 201))
+      .mockResolvedValueOnce(jsonResponse({ ...postDto, viewer: { isOwner: true, myProposalStatus: null } }, 201))
       .mockResolvedValueOnce(jsonResponse({ ...postDto, status: 'CLOSED', closedEarlyAt: '2026-09-07T10:00:00+09:00' }))
       .mockResolvedValueOnce(problemResponse(409, 'RECRUITMENT_POST_NOT_OPEN')))
     const repository = new RecruitmentRepositoryImpl({ sessionTokenStorage: createMemorySessionTokenStorage('token') })
@@ -145,6 +145,95 @@ describe('RecruitmentRepositoryImpl', () => {
     await expect(anonymous.listMine()).rejects.toMatchObject({ status: 401 })
     expect(fetchMock).not.toHaveBeenCalled()
     await expect(signedIn.update(12, draft)).rejects.toMatchObject({ status: 500 })
+  })
+})
+
+
+const proposalDto = {
+  id: 5,
+  postId: 12,
+  status: 'PENDING',
+  message: '공공 데이터 라벨링 운영 경험이 있는 참여기관입니다.',
+  createdAt: '2026-09-06T13:00:00+09:00',
+  decidedAt: null,
+  company: { businessNumber: '2208162517', companyName: '비전솔루션', businessStatus: '계속사업자' },
+  post: { id: 12, status: 'OPEN', title: postDto.title, closesOn: '2026-09-20', companyName: '데이터브릿지 주식회사' },
+  contactEmail: null,
+}
+
+describe('recruitment proposal api and repository', () => {
+  it('sends a proposal with the bearer token and maps the response', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(proposalDto, 201))
+    vi.stubGlobal('fetch', fetchMock)
+    const repository = new RecruitmentRepositoryImpl({ sessionTokenStorage: createMemorySessionTokenStorage('token') })
+
+    const result = await repository.sendProposal(12, proposalDto.message)
+
+    expect(result.outcome === 'sent' && result.proposal.company.companyName).toBe('비전솔루션')
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(new URL(url).pathname).toBe('/api/v1/recruitment-posts/12/proposals')
+    expect(init.method).toBe('POST')
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer token' })
+    expect(JSON.parse(String(init.body))).toEqual({ message: proposalDto.message })
+  })
+
+  it.each([
+    [403, 'OWN_POST', 'own-post'],
+    [404, 'RECRUITMENT_POST_NOT_FOUND', 'not-found'],
+    [409, 'PROPOSAL_ALREADY_EXISTS', 'already-exists'],
+    [409, 'RECRUITMENT_POST_NOT_OPEN', 'not-open'],
+    [422, 'CONTACT_IN_TEXT', 'contact-in-text'],
+  ])('maps a send failure %s %s to %s', async (status, code, outcome) => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(() => Promise.resolve(problemResponse(status, code))))
+    const repository = new RecruitmentRepositoryImpl({ sessionTokenStorage: createMemorySessionTokenStorage('token') })
+
+    await expect(repository.sendProposal(12, '제안')).resolves.toEqual({ outcome })
+  })
+
+  it('lists received and sent proposals and maps ownership failures', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [proposalDto] }))
+      .mockResolvedValueOnce(problemResponse(403, 'NOT_POST_OWNER'))
+      .mockResolvedValueOnce(problemResponse(404, 'RECRUITMENT_POST_NOT_FOUND'))
+      .mockResolvedValueOnce(jsonResponse({ items: [{ ...proposalDto, status: 'ACCEPTED', decidedAt: '2026-09-07T10:00:00+09:00', contactEmail: 'owner@databridge.co.kr' }] })))
+    const repository = new RecruitmentRepositoryImpl({ sessionTokenStorage: createMemorySessionTokenStorage('token') })
+
+    const received = await repository.listReceivedProposals(12)
+    expect(received.outcome === 'loaded' && received.proposals[0]?.id).toBe(5)
+    await expect(repository.listReceivedProposals(12)).resolves.toEqual({ outcome: 'not-owner' })
+    await expect(repository.listReceivedProposals(12)).resolves.toEqual({ outcome: 'not-found' })
+    const sent = await repository.listSentProposals()
+    expect(sent[0]?.contactEmail).toBe('owner@databridge.co.kr')
+  })
+
+  it('posts accept, decline and withdraw to their own paths and maps not-pending conflicts', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ...proposalDto, status: 'ACCEPTED', decidedAt: '2026-09-07T10:00:00+09:00', contactEmail: 'partner@vision.co.kr' }))
+      .mockResolvedValueOnce(jsonResponse({ ...proposalDto, status: 'DECLINED', decidedAt: '2026-09-07T10:00:00+09:00' }))
+      .mockResolvedValueOnce(problemResponse(409, 'PROPOSAL_NOT_PENDING'))
+      .mockResolvedValueOnce(problemResponse(403, 'NOT_PROPOSAL_OWNER'))
+    vi.stubGlobal('fetch', fetchMock)
+    const repository = new RecruitmentRepositoryImpl({ sessionTokenStorage: createMemorySessionTokenStorage('token') })
+
+    const accepted = await repository.acceptProposal(5)
+    expect(accepted.outcome === 'decided' && accepted.proposal.contactEmail).toBe('partner@vision.co.kr')
+    const declined = await repository.declineProposal(5)
+    expect(declined.outcome === 'decided' && declined.proposal.status).toBe('DECLINED')
+    await expect(repository.withdrawProposal(5)).resolves.toEqual({ outcome: 'not-pending' })
+    await expect(repository.withdrawProposal(5)).resolves.toEqual({ outcome: 'not-owner' })
+    expect(fetchMock.mock.calls.map((call) => new URL(String(call[0])).pathname)).toEqual([
+      '/api/v1/recruitment-proposals/5/accept',
+      '/api/v1/recruitment-proposals/5/decline',
+      '/api/v1/recruitment-proposals/5/withdraw',
+      '/api/v1/recruitment-proposals/5/withdraw',
+    ])
+  })
+
+  it('rejects a proposal payload with an unknown status', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ...proposalDto, status: 'MAYBE' })))
+    const repository = new RecruitmentRepositoryImpl({ sessionTokenStorage: createMemorySessionTokenStorage('token') })
+
+    await expect(repository.sendProposal(12, '제안')).rejects.toThrow()
   })
 })
 

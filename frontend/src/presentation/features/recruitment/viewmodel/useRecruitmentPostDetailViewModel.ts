@@ -35,11 +35,12 @@ export function useRecruitmentPostDetailViewModel(
   const activeController = useRef<AbortController | null>(null)
   const isMounted = useRef(true)
 
-  const load = useCallback(async () => {
+  /** silent이면 현재 글을 화면에 둔 채 다시 읽습니다(제안 뒤 제안 수·내 제안 상태 갱신). */
+  const load = useCallback(async (silent = false) => {
     activeController.current?.abort()
     const controller = new AbortController()
     activeController.current = controller
-    setState({ status: 'loading', post: null })
+    if (!silent) setState({ status: 'loading', post: null })
     try {
       const post = await getRecruitmentPostUseCase.execute(postId, controller.signal)
       if (!isMounted.current || controller.signal.aborted) return
@@ -93,7 +94,8 @@ export function useRecruitmentPostDetailViewModel(
     closeEarly,
     isClosing,
     notice,
-    reload: load,
+    refresh: () => load(true),
+    reload: () => load(),
     state,
   }
 }

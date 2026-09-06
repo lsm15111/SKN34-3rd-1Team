@@ -50,9 +50,10 @@ pnpm dev
 | `/signup` | 사업자등록번호 기업 확인 → 이메일·비밀번호로 간편 회원가입 |
 | `/login` | 이메일·비밀번호 로그인 |
 | `/partners` | 파트너 모집글 목록(모집 중, 마감 임박순). `?sourceCode=&sourceProgramId=`로 공고별 필터 |
-| `/partners/:postId` | 모집글 상세, 연결 공고·작성 기업, 작성 기업이면 수정·조기 마감 |
+| `/partners/:postId` | 모집글 상세, 연결 공고·작성 기업. 작성 기업이면 수정·조기 마감·받은 제안 링크, 다른 기업이면 참여 제안 폼·내 제안 상태·철회 |
+| `/partners/:postId/proposals` | 로그인 필요. 작성 기업이 받은 제안을 보고 수락·거절(수락 시 상대 담당자 이메일) |
 | `/partners/new`, `/partners/:postId/edit` | 로그인 필요. 공고 검색·선택 후 모집 조건·소개 작성, 수정 |
-| `/partners/mine` | 로그인 필요. 내 기업의 모집글(종료·숨김 포함) |
+| `/partners/mine` | 로그인 필요. 내 기업의 모집글(종료·숨김 포함). `?tab=sent`는 보낸 제안(상태·철회·수락 시 상대 이메일) |
 | `/admin/accounts` | 관리자 전용 운영 콘솔: 회원·기업 목록, 이메일 검색, 세션 강제 종료 |
 | `/examples/sample-item/hook` | React Hook Form·로컬 요청 상태 예제 |
 | `/examples/sample-item/redux` | Redux 상태 유지 예제 |
@@ -81,8 +82,13 @@ allowlist에 명시적으로 추가합니다. 테스트용 제공처는 producti
 조기 마감·내 글은 로그인이 필요합니다. 로그인이 필요한 화면은 로그인 뒤 원래 경로로 돌아옵니다. 제목·소개의
 이메일·전화번호는 서버와 같은 규칙으로 즉시 거부합니다.
 
+참여 제안은 모집글 상세의 오른쪽 영역에서 보냅니다(500자, 연락처 금지, 기업당 한 번). 이미 보낸 제안이 있으면 보낸 제안
+목록에서 찾아 상태(대기 중·수락됨·거절됨·철회함·7일 무응답 종료·모집 종료)와 대기 중 철회를 보여 주고, 보내거나 철회한
+뒤에는 상세를 조용히 다시 읽어 제안 수·내 제안 상태를 맞춥니다. 작성 기업은 받은 제안 화면에서 수락·거절하며, 수락된
+제안에서만 서로의 담당자 이메일이 보입니다. 서버의 409(중복·대기 아님)는 안내 문구로 바꿉니다.
+
 채팅 형태의 화면이지만 각 검색 요청에는 현재 입력한 검색어만 전달합니다. 이전 대화를 이해하는
-다중 턴 대화, 기업 프로필 편집, 북마크, 알림, 참여 제안, 대화 이력의 서버 저장은 아직 구현하지 않았습니다.
+다중 턴 대화, 기업 프로필 편집, 북마크, 알림, 대화 이력의 서버 저장은 아직 구현하지 않았습니다.
 
 ## 구조와 상태 책임
 
@@ -92,7 +98,7 @@ src/
 ├── presentation/features/chat/ # 검색·상세 View, ViewModel, chat slice
 ├── presentation/features/auth/ # 회원가입·로그인 View, ViewModel, 폼 검증, auth slice
 ├── presentation/features/admin/ # 운영 콘솔 셸·회원 목록 View, ViewModel (관리자 role만 진입)
-├── presentation/features/recruitment/ # 파트너 모집글 목록·상세·작성 View, ViewModel, 폼 검증
+├── presentation/features/recruitment/ # 파트너 모집글 목록·상세·작성, 참여 제안 보내기·받은/보낸 제안 View, ViewModel, 폼 검증
 ├── presentation/features/sample-item/ # 상태관리 비교 예제
 ├── presentation/shared/        # Core API 상태 표시
 ├── domain/                      # Entity, Repository 계약, UseCase
@@ -106,8 +112,8 @@ UseCase·Repository 경계를 거치되 로딩·결과 상태를 ViewModel의 �
 
 | 소유자 | 현재 담당 상태 | 화면 이동·새로고침 동작 |
 |---|---|---|
-| React 로컬 상태 | 사이드바, 상세 조회, Health, Hook SampleItem, 가입·로그인 폼과 기업 확인 결과, 모집글 목록·상세·폼 | 해당 화면이 unmount되면 초기화 |
-| URL 검색 매개변수 | 모집글 목록의 공고 필터·페이지, 작성 화면의 미리 선택한 공고 | 새로고침·공유 후 유지 |
+| React 로컬 상태 | 사이드바, 상세 조회, Health, Hook SampleItem, 가입·로그인 폼과 기업 확인 결과, 모집글 목록·상세·폼, 제안 폼·받은/보낸 제안 | 해당 화면이 unmount되면 초기화 |
+| URL 검색 매개변수 | 모집글 목록의 공고 필터·페이지, 작성 화면의 미리 선택한 공고, 내 활동의 탭 | 새로고침·공유 후 유지 |
 | Redux 메모리 | 채팅 메시지·입력·검색 상태, 로그인 상태·계정, Redux SampleItem | 앱 내 이동 시 유지, 새로고침 시 초기화(로그인 상태는 저장된 토큰으로 복원) |
 | 브라우저 localStorage | 세션 토큰, 비로그인 검색 횟수 | 새로고침·재접속 후 유지, 로그아웃·만료 시 토큰 삭제, 로그인 시 횟수 초기화 |
 | 서버 | MySQL 공고 카탈로그, 계정·기업·세션 | 브라우저 상태와 별개로 유지 |

@@ -10,6 +10,7 @@ import { MyRecruitmentPostsPage } from './presentation/features/recruitment/view
 import { RecruitmentPostDetailPage } from './presentation/features/recruitment/view/RecruitmentPostDetailPage'
 import { RecruitmentPostFormPage } from './presentation/features/recruitment/view/RecruitmentPostFormPage'
 import { RecruitmentPostListPage } from './presentation/features/recruitment/view/RecruitmentPostListPage'
+import { ReceivedProposalsPage } from './presentation/features/recruitment/view/ReceivedProposalsPage'
 import { ReduxSampleItemPage } from './presentation/features/sample-item/view/ReduxSampleItemPage'
 import { SampleItemPage } from './presentation/features/sample-item/view/SampleItemPage'
 
@@ -31,6 +32,7 @@ function App() {
       <Route path="/partners/mine" element={<MyRecruitmentPostsPage />} />
       <Route path="/partners/:postId" element={<RecruitmentPostDetailPage />} />
       <Route path="/partners/:postId/edit" element={<RecruitmentPostFormPage />} />
+      <Route path="/partners/:postId/proposals" element={<ReceivedProposalsPage />} />
       <Route path="/admin" element={<Navigate replace to="/admin/accounts" />} />
       <Route path="/admin/accounts" element={<AdminAccountsPage />} />
       <Route path="/examples/sample-item/hook" element={<SampleItemPage />} />

@@ -10,8 +10,14 @@ import {
   type RecruitmentPostDto,
   type RecruitmentPostPageDto,
 } from '../models/RecruitmentPostDto'
+import {
+  recruitmentProposalDtoSchema,
+  recruitmentProposalListDtoSchema,
+  type RecruitmentProposalDto,
+} from '../models/RecruitmentProposalDto'
 
 const RECRUITMENT_POSTS_PATH = '/api/v1/recruitment-posts'
+const RECRUITMENT_PROPOSALS_PATH = '/api/v1/recruitment-proposals'
 
 /** 모집글 목록·상세는 로그인 없이도 조회하므로 토큰이 있을 때만 Bearer 헤더를 붙입니다. */
 function headers(sessionToken: string | null, withBody = false): Record<string, string> {
@@ -117,6 +123,71 @@ export async function listMyRecruitmentPostsApi(
   await rejectFailedResponse(response)
 
   return recruitmentPostListDtoSchema.parse(await response.json()).items
+}
+
+export async function sendProposalApi(
+  sessionToken: string,
+  postId: number,
+  message: string,
+  signal?: AbortSignal,
+): Promise<RecruitmentProposalDto> {
+  const response = await fetch(`${getCoreApiBaseUrl()}${RECRUITMENT_POSTS_PATH}/${postId}/proposals`, {
+    method: 'POST',
+    headers: headers(sessionToken, true),
+    body: JSON.stringify({ message }),
+    signal,
+  })
+  await rejectFailedResponse(response)
+
+  return recruitmentProposalDtoSchema.parse(await response.json())
+}
+
+export async function listReceivedProposalsApi(
+  sessionToken: string,
+  postId: number,
+  signal?: AbortSignal,
+): Promise<RecruitmentProposalDto[]> {
+  const response = await fetch(`${getCoreApiBaseUrl()}${RECRUITMENT_POSTS_PATH}/${postId}/proposals`, {
+    headers: headers(sessionToken),
+    signal,
+    cache: 'no-store',
+  })
+  await rejectFailedResponse(response)
+
+  return recruitmentProposalListDtoSchema.parse(await response.json()).items
+}
+
+export async function listSentProposalsApi(
+  sessionToken: string,
+  signal?: AbortSignal,
+): Promise<RecruitmentProposalDto[]> {
+  const response = await fetch(`${getCoreApiBaseUrl()}${RECRUITMENT_PROPOSALS_PATH}/sent`, {
+    headers: headers(sessionToken),
+    signal,
+    cache: 'no-store',
+  })
+  await rejectFailedResponse(response)
+
+  return recruitmentProposalListDtoSchema.parse(await response.json()).items
+}
+
+export type ProposalAction = 'accept' | 'decline' | 'withdraw'
+
+/** 수락·거절·철회는 같은 형태의 POST이며 결과로 바뀐 제안을 돌려받습니다. */
+export async function decideProposalApi(
+  sessionToken: string,
+  proposalId: number,
+  action: ProposalAction,
+  signal?: AbortSignal,
+): Promise<RecruitmentProposalDto> {
+  const response = await fetch(`${getCoreApiBaseUrl()}${RECRUITMENT_PROPOSALS_PATH}/${proposalId}/${action}`, {
+    method: 'POST',
+    headers: headers(sessionToken),
+    signal,
+  })
+  await rejectFailedResponse(response)
+
+  return recruitmentProposalDtoSchema.parse(await response.json())
 }
 
 async function rejectFailedResponse(response: Response): Promise<void> {

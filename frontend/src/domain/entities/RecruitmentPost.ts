@@ -1,4 +1,5 @@
 import type { Company } from './Account'
+import type { ProposalStatus } from './RecruitmentProposal'
 import type { SupportProgramStatus } from './SupportProgram'
 
 /** 컨소시엄에서 맡는 역할입니다. 작성 기업은 주관·참여만, 수요처는 찾는 역할로만 씁니다. */
@@ -42,8 +43,10 @@ export type RecruitmentPost = RecruitmentPostDraft & {
   company: Company
   /** 연결 공고가 더 이상 공개되지 않으면 null이며 그때 status는 CLOSED입니다. */
   program: LinkedProgram | null
+  /** 받은 제안 수(철회 제외)입니다. */
   proposalCount: number
-  viewer: { isOwner: boolean }
+  /** myProposalStatus는 조회 기업이 이 글에 보낸 제안의 상태이며 비로그인·미제안이면 null입니다. */
+  viewer: { isOwner: boolean; myProposalStatus: ProposalStatus | null }
 }
 
 export type RecruitmentPostPage = {

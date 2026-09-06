@@ -17,6 +17,13 @@ import {
   ListRecruitmentPostsUseCase,
   UpdateRecruitmentPostUseCase,
 } from '../../domain/usecases/RecruitmentPostUseCases'
+import {
+  DecideProposalUseCase,
+  ListReceivedProposalsUseCase,
+  ListSentProposalsUseCase,
+  SendProposalUseCase,
+  WithdrawProposalUseCase,
+} from '../../domain/usecases/RecruitmentProposalUseCases'
 import { RevokeAccountSessionsUseCase } from '../../domain/usecases/RevokeAccountSessionsUseCase'
 import { SearchSupportProgramsUseCase } from '../../domain/usecases/SearchSupportProgramsUseCase'
 import { SignUpUseCase } from '../../domain/usecases/SignUpUseCase'
@@ -30,6 +37,7 @@ export function registerUseCases(container: AppContainer) {
     ).singleton(),
     closeRecruitmentPostUseCase: asFunction(createCloseRecruitmentPostUseCase).singleton(),
     createRecruitmentPostUseCase: asFunction(createCreateRecruitmentPostUseCase).singleton(),
+    decideProposalUseCase: asFunction(createDecideProposalUseCase).singleton(),
     getCurrentAccountUseCase: asFunction(createGetCurrentAccountUseCase).singleton(),
     getRecruitmentPostUseCase: asFunction(createGetRecruitmentPostUseCase).singleton(),
     getSupportProgramDetailUseCase: asFunction(
@@ -40,7 +48,9 @@ export function registerUseCases(container: AppContainer) {
     ).singleton(),
     listAdminAccountsUseCase: asFunction(createListAdminAccountsUseCase).singleton(),
     listMyRecruitmentPostsUseCase: asFunction(createListMyRecruitmentPostsUseCase).singleton(),
+    listReceivedProposalsUseCase: asFunction(createListReceivedProposalsUseCase).singleton(),
     listRecruitmentPostsUseCase: asFunction(createListRecruitmentPostsUseCase).singleton(),
+    listSentProposalsUseCase: asFunction(createListSentProposalsUseCase).singleton(),
     logInUseCase: asFunction(createLogInUseCase).singleton(),
     logOutUseCase: asFunction(createLogOutUseCase).singleton(),
     lookupBusinessUseCase: asFunction(createLookupBusinessUseCase).singleton(),
@@ -52,7 +62,9 @@ export function registerUseCases(container: AppContainer) {
       createSearchSupportProgramsUseCase,
     ).singleton(),
     signUpUseCase: asFunction(createSignUpUseCase).singleton(),
+    sendProposalUseCase: asFunction(createSendProposalUseCase).singleton(),
     updateRecruitmentPostUseCase: asFunction(createUpdateRecruitmentPostUseCase).singleton(),
+    withdrawProposalUseCase: asFunction(createWithdrawProposalUseCase).singleton(),
   })
 }
 
@@ -156,6 +168,36 @@ function createCloseRecruitmentPostUseCase({
   recruitmentRepository,
 }: Pick<AppCradle, 'recruitmentRepository'>): CloseRecruitmentPostUseCase {
   return new CloseRecruitmentPostUseCase(recruitmentRepository)
+}
+
+function createSendProposalUseCase({
+  recruitmentRepository,
+}: Pick<AppCradle, 'recruitmentRepository'>): SendProposalUseCase {
+  return new SendProposalUseCase(recruitmentRepository)
+}
+
+function createListReceivedProposalsUseCase({
+  recruitmentRepository,
+}: Pick<AppCradle, 'recruitmentRepository'>): ListReceivedProposalsUseCase {
+  return new ListReceivedProposalsUseCase(recruitmentRepository)
+}
+
+function createListSentProposalsUseCase({
+  recruitmentRepository,
+}: Pick<AppCradle, 'recruitmentRepository'>): ListSentProposalsUseCase {
+  return new ListSentProposalsUseCase(recruitmentRepository)
+}
+
+function createDecideProposalUseCase({
+  recruitmentRepository,
+}: Pick<AppCradle, 'recruitmentRepository'>): DecideProposalUseCase {
+  return new DecideProposalUseCase(recruitmentRepository)
+}
+
+function createWithdrawProposalUseCase({
+  recruitmentRepository,
+}: Pick<AppCradle, 'recruitmentRepository'>): WithdrawProposalUseCase {
+  return new WithdrawProposalUseCase(recruitmentRepository)
 }
 
 function createListMyRecruitmentPostsUseCase({

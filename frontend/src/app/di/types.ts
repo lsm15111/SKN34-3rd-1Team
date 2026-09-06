@@ -24,6 +24,13 @@ import type {
   ListRecruitmentPostsUseCase,
   UpdateRecruitmentPostUseCase,
 } from '../../domain/usecases/RecruitmentPostUseCases'
+import type {
+  DecideProposalUseCase,
+  ListReceivedProposalsUseCase,
+  ListSentProposalsUseCase,
+  SendProposalUseCase,
+  WithdrawProposalUseCase,
+} from '../../domain/usecases/RecruitmentProposalUseCases'
 import type { RevokeAccountSessionsUseCase } from '../../domain/usecases/RevokeAccountSessionsUseCase'
 import type { SearchSupportProgramsUseCase } from '../../domain/usecases/SearchSupportProgramsUseCase'
 import type { SignUpUseCase } from '../../domain/usecases/SignUpUseCase'
@@ -37,6 +44,7 @@ export type AppCradle = {
   askSupportProgramEvidenceQuestionUseCase: AskSupportProgramEvidenceQuestionUseCase
   closeRecruitmentPostUseCase: CloseRecruitmentPostUseCase
   createRecruitmentPostUseCase: CreateRecruitmentPostUseCase
+  decideProposalUseCase: DecideProposalUseCase
   fetchCoreApiHealth: FetchCoreApiHealth
   getCurrentAccountUseCase: GetCurrentAccountUseCase
   getRecruitmentPostUseCase: GetRecruitmentPostUseCase
@@ -44,7 +52,9 @@ export type AppCradle = {
   getSupportProgramSearchReadinessUseCase: GetSupportProgramSearchReadinessUseCase
   listAdminAccountsUseCase: ListAdminAccountsUseCase
   listMyRecruitmentPostsUseCase: ListMyRecruitmentPostsUseCase
+  listReceivedProposalsUseCase: ListReceivedProposalsUseCase
   listRecruitmentPostsUseCase: ListRecruitmentPostsUseCase
+  listSentProposalsUseCase: ListSentProposalsUseCase
   logInUseCase: LogInUseCase
   logOutUseCase: LogOutUseCase
   lookupBusinessUseCase: LookupBusinessUseCase
@@ -56,7 +66,9 @@ export type AppCradle = {
   sessionTokenStorage: SessionTokenStorage
   signUpUseCase: SignUpUseCase
   supportProgramRepository: SupportProgramRepository
+  sendProposalUseCase: SendProposalUseCase
   updateRecruitmentPostUseCase: UpdateRecruitmentPostUseCase
+  withdrawProposalUseCase: WithdrawProposalUseCase
 }
 
 export type AppContainer = AwilixContainer<AppCradle>

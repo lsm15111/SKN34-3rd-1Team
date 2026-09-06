@@ -5,6 +5,7 @@ import {
   recruitmentRoleLabels,
   type RecruitmentPost,
 } from '../../../../domain/entities/RecruitmentPost'
+import { proposalStatusLabels } from '../../../../domain/entities/RecruitmentProposal'
 import { formatDeadline } from '../viewmodel/recruitmentDates'
 import { recruitmentStatusClassName, recruitmentStyles } from './Recruitment.styles'
 
@@ -33,6 +34,7 @@ export function RecruitmentPostCard({ post }: { post: RecruitmentPost }) {
         <span>{post.company.companyName}</span>
         <span className={recruitmentStyles.chip}>{recruitmentRoleLabels[post.ourRole]}</span>
         {post.viewer.isOwner ? <span className={recruitmentStyles.chipAccent}>내 모집글</span> : null}
+        {post.viewer.myProposalStatus ? <span className={recruitmentStyles.chipAccent}>내 제안 · {proposalStatusLabels[post.viewer.myProposalStatus]}</span> : null}
       </div>
       <div className={recruitmentStyles.chipRow}>
         <span className={recruitmentStyles.chip}>찾는 역할 · {recruitmentRoleLabels[post.wantedRole]} {post.wantedCompanyCount}곳</span>

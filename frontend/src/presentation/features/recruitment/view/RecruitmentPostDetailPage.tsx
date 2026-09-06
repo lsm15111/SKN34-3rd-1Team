@@ -7,6 +7,7 @@ import {
 } from '../../../../domain/entities/RecruitmentPost'
 import { formatDate, formatDeadline } from '../viewmodel/recruitmentDates'
 import { useRecruitmentPostDetailViewModel } from '../viewmodel/useRecruitmentPostDetailViewModel'
+import { ProposalPanel } from './ProposalPanel'
 import { recruitmentStatusClassName, recruitmentStyles } from './Recruitment.styles'
 
 const programStatusLabels = { OPEN: '접수 중', UPCOMING: '접수 예정', CLOSED: '접수 종료', UNKNOWN: '기간 확인 필요' } as const
@@ -23,7 +24,7 @@ export function RecruitmentPostDetailPage() {
 }
 
 function RecruitmentPostDetailContent({ postId }: { postId: number }) {
-  const { closeEarly, isClosing, notice, state } = useRecruitmentPostDetailViewModel(postId)
+  const { closeEarly, isClosing, notice, refresh, state } = useRecruitmentPostDetailViewModel(postId)
 
   if (state.status === 'loading') {
     return <main className={recruitmentStyles.narrowPage}><p className={recruitmentStyles.hint}>모집글을 불러오는 중입니다.</p></main>
@@ -84,6 +85,7 @@ function RecruitmentPostDetailContent({ postId }: { postId: number }) {
           </section>
         </div>
         <aside className="grid content-start gap-6">
+          <ProposalPanel post={post} onPostChanged={() => void refresh()} />
           <section className={recruitmentStyles.section} aria-labelledby="company-title">
             <h2 id="company-title" className={recruitmentStyles.sectionTitle}>작성 기업</h2>
             <div className={recruitmentStyles.cardCompany}>

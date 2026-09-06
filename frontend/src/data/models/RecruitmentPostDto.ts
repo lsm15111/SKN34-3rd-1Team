@@ -2,6 +2,7 @@ import { z } from 'zod'
 
 import type { LinkedProgram, RecruitmentPost, RecruitmentPostPage } from '../../domain/entities/RecruitmentPost'
 import { companyDtoSchema, toCompany } from './AccountDto'
+import { proposalStatusSchema } from './RecruitmentProposalDto'
 
 const recruitmentRoleSchema = z.enum(['LEAD', 'PARTICIPANT', 'DEMAND'])
 
@@ -34,7 +35,7 @@ export const recruitmentPostDtoSchema = z.object({
   company: companyDtoSchema,
   program: linkedProgramDtoSchema.nullable(),
   proposalCount: z.number().int().nonnegative(),
-  viewer: z.object({ isOwner: z.boolean() }),
+  viewer: z.object({ isOwner: z.boolean(), myProposalStatus: proposalStatusSchema.nullable() }),
 })
 
 export const recruitmentPostPageDtoSchema = z.object({
@@ -84,7 +85,7 @@ export function toRecruitmentPost(dto: RecruitmentPostDto): RecruitmentPost {
     company: toCompany(dto.company),
     program: dto.program ? toLinkedProgram(dto.program) : null,
     proposalCount: dto.proposalCount,
-    viewer: { isOwner: dto.viewer.isOwner },
+    viewer: { isOwner: dto.viewer.isOwner, myProposalStatus: dto.viewer.myProposalStatus },
   }
 }
 

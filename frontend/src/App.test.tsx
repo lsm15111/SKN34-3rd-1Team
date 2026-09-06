@@ -77,7 +77,7 @@ describe('Partner recruitment posts', () => {
     company: { businessNumber: '2208162517', companyName: '데이터브릿지 주식회사', businessStatus: '계속사업자' },
     program: linkedProgram,
     proposalCount: 0,
-    viewer: { isOwner: false },
+    viewer: { isOwner: false, myProposalStatus: null },
   }
 
   it('모집글 목록에서 상세로 이동하고 연결 공고 링크를 보여 준다', async () => {
@@ -122,7 +122,7 @@ describe('Partner recruitment posts', () => {
 
   it('공고를 검색해 선택하고 모집글을 등록하면 상세로 이동한다', async () => {
     window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
-    const createdPost = { ...samplePost, id: 30, title: '스마트공장 과제 참여기관 찾습니다', viewer: { isOwner: true } }
+    const createdPost = { ...samplePost, id: 30, title: '스마트공장 과제 참여기관 찾습니다', viewer: { isOwner: true, myProposalStatus: null } }
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ account: sampleAccount }))
       .mockResolvedValueOnce(jsonResponse({ query: '서울 AI', programs: [supportPrograms[0]] }))
@@ -162,7 +162,7 @@ describe('Partner recruitment posts', () => {
   it('작성 기업은 상세에서 조기 마감할 수 있다', async () => {
     window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
-    const ownPost = { ...samplePost, viewer: { isOwner: true } }
+    const ownPost = { ...samplePost, viewer: { isOwner: true, myProposalStatus: null } }
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse(ownPost))
       .mockResolvedValueOnce(jsonResponse({ account: sampleAccount }))
@@ -194,6 +194,209 @@ describe('Partner recruitment posts', () => {
 
     expect((await screen.findByRole('status')).textContent).toContain(`선택한 공고(${detail.id})의 모집글만`)
     await screen.findByText('아직 모집 중인 글이 없습니다. 첫 모집글을 올려 보세요.')
+  })
+})
+
+describe('Partner recruitment proposals', () => {
+  const openPost = {
+    id: 12,
+    status: 'OPEN',
+    title: 'AI 실증 과제 데이터 구축·라벨링 참여기관 구합니다',
+    body: '학습용 민원 문서 정제와 라벨링을 맡아 주실 참여기관을 찾습니다.',
+    ourRole: 'LEAD',
+    wantedRole: 'PARTICIPANT',
+    wantedCompanyCount: 1,
+    wantedRegion: '서울·경기·인천',
+    requiredCapabilities: ['데이터 구축', '라벨링 운영'],
+    closesOn: '2999-09-20',
+    closedEarlyAt: null,
+    createdAt: '2026-09-06T12:00:00+09:00',
+    updatedAt: '2026-09-06T12:00:00+09:00',
+    company: { businessNumber: '2208162517', companyName: '데이터브릿지 주식회사', businessStatus: '계속사업자' },
+    program: {
+      sourceCode: supportPrograms[0].sourceCode,
+      sourceProgramId: supportPrograms[0].id,
+      title: supportPrograms[0].title,
+      organization: supportPrograms[0].organization,
+      status: 'OPEN',
+      applicationPeriod: supportPrograms[0].applicationPeriod,
+      applicationEndDate: supportPrograms[0].applicationEndDate,
+      targetDescription: supportPrograms[0].targetDescription,
+      sourceUrl: supportPrograms[0].sourceUrl,
+    },
+    proposalCount: 0,
+    viewer: { isOwner: false, myProposalStatus: null },
+  }
+  const pendingProposal = {
+    id: 5,
+    postId: 12,
+    status: 'PENDING',
+    message: '공공 데이터 라벨링 운영 경험이 있는 참여기관입니다.',
+    createdAt: '2026-09-06T13:00:00+09:00',
+    decidedAt: null,
+    company: sampleCompany,
+    post: { id: 12, status: 'OPEN', title: openPost.title, closesOn: '2999-09-20', companyName: '데이터브릿지 주식회사' },
+    contactEmail: null,
+  }
+
+  it('비로그인 사용자에게는 로그인 유도만 보이고 상세로 돌아올 경로를 남긴다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse(openPost)))
+
+    renderApp(createAppStore(), '/partners/12')
+
+    const link = await screen.findByRole('link', { name: '로그인하고 제안하기' })
+    expect(link.getAttribute('href')).toBe('/login')
+    expect(screen.queryByLabelText('제안 메시지')).toBeNull()
+    fireEvent.click(link)
+    expect(await screen.findByRole('heading', { name: '다시 만나서 반가워요' })).toBeTruthy()
+  })
+
+  it('다른 기업은 연락처 없는 메시지로 제안을 보내고 대기 중인 제안을 철회할 수 있다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(openPost))
+      .mockResolvedValueOnce(jsonResponse({ account: sampleAccount }))
+      .mockResolvedValueOnce(jsonResponse(pendingProposal, 201))
+      .mockResolvedValueOnce(jsonResponse({ ...openPost, proposalCount: 1, viewer: { isOwner: false, myProposalStatus: 'PENDING' } }))
+      .mockResolvedValueOnce(jsonResponse({ ...pendingProposal, status: 'WITHDRAWN', decidedAt: '2026-09-06T14:00:00+09:00' }))
+      .mockResolvedValueOnce(jsonResponse({ ...openPost, viewer: { isOwner: false, myProposalStatus: 'WITHDRAWN' } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/partners/12')
+
+    const textarea = await screen.findByLabelText(/^제안 메시지/)
+    fireEvent.change(textarea, { target: { value: '연락은 010-1234-5678' } })
+    fireEvent.click(screen.getByRole('button', { name: '참여 제안 보내기' }))
+    await screen.findByText(/메시지에는 이메일·전화번호를 적지 마세요/)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    fireEvent.change(textarea, { target: { value: pendingProposal.message } })
+    fireEvent.click(screen.getByRole('button', { name: '참여 제안 보내기' }))
+
+    expect((await screen.findByRole('status')).textContent).toContain('제안을 보냈습니다')
+    expect(screen.getByText('대기 중')).toBeTruthy()
+    expect(screen.getByText(pendingProposal.message)).toBeTruthy()
+    const [sendUrl, sendInit] = fetchMock.mock.calls[2] as [string, RequestInit]
+    expect(new URL(sendUrl).pathname).toBe('/api/v1/recruitment-posts/12/proposals')
+    expect(JSON.parse(String(sendInit.body))).toEqual({ message: pendingProposal.message })
+    await screen.findByText('받은 제안')
+    expect(screen.getByText('1건')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: '제안 철회' }))
+
+    expect((await screen.findByRole('status')).textContent).toContain('제안을 철회했습니다')
+    expect(screen.getByText('철회함')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '제안 철회' })).toBeNull()
+    expect(new URL(String(fetchMock.mock.calls[4]?.[0])).pathname).toBe('/api/v1/recruitment-proposals/5/withdraw')
+  })
+
+  it('이미 제안한 글에서는 보낸 제안을 찾아 상태를 보여 주고, 중복 제안 409는 안내로 바꾼다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ ...openPost, proposalCount: 1, viewer: { isOwner: false, myProposalStatus: 'ACCEPTED' } }))
+      .mockResolvedValueOnce(jsonResponse({ account: sampleAccount }))
+      .mockResolvedValueOnce(jsonResponse({ items: [{ ...pendingProposal, status: 'ACCEPTED', decidedAt: '2026-09-07T10:00:00+09:00', contactEmail: 'owner@databridge.co.kr' }] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/partners/12')
+
+    expect(await screen.findByText('수락됨')).toBeTruthy()
+    expect(await screen.findByRole('link', { name: 'owner@databridge.co.kr' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '제안 철회' })).toBeNull()
+    expect(screen.getByRole('link', { name: '보낸 제안 전체 보기' }).getAttribute('href')).toBe('/partners/mine?tab=sent')
+    expect(new URL(String(fetchMock.mock.calls[2]?.[0])).pathname).toBe('/api/v1/recruitment-proposals/sent')
+  })
+
+  it('같은 글에 다시 제안하면 서버 409를 안내 문구로 보여 준다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(openPost))
+      .mockResolvedValueOnce(jsonResponse({ account: sampleAccount }))
+      .mockResolvedValueOnce(problemResponse(409, 'PROPOSAL_ALREADY_EXISTS'))
+      .mockResolvedValueOnce(jsonResponse({ ...openPost, viewer: { isOwner: false, myProposalStatus: 'DECLINED' } }))
+      .mockResolvedValueOnce(jsonResponse({ items: [{ ...pendingProposal, status: 'DECLINED', decidedAt: '2026-09-07T10:00:00+09:00' }] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/partners/12')
+
+    fireEvent.change(await screen.findByLabelText(/^제안 메시지/), { target: { value: '다시 제안합니다.' } })
+    fireEvent.click(screen.getByRole('button', { name: '참여 제안 보내기' }))
+
+    expect((await screen.findByRole('status')).textContent).toContain('이미 제안을 보냈습니다')
+    expect(await screen.findByText('거절됨')).toBeTruthy()
+  })
+
+  it('작성 기업은 받은 제안 화면에서 수락하고 상대 담당자 이메일을 본다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
+    const ownPost = { ...openPost, company: sampleCompany, proposalCount: 2, viewer: { isOwner: true, myProposalStatus: null } }
+    const partnerCompany = { businessNumber: '1058144880', companyName: '비전솔루션', businessStatus: '계속사업자' }
+    const received = [
+      { ...pendingProposal, id: 7, company: partnerCompany, post: { ...pendingProposal.post, companyName: '삼성전자(주)' } },
+      { ...pendingProposal, id: 8, status: 'EXPIRED', company: { ...partnerCompany, businessNumber: '2208162517', companyName: '늦은 기업' }, message: '늦은 제안' },
+    ]
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(ownPost))
+      .mockResolvedValueOnce(jsonResponse({ account: sampleAccount }))
+      .mockResolvedValueOnce(jsonResponse(ownPost))
+      .mockResolvedValueOnce(jsonResponse({ items: received }))
+      .mockResolvedValueOnce(jsonResponse({ ...received[0], status: 'ACCEPTED', decidedAt: '2026-09-07T10:00:00+09:00', contactEmail: 'partner@vision.co.kr' }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/partners/12')
+
+    expect(await screen.findByText('이 글에 받은 제안 2건')).toBeTruthy()
+    expect(screen.queryByLabelText(/^제안 메시지/)).toBeNull()
+    fireEvent.click(screen.getByRole('link', { name: '받은 제안 보기' }))
+
+    await screen.findByText(/^받은 제안 2건\./)
+    expect(screen.getByText('비전솔루션')).toBeTruthy()
+    expect(screen.getByText('7일 무응답 종료')).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: '수락' })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '수락' }))
+
+    expect((await screen.findByRole('status')).textContent).toContain('제안을 수락했습니다')
+    expect(screen.getByText('수락됨')).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'partner@vision.co.kr' }).getAttribute('href')).toBe('mailto:partner@vision.co.kr')
+    expect(screen.queryByRole('button', { name: '수락' })).toBeNull()
+    expect(new URL(String(fetchMock.mock.calls[4]?.[0])).pathname).toBe('/api/v1/recruitment-proposals/7/accept')
+  })
+
+  it('다른 기업의 글에서 받은 제안 화면에 들어가면 작성 기업만 볼 수 있다고 안내한다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ account: sampleAccount }))
+      .mockResolvedValueOnce(jsonResponse(openPost))
+      .mockResolvedValueOnce(problemResponse(403, 'NOT_POST_OWNER')))
+
+    renderApp(createAppStore(), '/partners/12/proposals')
+
+    expect(await screen.findByRole('heading', { name: '작성 기업만 볼 수 있습니다' })).toBeTruthy()
+  })
+
+  it('내 모집글의 보낸 제안 탭에서 대기 중인 제안을 철회한다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
+    const accepted = { ...pendingProposal, id: 9, postId: 13, status: 'ACCEPTED', decidedAt: '2026-09-07T10:00:00+09:00', contactEmail: 'owner@databridge.co.kr', post: { ...pendingProposal.post, id: 13, title: '두 번째 모집글' } }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ account: sampleAccount }))
+      .mockResolvedValueOnce(jsonResponse({ items: [pendingProposal, accepted] }))
+      .mockResolvedValueOnce(jsonResponse({ ...pendingProposal, status: 'WITHDRAWN', decidedAt: '2026-09-07T11:00:00+09:00' }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/partners/mine?tab=sent')
+
+    await screen.findByRole('heading', { name: '보낸 제안' })
+    expect(screen.getByRole('link', { name: '보낸 제안' }).getAttribute('aria-current')).toBe('page')
+    expect(screen.getByRole('link', { name: openPost.title }).getAttribute('href')).toBe('/partners/12')
+    expect(screen.getByRole('link', { name: 'owner@databridge.co.kr' })).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: '제안 철회' })).toHaveLength(1)
+    fireEvent.click(screen.getByRole('button', { name: '제안 철회' }))
+
+    expect((await screen.findByRole('status')).textContent).toContain('제안을 철회했습니다')
+    expect(screen.getByText('철회함')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: '제안 철회' })).toBeNull()
+    expect(new URL(String(fetchMock.mock.calls[1]?.[0])).pathname).toBe('/api/v1/recruitment-proposals/sent')
   })
 })
 
@@ -1202,4 +1405,8 @@ function installMobileMediaQuery() {
       listener?.({ matches: false } as MediaQueryListEvent)
     },
   }
+}
+
+function problemResponse(status: number, code: string) {
+  return new Response(JSON.stringify({ status, code }), { status, headers: { 'Content-Type': 'application/problem+json' } })
 }
