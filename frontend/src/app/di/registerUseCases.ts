@@ -1,10 +1,15 @@
 import { asFunction } from 'awilix/browser'
 
 import { AskSupportProgramEvidenceQuestionUseCase } from '../../domain/usecases/AskSupportProgramEvidenceQuestionUseCase'
+import { GetCurrentAccountUseCase } from '../../domain/usecases/GetCurrentAccountUseCase'
 import { GetSupportProgramDetailUseCase } from '../../domain/usecases/GetSupportProgramDetailUseCase'
 import { GetSupportProgramSearchReadinessUseCase } from '../../domain/usecases/GetSupportProgramSearchReadinessUseCase'
+import { LogInUseCase } from '../../domain/usecases/LogInUseCase'
+import { LogOutUseCase } from '../../domain/usecases/LogOutUseCase'
+import { LookupBusinessUseCase } from '../../domain/usecases/LookupBusinessUseCase'
 import { PrepareSampleItemUseCase } from '../../domain/usecases/PrepareSampleItemUseCase'
 import { SearchSupportProgramsUseCase } from '../../domain/usecases/SearchSupportProgramsUseCase'
+import { SignUpUseCase } from '../../domain/usecases/SignUpUseCase'
 import type { AppContainer, AppCradle } from './types'
 
 /** Domain UseCase와 UseCase가 필요로 하는 Repository 연결을 등록합니다. */
@@ -13,18 +18,23 @@ export function registerUseCases(container: AppContainer) {
     askSupportProgramEvidenceQuestionUseCase: asFunction(
       createAskSupportProgramEvidenceQuestionUseCase,
     ).singleton(),
+    getCurrentAccountUseCase: asFunction(createGetCurrentAccountUseCase).singleton(),
     getSupportProgramDetailUseCase: asFunction(
       createGetSupportProgramDetailUseCase,
     ).singleton(),
     getSupportProgramSearchReadinessUseCase: asFunction(
       createGetSupportProgramSearchReadinessUseCase,
     ).singleton(),
+    logInUseCase: asFunction(createLogInUseCase).singleton(),
+    logOutUseCase: asFunction(createLogOutUseCase).singleton(),
+    lookupBusinessUseCase: asFunction(createLookupBusinessUseCase).singleton(),
     prepareSampleItemUseCase: asFunction(
       createPrepareSampleItemUseCase,
     ).singleton(),
     searchSupportProgramsUseCase: asFunction(
       createSearchSupportProgramsUseCase,
     ).singleton(),
+    signUpUseCase: asFunction(createSignUpUseCase).singleton(),
   })
 }
 
@@ -32,6 +42,12 @@ function createAskSupportProgramEvidenceQuestionUseCase({
   supportProgramRepository,
 }: Pick<AppCradle, 'supportProgramRepository'>): AskSupportProgramEvidenceQuestionUseCase {
   return new AskSupportProgramEvidenceQuestionUseCase(supportProgramRepository)
+}
+
+function createGetCurrentAccountUseCase({
+  accountRepository,
+}: Pick<AppCradle, 'accountRepository'>): GetCurrentAccountUseCase {
+  return new GetCurrentAccountUseCase(accountRepository)
 }
 
 function createGetSupportProgramDetailUseCase({
@@ -46,6 +62,24 @@ function createGetSupportProgramSearchReadinessUseCase({
   return new GetSupportProgramSearchReadinessUseCase(supportProgramRepository)
 }
 
+function createLogInUseCase({
+  accountRepository,
+}: Pick<AppCradle, 'accountRepository'>): LogInUseCase {
+  return new LogInUseCase(accountRepository)
+}
+
+function createLogOutUseCase({
+  accountRepository,
+}: Pick<AppCradle, 'accountRepository'>): LogOutUseCase {
+  return new LogOutUseCase(accountRepository)
+}
+
+function createLookupBusinessUseCase({
+  accountRepository,
+}: Pick<AppCradle, 'accountRepository'>): LookupBusinessUseCase {
+  return new LookupBusinessUseCase(accountRepository)
+}
+
 function createPrepareSampleItemUseCase({
   sampleItemRepository,
 }: Pick<AppCradle, 'sampleItemRepository'>): PrepareSampleItemUseCase {
@@ -56,4 +90,10 @@ function createSearchSupportProgramsUseCase({
   supportProgramRepository,
 }: Pick<AppCradle, 'supportProgramRepository'>): SearchSupportProgramsUseCase {
   return new SearchSupportProgramsUseCase(supportProgramRepository)
+}
+
+function createSignUpUseCase({
+  accountRepository,
+}: Pick<AppCradle, 'accountRepository'>): SignUpUseCase {
+  return new SignUpUseCase(accountRepository)
 }

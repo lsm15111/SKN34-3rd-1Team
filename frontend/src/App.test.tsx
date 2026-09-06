@@ -32,6 +32,145 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  window.localStorage.clear()
+})
+
+const sampleCompany = {
+  businessNumber: '1248100998',
+  companyName: '삼성전자(주)',
+  businessStatus: '계속사업자',
+}
+const sampleAccount = { email: 'manager@company.co.kr', company: sampleCompany }
+const sampleSession = {
+  sessionToken: 'session-token',
+  expiresAt: '2026-10-06T12:00:00+09:00',
+  account: sampleAccount,
+}
+
+describe('Account sign-up and login', () => {
+  it('회원가입은 기업 확인 뒤 가입 요청을 보내고 홈 헤더에 회사명을 표시한다', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ businesses: [sampleCompany] }))
+      .mockResolvedValueOnce(jsonResponse(sampleSession, 201))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/signup')
+
+    expect(screen.getByRole('heading', { name: '간편 회원가입' })).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: '124-81-00998' } })
+    fireEvent.click(screen.getByRole('button', { name: '기업 정보 확인' }))
+
+    await screen.findByText('삼성전자(주)')
+    expect(new URL(String(fetchMock.mock.calls[0]?.[0])).searchParams.get('businessNumber')).toBe('1248100998')
+
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: ' Manager@Company.co.kr ' } })
+    fireEvent.change(passwordInput('signup-password'), { target: { value: 'password1' } })
+    fireEvent.change(screen.getByLabelText('비밀번호 확인'), { target: { value: 'password1' } })
+    fireEvent.click(screen.getByLabelText(/서비스 이용약관/))
+    fireEvent.click(screen.getByRole('button', { name: '가입하고 계속하기' }))
+
+    await screen.findByRole('heading', { name: 'GovBiz에게 물어보세요' })
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+      email: 'manager@company.co.kr',
+      password: 'password1',
+      businessNumber: '1248100998',
+    })
+    expect(screen.getByText('삼성전자(주)')).toBeTruthy()
+    expect(screen.getByRole('button', { name: '로그아웃' })).toBeTruthy()
+    expect(screen.queryByRole('link', { name: '로그인' })).toBeNull()
+    expect(window.localStorage.getItem('govbiz.sessionToken')).toBe('session-token')
+  })
+
+  it('기업 확인 전 가입 제출과 미등록 사업자를 각각 안내한다', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ businesses: [] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/signup')
+
+    fireEvent.change(screen.getByLabelText(/사업자등록번호/), { target: { value: '1234567890' } })
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'new@company.co.kr' } })
+    fireEvent.change(passwordInput('signup-password'), { target: { value: 'password1' } })
+    fireEvent.change(screen.getByLabelText('비밀번호 확인'), { target: { value: 'password1' } })
+    fireEvent.click(screen.getByLabelText(/서비스 이용약관/))
+    fireEvent.click(screen.getByRole('button', { name: '가입하고 계속하기' }))
+
+    expect((await screen.findByRole('alert')).textContent).toBe('가입 전에 사업자등록번호로 기업 정보를 확인해 주세요.')
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: '기업 정보 확인' }))
+    expect((await screen.findByRole('status')).textContent).toBe('국세청에 등록된 사업자를 찾지 못했습니다. 번호를 다시 확인해 주세요.')
+    expect(fetchMock).toHaveBeenCalledOnce()
+  })
+
+  it('가입 폼은 비밀번호 규칙과 확인 불일치를 API 호출 없이 안내한다', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/signup')
+
+    fireEvent.change(passwordInput('signup-password'), { target: { value: 'onlyletters' } })
+    fireEvent.change(screen.getByLabelText('비밀번호 확인'), { target: { value: 'different1' } })
+    fireEvent.click(screen.getByRole('button', { name: '가입하고 계속하기' }))
+
+    await screen.findByText('비밀번호는 8~72자이며 영문과 숫자를 모두 포함해야 합니다.')
+    expect(screen.getByText('서비스 이용약관과 개인정보 처리방침에 동의해 주세요.')).toBeTruthy()
+
+    // 필드 규칙을 통과한 뒤에야 비밀번호 확인 일치 검사가 실행됩니다.
+    fireEvent.change(passwordInput('signup-password'), { target: { value: 'password1' } })
+    fireEvent.click(screen.getByLabelText(/서비스 이용약관/))
+    fireEvent.click(screen.getByRole('button', { name: '가입하고 계속하기' }))
+
+    await screen.findByText('비밀번호가 일치하지 않습니다.')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('로그인 실패는 이메일·비밀번호를 구분하지 않는 안내를 표시한다', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ status: 401, code: 'INVALID_CREDENTIALS' }),
+      { status: 401, headers: { 'Content-Type': 'application/problem+json' } },
+    )))
+
+    renderApp(createAppStore(), '/login')
+
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'manager@company.co.kr' } })
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: 'wrong-pass1' } })
+    fireEvent.click(screen.getByRole('button', { name: '로그인' }))
+
+    expect((await screen.findByRole('alert')).textContent).toBe('이메일 또는 비밀번호를 확인해 주세요.')
+    expect(screen.getByRole('heading', { name: '다시 만나서 반가워요' })).toBeTruthy()
+    expect(window.localStorage.getItem('govbiz.sessionToken')).toBeNull()
+  })
+
+  it('저장된 토큰으로 세션을 복원하고 로그아웃하면 토큰을 지운다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ account: sampleAccount }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore())
+
+    await screen.findByRole('button', { name: '로그아웃' })
+    expect(screen.getByText('삼성전자(주)')).toBeTruthy()
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      headers: { Authorization: 'Bearer stored-token' },
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '로그아웃' }))
+
+    await screen.findByRole('link', { name: '로그인' })
+    expect(new URL(String(fetchMock.mock.calls[1]?.[0])).pathname).toBe('/api/v1/auth/logout')
+    expect(window.localStorage.getItem('govbiz.sessionToken')).toBeNull()
+  })
+
+  it('로그인한 상태에서는 로그인·회원가입 화면 대신 홈으로 보낸다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ account: sampleAccount })))
+
+    renderApp(createAppStore(), '/login')
+
+    await screen.findByRole('heading', { name: 'GovBiz에게 물어보세요' })
+  })
 })
 
 describe('App navigation', () => {
@@ -53,7 +192,7 @@ describe('App navigation', () => {
     vi.stubGlobal('fetch', fetchMock)
     const appStore = createAppStore()
 
-    expect(Object.keys(appStore.getState())).toEqual(['chat', 'sampleItem'])
+    expect(Object.keys(appStore.getState())).toEqual(['chat', 'auth', 'sampleItem'])
 
     renderApp(appStore)
 
@@ -742,9 +881,15 @@ function renderApp(
   )
 }
 
-function jsonResponse(body: unknown) {
+function passwordInput(id: string): HTMLInputElement {
+  const input = document.getElementById(id)
+  if (!(input instanceof HTMLInputElement)) throw new Error(`비밀번호 입력이 없습니다: ${id}`)
+  return input
+}
+
+function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { 'Content-Type': 'application/json' },
   })
 }

@@ -321,7 +321,13 @@ Awilix의 `app/di`에서 Repository·UseCase·외부 함수를 구성하고 `app
 
 채팅 메시지·검색 조건은 Redux Toolkit으로 관리하고 검색 요청 흐름은 ViewModel의 thunk에 둡니다.
 화면 전용 DOM 참조·입력 조합 상태 등은 로컬 hook으로 관리합니다. React Router는 검색 화면,
-지원사업 상세와 두 SampleItem 예제 화면을 연결합니다. SampleItem은 업무 기능이 아니라 같은 UseCase의
+지원사업 상세, 회원가입·로그인과 두 SampleItem 예제 화면을 연결합니다.
+
+계정 기능은 `AccountRepository` 포트 뒤에서 세션 토큰의 저장·삭제까지 책임집니다. `AccountRepositoryImpl`은
+`data/storage`의 토큰 저장소(`localStorage`)를 생성자로 받아 가입·로그인 성공 시 토큰을 쓰고, 로그아웃과
+`401` 응답에서 지웁니다. 로그인 상태와 계정은 Redux `auth` slice에 두고, 앱 진입 시 ViewModel이
+`GetCurrentAccountUseCase`로 한 번 복원합니다. 가입·로그인 실패 사유(409·422·401)는 예외가 아니라
+결과 union으로 Domain에 전달되어 화면이 안내 문구를 고릅니다. SampleItem은 업무 기능이 아니라 같은 UseCase의
 Hook 상태와 Redux 상태 차이를 비교하는 예제입니다.
 
 Core의 공개 계약은 기능별 `controller/dto`, 외부 계약은 시스템별 `client/dto`, 검증된 실행 결과는

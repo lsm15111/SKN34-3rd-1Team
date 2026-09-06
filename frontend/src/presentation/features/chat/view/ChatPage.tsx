@@ -8,6 +8,7 @@ import {
   useSupportProgramChatViewModel,
 } from '../viewmodel/useSupportProgramChatViewModel'
 import { useSupportProgramSearchReadinessViewModel } from '../viewmodel/useSupportProgramSearchReadinessViewModel'
+import { useAuthSessionViewModel } from '../../auth/viewmodel/useAuthSessionViewModel'
 import {
   chatBackdropClassName,
   chatMessageBubbleClassName,
@@ -20,6 +21,7 @@ const chatMobileMediaQuery = '(max-width: 47.5rem)'
 
 export function ChatPage() {
   const readiness = useSupportProgramSearchReadinessViewModel()
+  const session = useAuthSessionViewModel()
   const {
     canRetrySearch,
     conversationCount,
@@ -276,9 +278,29 @@ export function ChatPage() {
               GovBiz에게 물어보세요
             </h1>
           </div>
-          <span className={chatPageStyles.sourceBadge}>
-            기업마당 공식 데이터
-          </span>
+          <div className={chatPageStyles.headerActions}>
+            <span className={chatPageStyles.sourceBadge}>
+              기업마당 공식 데이터
+            </span>
+            {session.isAuthenticated && session.account ? (
+              <>
+                <span className={chatPageStyles.accountBadge} title={session.account.email}>
+                  {session.account.company.companyName}
+                </span>
+                <button
+                  type="button"
+                  className={chatPageStyles.logoutButton}
+                  onClick={() => void session.logOut()}
+                >
+                  로그아웃
+                </button>
+              </>
+            ) : (
+              <Link className={chatPageStyles.loginLink} to="/login">
+                로그인
+              </Link>
+            )}
+          </div>
         </header>
 
         <div

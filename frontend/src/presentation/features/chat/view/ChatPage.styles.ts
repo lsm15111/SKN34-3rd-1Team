@@ -70,9 +70,22 @@ export const chatPageStyles = {
   headerEyebrow:
     'mt-0 mb-1 text-[0.7rem] font-extrabold tracking-[0.12em] text-[#6471a0] uppercase',
   headerTitle: 'm-0 text-[1.25rem] font-bold tracking-[-0.04em] text-[#151d3a]',
+  headerActions: 'flex flex-wrap items-center justify-end gap-2',
   sourceBadge: classes(
     'whitespace-nowrap rounded-full border px-[0.7rem] py-[0.45rem] text-[0.72rem] font-bold',
     'border-[#dfe4ef] bg-[#f5f7fb] text-[#536087] max-chat:text-[0.62rem]',
+  ),
+  accountBadge: classes(
+    'max-w-[14rem] truncate rounded-full border px-[0.7rem] py-[0.45rem] text-[0.72rem] font-bold',
+    'border-[#d9edc8] bg-[#f5fbea] text-[#536d37] max-chat:max-w-[8rem] max-chat:text-[0.62rem]',
+  ),
+  loginLink: classes(
+    'whitespace-nowrap rounded-full border px-[0.7rem] py-[0.45rem] text-[0.72rem] font-extrabold no-underline',
+    'border-[#d7dcef] bg-[#f1f2ff] text-[#5e5fc8] max-chat:text-[0.62rem]',
+  ),
+  logoutButton: classes(
+    'cursor-pointer whitespace-nowrap rounded-full border bg-white px-[0.7rem] py-[0.45rem] text-[0.72rem] font-bold',
+    'border-[#dfe4ef] text-[#536087] hover:border-[#7774d7] hover:text-[#504ebd] max-chat:text-[0.62rem]',
   ),
   timeline: classes(
     'mx-auto w-[min(860px,calc(100%_-_2rem))] overflow-y-auto pt-10 pb-8',

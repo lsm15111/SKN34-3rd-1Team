@@ -47,6 +47,8 @@ pnpm dev
 |---|---|
 | `/` | 자연어 검색, 결과 카드, 새 대화 시작 |
 | `/support-programs/detail?sourceCode=...&sourceProgramId=...` | 식별자로 상세 API를 조회해 공고 조건·출처 표시 |
+| `/signup` | 사업자등록번호 기업 확인 → 이메일·비밀번호로 간편 회원가입 |
+| `/login` | 이메일·비밀번호 로그인 |
 | `/examples/sample-item/hook` | React Hook Form·로컬 요청 상태 예제 |
 | `/examples/sample-item/redux` | Redux 상태 유지 예제 |
 
@@ -62,8 +64,13 @@ pnpm dev
 `BIZINFO`의 기업마당 도메인만 허용합니다. 실제 제공처를 추가할 때는 해당 제공처의 공식 도메인을
 allowlist에 명시적으로 추가합니다. 테스트용 제공처는 production 허용 목록에 포함하지 않습니다.
 
+회원가입은 사업자등록번호를 Core API의 Bizno 확인 endpoint로 검증한 뒤 이메일·비밀번호만 받습니다.
+가입·로그인 응답의 세션 토큰은 `localStorage`(`govbiz.sessionToken`)에 저장하고 앱 진입 시 `GET /api/v1/auth/me`로
+로그인 상태를 복원합니다. 채팅 헤더는 로그인 전에는 `로그인` 링크, 로그인 후에는 회사명과 `로그아웃`을
+보여 줍니다. 검색은 로그인 없이도 그대로 동작합니다.
+
 채팅 형태의 화면이지만 각 검색 요청에는 현재 입력한 검색어만 전달합니다. 이전 대화를 이해하는
-다중 턴 대화, 로그인, 북마크, 알림, 대화 이력의 서버 저장은 아직 구현하지 않았습니다.
+다중 턴 대화, 기업 프로필 편집, 북마크, 알림, 대화 이력의 서버 저장은 아직 구현하지 않았습니다.
 
 ## 구조와 상태 책임
 
@@ -71,10 +78,11 @@ allowlist에 명시적으로 추가합니다. 테스트용 제공처는 producti
 src/
 ├── app/                         # Redux Store, typed hook, Awilix 조립·등록
 ├── presentation/features/chat/ # 검색·상세 View, ViewModel, chat slice
+├── presentation/features/auth/ # 회원가입·로그인 View, ViewModel, 폼 검증, auth slice
 ├── presentation/features/sample-item/ # 상태관리 비교 예제
 ├── presentation/shared/        # Core API 상태 표시
 ├── domain/                      # Entity, Repository 계약, UseCase
-└── data/                        # Fetch, Zod DTO 검증, Repository 구현, 테스트 fixture
+└── data/                        # Fetch, Zod DTO 검증, Repository 구현, 세션 토큰 저장소, 테스트 fixture
 ```
 
 검색은 `View → ViewModel → UseCase → Repository → Fetch → Core API` 순서입니다. ViewModel은
@@ -84,9 +92,10 @@ UseCase·Repository 경계를 거치되 로딩·결과 상태를 ViewModel의 �
 
 | 소유자 | 현재 담당 상태 | 화면 이동·새로고침 동작 |
 |---|---|---|
-| React 로컬 상태 | 사이드바, 상세 조회, Health, Hook SampleItem | 해당 화면이 unmount되면 초기화 |
-| Redux 메모리 | 채팅 메시지·입력·검색 상태, Redux SampleItem | 앱 내 이동 시 유지, 새로고침 시 초기화 |
-| 서버 | MySQL 공고 카탈로그 | 브라우저 상태와 별개로 유지 |
+| React 로컬 상태 | 사이드바, 상세 조회, Health, Hook SampleItem, 가입·로그인 폼과 기업 확인 결과 | 해당 화면이 unmount되면 초기화 |
+| Redux 메모리 | 채팅 메시지·입력·검색 상태, 로그인 상태·계정, Redux SampleItem | 앱 내 이동 시 유지, 새로고침 시 초기화(로그인 상태는 저장된 토큰으로 복원) |
+| 브라우저 localStorage | 세션 토큰 | 새로고침·재접속 후 유지, 로그아웃·만료 시 삭제 |
+| 서버 | MySQL 공고 카탈로그, 계정·기업·세션 | 브라우저 상태와 별개로 유지 |
 
 Redux에는 직렬화 가능한 데이터만 저장하며 `AbortController`는 ViewModel의 `useRef`가 관리합니다.
 새 대화 시작·화면 이탈 시 요청을 취소하고, `requestId`가 다른 과거 응답은 무시합니다. 새 대화
@@ -99,6 +108,8 @@ Redux에는 직렬화 가능한 데이터만 저장하며 `AbortController`는 V
 - 한글 IME 조합 중 Enter와 Safari `keyCode 229` Enter 제출 차단
 - Enter 전송, Shift+Enter 줄바꿈
 - 검색 실패 시 내부 예외 대신 안전한 오류 문구 표시
+- 가입·로그인 폼은 Core API와 같은 규칙(이메일 형식, 비밀번호 8~72자 영문·숫자, 사업자등록번호 10자리)을
+  Zod로 먼저 검사하고, 409·422·401은 사유별 안내 문구로 바꿈
 
 스타일은 `src/index.css`의 Tailwind `@theme` 토큰과 View 옆 `*.styles.ts`를 사용합니다.
 계층·DI의 상세 규칙은 [아키텍처 문서](../docs/architecture.md#frontend와-내부-계약), 예제 API는

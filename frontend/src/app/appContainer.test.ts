@@ -2,14 +2,20 @@ import { asValue } from 'awilix/browser'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { supportPrograms } from '../data/fixtures/supportPrograms'
+import { createMemorySessionTokenStorage } from '../data/storage/sessionTokenStorage'
 import type { SampleItem } from '../domain/entities/SampleItem'
 import type { SampleItemRepository } from '../domain/repositories/SampleItemRepository'
 import type { SupportProgramRepository } from '../domain/repositories/SupportProgramRepository'
 import { AskSupportProgramEvidenceQuestionUseCase } from '../domain/usecases/AskSupportProgramEvidenceQuestionUseCase'
+import { GetCurrentAccountUseCase } from '../domain/usecases/GetCurrentAccountUseCase'
 import { GetSupportProgramDetailUseCase } from '../domain/usecases/GetSupportProgramDetailUseCase'
 import { GetSupportProgramSearchReadinessUseCase } from '../domain/usecases/GetSupportProgramSearchReadinessUseCase'
+import { LogInUseCase } from '../domain/usecases/LogInUseCase'
+import { LogOutUseCase } from '../domain/usecases/LogOutUseCase'
+import { LookupBusinessUseCase } from '../domain/usecases/LookupBusinessUseCase'
 import { PrepareSampleItemUseCase } from '../domain/usecases/PrepareSampleItemUseCase'
 import { SearchSupportProgramsUseCase } from '../domain/usecases/SearchSupportProgramsUseCase'
+import { SignUpUseCase } from '../domain/usecases/SignUpUseCase'
 import { appContainer } from './appContainer'
 import { createAppContainer } from './di/container'
 
@@ -37,6 +43,37 @@ describe('Awilix application container and Service Locator', () => {
     expect(appContainer.resolve('searchSupportProgramsUseCase')).toBe(
       searchUseCase,
     )
+  })
+
+  it('resolves the account use cases against one shared account repository', () => {
+    const container = createAppContainer()
+
+    expect(container.resolve('signUpUseCase')).toBeInstanceOf(SignUpUseCase)
+    expect(container.resolve('logInUseCase')).toBeInstanceOf(LogInUseCase)
+    expect(container.resolve('logOutUseCase')).toBeInstanceOf(LogOutUseCase)
+    expect(container.resolve('lookupBusinessUseCase')).toBeInstanceOf(LookupBusinessUseCase)
+    expect(container.resolve('getCurrentAccountUseCase')).toBeInstanceOf(GetCurrentAccountUseCase)
+    expect(container.resolve('accountRepository')).toBe(container.resolve('accountRepository'))
+    expect(container.resolve('signUpUseCase')).toBe(container.resolve('signUpUseCase'))
+  })
+
+  it('injects a memory token storage so the account repository restores a session without localStorage', async () => {
+    const account = {
+      email: 'manager@company.co.kr',
+      company: { businessNumber: '1248100998', companyName: '삼성전자(주)', businessStatus: '계속사업자' },
+    }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ account }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const container = createAppContainer()
+    container.register({ sessionTokenStorage: asValue(createMemorySessionTokenStorage('stored-token')) })
+
+    await expect(container.resolve('getCurrentAccountUseCase').execute()).resolves.toEqual(account)
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({
+      headers: { Authorization: 'Bearer stored-token' },
+    })
   })
 
   it('resolves the production graph and executes the Core API search', async () => {

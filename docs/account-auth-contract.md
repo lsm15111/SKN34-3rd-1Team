@@ -138,6 +138,8 @@ Content-Type: application/json
   `Authorization: Bearer <sessionToken>` 헤더로 보냅니다.
 - 유효 기간은 `ACCOUNT_SESSION_TTL`(기본 30일)이며 `expiresAt`은 서울 오프셋 ISO-8601 문자열입니다.
 - 쿠키·CSRF 토큰·refresh 토큰은 없습니다. 만료·로그아웃된 토큰은 `401 AUTHENTICATION_REQUIRED`가 됩니다.
+- GovBiz Web은 토큰을 `localStorage`의 `govbiz.sessionToken`에 저장하고, 앱 진입 시 `GET /api/v1/auth/me`로
+  로그인 상태를 복원하며, 로그아웃과 `401` 응답에서 삭제합니다.
 
 ## 내 계정 조회
 
