@@ -198,6 +198,9 @@ account/
 ├── controller            # 계정·기업 확인 공개 HTTP 진입점
 │   └── dto               # 공개 응답 계약
 ├── service               # 사업자등록번호 정규화와 Bizno 조회 흐름
+├── repository            # 기업 UPSERT·계정·세션 저장과 조회, DbRow 변환
+│   └── mapper            # MyBatis Mapper, DbRow
+├── domain                # 계정·기업·세션 업무 모델
 └── client/
     └── bizno             # Bizno HTTP·응답 검증·등록 사업자 필터
 _health                    # Core API Health
@@ -219,7 +222,8 @@ Facade와 Domain은 MyBatis Mapper를 직접 호출하지 않습니다.
 | `DbRow` | `repository/mapper`의 DB 행 타입. Repository 밖으로 노출하지 않음 |
 | `Helper` | 실제 반복 보조 작업. 특정 기능의 하위 흐름이 함께 쓰면 해당 기능의 `helper`, 둘 이상의 기능이 함께 쓰면 `_common/helper` |
 
-SQL은 [`SupportProgramMapper.xml`](src/main/resources/mybatis/supportprogram/repository/SupportProgramMapper.xml)에
+SQL은 기능별 [`SupportProgramMapper.xml`](src/main/resources/mybatis/supportprogram/repository/SupportProgramMapper.xml),
+[`AccountMapper.xml`](src/main/resources/mybatis/account/repository/AccountMapper.xml)에
 명시하며 JPA·JdbcClient·annotation SQL을 혼용하지 않습니다. Repository가 JSON 배열과 DbRow를
 변환하고 `SupportProgramStatusResolver`를 호출합니다. 상세 규칙은 [AGENTS.md](../../AGENTS.md)를 따릅니다.
 
@@ -229,7 +233,13 @@ SQL은 [`SupportProgramMapper.xml`](src/main/resources/mybatis/supportprogram/re
   [V2](src/main/resources/db/migration/V2__add_support_program_sync_generation.sql)는 최신 수집 시작 세대,
   [V3](src/main/resources/db/migration/V3__create_support_program_source_document.sql)는 공고별 공식 원문
   테이블, [V4](src/main/resources/db/migration/V4__create_support_program_sync_status.sql)는 공개 스냅샷의
-  세대·지문·공고 수·색인 준비와 최근 동기화 결과를 만듭니다. 적용된 migration은 수정하지 않고 새 버전을 추가합니다.
+  세대·지문·공고 수·색인 준비와 최근 동기화 결과를 만듭니다.
+  [V5](src/main/resources/db/migration/V5__create_account.sql)는 회원 기업(`company`, 사업자등록번호 고유키),
+  계정(`account`, 이메일 고유키·비밀번호 해시), 로그인 세션(`account_session`, 토큰 해시·만료 시각, 계정 삭제 시
+  함께 삭제)을 만듭니다. 적용된 migration은 수정하지 않고 새 버전을 추가합니다.
+- 회원가입 저장은 기업 UPSERT → 계정 INSERT → 세션 INSERT를 하나의 짧은 transaction으로 묶습니다. Bizno 조회와
+  비밀번호 해시는 transaction 밖에서 먼저 끝냅니다. 이메일 중복은 DB UNIQUE 제약(`utf8mb4_0900_ai_ci`, 대소문자 무시)이
+  막고 Service가 409로 변환합니다.
 - 전체 수집·검증·색인이 끝난 뒤 최신 시작 세대만 공개합니다. BIZINFO 행 미노출 처리와 UPSERT를
   하나의 짧은 DB transaction으로 묶고, 같은 transaction에서 스냅샷 지문·공고 수·`indexReady=true`·성공
   시각을 기록합니다. 외부 HTTP 호출은 transaction 밖에서 수행합니다.
@@ -282,5 +292,6 @@ AI Service는 LLM 실행 실패와 색인 미준비·Qdrant 실패를 내부 503
 ```
 
 테스트는 Controller 계약·Client/Facade 응답 검증·상태 계산·동기화 순서·공식 원문 HTML 검증·근거 청크/인용 계약과
-MySQL의 JSON, 복합 식별자, UPSERT, rollback, 시작 세대에 따른 공개 제어, 공개 스냅샷 준비 상태 전이를 검증합니다. 전체 서비스 연결 검증은
+MySQL의 JSON, 복합 식별자, UPSERT, rollback, 시작 세대에 따른 공개 제어, 공개 스냅샷 준비 상태 전이,
+계정·기업·세션의 UPSERT·이메일 고유성·세션 만료·transaction rollback을 검증합니다. 전체 서비스 연결 검증은
 [인프라 README](../../infrastructure/README.md)의 Compose 검증 절차를 참고하세요.

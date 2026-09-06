@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="ai.govbiz.core.account.repository.mapper.AccountMapper">
+
+    <resultMap id="companyDbRow"
+               type="ai.govbiz.core.account.repository.mapper.CompanyDbRow">
+        <id column="id" property="id" />
+        <result column="business_number" property="businessNumber" />
+        <result column="company_name" property="companyName" />
+        <result column="business_status" property="businessStatus" />
+        <result column="verified_source" property="verifiedSource" />
+        <result column="verified_at" property="verifiedAt" />
+    </resultMap>
+
+    <resultMap id="accountDbRow"
+               type="ai.govbiz.core.account.repository.mapper.AccountDbRow">
+        <id column="id" property="id" />
+        <result column="email" property="email" />
+        <result column="password_hash" property="passwordHash" />
+        <result column="company_id" property="companyId" />
+        <result column="terms_agreed_at" property="termsAgreedAt" />
+        <result column="company_business_number" property="companyBusinessNumber" />
+        <result column="company_name" property="companyName" />
+        <result column="company_business_status" property="companyBusinessStatus" />
+    </resultMap>
+
+    <sql id="accountWithCompanyColumns">
+        account.id,
+        account.email,
+        account.password_hash,
+        account.company_id,
+        account.terms_agreed_at,
+        company.business_number AS company_business_number,
+        company.company_name,
+        company.business_status AS company_business_status
+    </sql>
+
+    <insert id="upsertCompany"
+            parameterType="ai.govbiz.core.account.repository.mapper.CompanyDbRow">
+        INSERT INTO company (
+            business_number,
+            company_name,
+            business_status,
+            verified_source,
+            verified_at
+        ) VALUES (
+            #{businessNumber},
+            #{companyName},
+            #{businessStatus},
+            #{verifiedSource},
+            #{verifiedAt}
+        )
+        ON DUPLICATE KEY UPDATE
+            company_name = #{companyName},
+            business_status = #{businessStatus},
+            verified_source = #{verifiedSource},
+            verified_at = #{verifiedAt}
+    </insert>
+
+    <select id="findCompanyByBusinessNumber" resultMap="companyDbRow">
+        SELECT
+            id,
+            business_number,
+            company_name,
+            business_status,
+            verified_source,
+            verified_at
+        FROM company
+        WHERE business_number = #{businessNumber}
+    </select>
+
+    <insert id="insertAccount"
+            parameterType="ai.govbiz.core.account.repository.mapper.AccountDbRow"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO account (
+            email,
+            password_hash,
+            company_id,
+            terms_agreed_at
+        ) VALUES (
+            #{email},
+            #{passwordHash},
+            #{companyId},
+            #{termsAgreedAt}
+        )
+    </insert>
+
+    <select id="findAccountByEmail" resultMap="accountDbRow">
+        SELECT
+            <include refid="accountWithCompanyColumns" />
+        FROM account
+        INNER JOIN company
+            ON company.id = account.company_id
+        WHERE account.email = #{email}
+    </select>
+
+    <select id="findAccountBySessionTokenHash" resultMap="accountDbRow">
+        SELECT
+            <include refid="accountWithCompanyColumns" />
+        FROM account_session session
+        INNER JOIN account
+            ON account.id = session.account_id
+        INNER JOIN company
+            ON company.id = account.company_id
+        WHERE session.token_hash = #{tokenHash}
+          AND session.expires_at &gt; #{now}
+    </select>
+
+    <insert id="insertSession"
+            parameterType="ai.govbiz.core.account.repository.mapper.AccountSessionDbRow"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO account_session (
+            token_hash,
+            account_id,
+            expires_at
+        ) VALUES (
+            #{tokenHash},
+            #{accountId},
+            #{expiresAt}
+        )
+    </insert>
+
+    <delete id="deleteSessionByTokenHash">
+        DELETE FROM account_session
+        WHERE token_hash = #{tokenHash}
+    </delete>
+
+    <delete id="deleteExpiredSessionsByAccountId">
+        DELETE FROM account_session
+        WHERE account_id = #{accountId}
+          AND expires_at &lt;= #{now}
+    </delete>
+</mapper>

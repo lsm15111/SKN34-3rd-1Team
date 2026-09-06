@@ -270,6 +270,13 @@ V4 적용 전부터 있던 공고는 과거 공개 세대를 복원하지 않습
 한해, 전체 복구 색인이 성공한 뒤 그때 읽은 지문·공고 수를 sentinel 세대 `0`으로 조건부 채택할 수 있습니다.
 빈 초기 DB·복구 전 legacy 공고는 `PREPARING`이며, 이미 실제 지문이 있는 새 스냅샷은 bootstrap이 덮어쓰지 않습니다.
 
+`company`·`account`·`account_session`(V5)은 회원 계정을 저장합니다. `company`는 하이픈을 제거한 사업자등록번호
+10자리를 고유키로 두고 가입 시점의 Bizno 상호·사업자 상태·확인 시각을 UPSERT하며, 한 기업에 여러 담당자 계정을
+허용합니다. `account`는 소문자로 정규화한 이메일을 고유키로 두고 비밀번호 해시와 약관 동의 시각을 저장합니다.
+`account_session`은 불투명 세션 토큰의 SHA-256 해시와 만료 시각만 저장하고 계정 삭제 시 함께 삭제됩니다.
+`AccountRepository`는 기업 UPSERT → 계정 INSERT → 첫 세션 INSERT를 하나의 짧은 transaction으로 묶고, 이메일
+중복은 DB UNIQUE 제약이 막습니다. 만료 여부는 서울 기준 시계로 조회 시점에 판단합니다.
+
 접수 상태는 `SupportProgramStatusResolver`가 읽을 때 계산합니다. 파싱된 시작일 전은 `UPCOMING`,
 종료일 이후는 `CLOSED`, 시작일·종료일 범위 안은 `OPEN`입니다. 날짜 경계는 포함합니다.
 날짜만으로 결정되지 않은 경우 예정 표현, 남아 있는 종료일, 명시적 종료 표현, 상시 접수 표현 등의
