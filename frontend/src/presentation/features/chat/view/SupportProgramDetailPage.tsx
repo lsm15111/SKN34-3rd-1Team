@@ -170,8 +170,30 @@ function SupportProgramDetail({ program }: { program: SupportProgram }) {
           {program.sourceName} 원문 보기 ↗
         </a>
       </section>
+
+      <section className={supportProgramDetailStyles.reasonSection} aria-labelledby="partner-recruitment">
+        <p className={supportProgramDetailStyles.sectionEyebrow}>파트너 모집</p>
+        <h2 id="partner-recruitment" className={supportProgramDetailStyles.sectionTitle}>
+          이 공고로 함께 신청할 기업 찾기
+        </h2>
+        <p className={supportProgramDetailStyles.emptyReason}>
+          컨소시엄이 필요한 공고라면 모집글을 올리거나 다른 기업의 모집글을 확인해 보세요. 모집글은 이 공고에 묶이며 공고가 마감되면 자동 종료됩니다.
+        </p>
+        <div className={supportProgramDetailStyles.programLinks}>
+          <Link className={supportProgramDetailStyles.sourceLink} to={`/partners?${programQuery(program)}`}>
+            이 공고의 모집글 보기
+          </Link>
+          <Link className={supportProgramDetailStyles.sourceLink} to={`/partners/new?${programQuery(program)}`}>
+            이 공고로 모집글 작성
+          </Link>
+        </div>
+      </section>
     </main>
   )
+}
+
+function programQuery(program: SupportProgram) {
+  return new URLSearchParams({ sourceCode: program.sourceCode, sourceProgramId: program.id }).toString()
 }
 
 function UnavailableSupportProgramDetail({

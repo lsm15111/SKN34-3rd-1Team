@@ -6,6 +6,10 @@ import { SignupPage } from './presentation/features/auth/view/SignupPage'
 import { useRestoreAuthSession } from './presentation/features/auth/viewmodel/useAuthSessionViewModel'
 import { ChatPage } from './presentation/features/chat/view/ChatPage'
 import { SupportProgramDetailPage } from './presentation/features/chat/view/SupportProgramDetailPage'
+import { MyRecruitmentPostsPage } from './presentation/features/recruitment/view/MyRecruitmentPostsPage'
+import { RecruitmentPostDetailPage } from './presentation/features/recruitment/view/RecruitmentPostDetailPage'
+import { RecruitmentPostFormPage } from './presentation/features/recruitment/view/RecruitmentPostFormPage'
+import { RecruitmentPostListPage } from './presentation/features/recruitment/view/RecruitmentPostListPage'
 import { ReduxSampleItemPage } from './presentation/features/sample-item/view/ReduxSampleItemPage'
 import { SampleItemPage } from './presentation/features/sample-item/view/SampleItemPage'
 
@@ -22,6 +26,11 @@ function App() {
         path="/support-programs/detail"
         element={<SupportProgramDetailPage />}
       />
+      <Route path="/partners" element={<RecruitmentPostListPage />} />
+      <Route path="/partners/new" element={<RecruitmentPostFormPage />} />
+      <Route path="/partners/mine" element={<MyRecruitmentPostsPage />} />
+      <Route path="/partners/:postId" element={<RecruitmentPostDetailPage />} />
+      <Route path="/partners/:postId/edit" element={<RecruitmentPostFormPage />} />
       <Route path="/admin" element={<Navigate replace to="/admin/accounts" />} />
       <Route path="/admin/accounts" element={<AdminAccountsPage />} />
       <Route path="/examples/sample-item/hook" element={<SampleItemPage />} />

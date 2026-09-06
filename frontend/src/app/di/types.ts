@@ -4,6 +4,7 @@ import type { CoreApiHealth } from '../../data/api/coreApiHealth'
 import type { SessionTokenStorage } from '../../data/storage/sessionTokenStorage'
 import type { AccountRepository } from '../../domain/repositories/AccountRepository'
 import type { AdminRepository } from '../../domain/repositories/AdminRepository'
+import type { RecruitmentRepository } from '../../domain/repositories/RecruitmentRepository'
 import type { SampleItemRepository } from '../../domain/repositories/SampleItemRepository'
 import type { SupportProgramRepository } from '../../domain/repositories/SupportProgramRepository'
 import type { AskSupportProgramEvidenceQuestionUseCase } from '../../domain/usecases/AskSupportProgramEvidenceQuestionUseCase'
@@ -15,6 +16,14 @@ import type { LogInUseCase } from '../../domain/usecases/LogInUseCase'
 import type { LogOutUseCase } from '../../domain/usecases/LogOutUseCase'
 import type { LookupBusinessUseCase } from '../../domain/usecases/LookupBusinessUseCase'
 import type { PrepareSampleItemUseCase } from '../../domain/usecases/PrepareSampleItemUseCase'
+import type {
+  CloseRecruitmentPostUseCase,
+  CreateRecruitmentPostUseCase,
+  GetRecruitmentPostUseCase,
+  ListMyRecruitmentPostsUseCase,
+  ListRecruitmentPostsUseCase,
+  UpdateRecruitmentPostUseCase,
+} from '../../domain/usecases/RecruitmentPostUseCases'
 import type { RevokeAccountSessionsUseCase } from '../../domain/usecases/RevokeAccountSessionsUseCase'
 import type { SearchSupportProgramsUseCase } from '../../domain/usecases/SearchSupportProgramsUseCase'
 import type { SignUpUseCase } from '../../domain/usecases/SignUpUseCase'
@@ -26,21 +35,28 @@ export type AppCradle = {
   accountRepository: AccountRepository
   adminRepository: AdminRepository
   askSupportProgramEvidenceQuestionUseCase: AskSupportProgramEvidenceQuestionUseCase
+  closeRecruitmentPostUseCase: CloseRecruitmentPostUseCase
+  createRecruitmentPostUseCase: CreateRecruitmentPostUseCase
   fetchCoreApiHealth: FetchCoreApiHealth
   getCurrentAccountUseCase: GetCurrentAccountUseCase
+  getRecruitmentPostUseCase: GetRecruitmentPostUseCase
   getSupportProgramDetailUseCase: GetSupportProgramDetailUseCase
   getSupportProgramSearchReadinessUseCase: GetSupportProgramSearchReadinessUseCase
   listAdminAccountsUseCase: ListAdminAccountsUseCase
+  listMyRecruitmentPostsUseCase: ListMyRecruitmentPostsUseCase
+  listRecruitmentPostsUseCase: ListRecruitmentPostsUseCase
   logInUseCase: LogInUseCase
   logOutUseCase: LogOutUseCase
   lookupBusinessUseCase: LookupBusinessUseCase
   prepareSampleItemUseCase: PrepareSampleItemUseCase
+  recruitmentRepository: RecruitmentRepository
   revokeAccountSessionsUseCase: RevokeAccountSessionsUseCase
   sampleItemRepository: SampleItemRepository
   searchSupportProgramsUseCase: SearchSupportProgramsUseCase
   sessionTokenStorage: SessionTokenStorage
   signUpUseCase: SignUpUseCase
   supportProgramRepository: SupportProgramRepository
+  updateRecruitmentPostUseCase: UpdateRecruitmentPostUseCase
 }
 
 export type AppContainer = AwilixContainer<AppCradle>

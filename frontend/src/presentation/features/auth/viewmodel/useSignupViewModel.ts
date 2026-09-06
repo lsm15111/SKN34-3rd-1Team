@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 
 import { appContainer } from '../../../../app/appContainer'
 import { useAppDispatch } from '../../../../app/hooks'
@@ -9,6 +9,7 @@ import type { Company } from '../../../../domain/entities/Account'
 import type { LookupBusinessUseCase } from '../../../../domain/usecases/LookupBusinessUseCase'
 import type { SignUpUseCase } from '../../../../domain/usecases/SignUpUseCase'
 import { signedIn } from '../state/authSlice'
+import { readReturnPath } from './returnPath'
 import {
   businessNumberPattern,
   signupFormSchema,
@@ -41,6 +42,7 @@ export function useSignupViewModel(
 ) {
   const dispatchToStore = useAppDispatch()
   const navigate = useNavigate()
+  const location = useLocation()
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupFormSchema),
     mode: 'onBlur',
@@ -134,7 +136,7 @@ export function useSignupViewModel(
       switch (result.outcome) {
         case 'session':
           dispatchToStore(signedIn(result.session.account))
-          navigate('/', { replace: true })
+          navigate(readReturnPath(location.state), { replace: true })
           return
         case 'email-taken':
           setSubmitError(signupMessages.emailTaken)

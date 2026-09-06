@@ -1,14 +1,16 @@
-import { Link, Navigate } from 'react-router'
+import { Link, Navigate, useLocation } from 'react-router'
 
+import { readReturnPath } from '../viewmodel/returnPath'
 import { useAuthSessionViewModel } from '../viewmodel/useAuthSessionViewModel'
 import { type BusinessLookupState, useSignupViewModel } from '../viewmodel/useSignupViewModel'
 import { authPageStyles } from './AuthPage.styles'
 
 export function SignupPage() {
   const session = useAuthSessionViewModel()
+  const location = useLocation()
 
   if (session.isAuthenticated) {
-    return <Navigate replace to="/" />
+    return <Navigate replace to={readReturnPath(location.state)} />
   }
 
   return <SignupForm />

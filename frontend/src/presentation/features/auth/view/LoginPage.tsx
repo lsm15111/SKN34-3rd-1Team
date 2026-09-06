@@ -1,14 +1,16 @@
-import { Link, Navigate } from 'react-router'
+import { Link, Navigate, useLocation } from 'react-router'
 
+import { readReturnPath } from '../viewmodel/returnPath'
 import { useAuthSessionViewModel } from '../viewmodel/useAuthSessionViewModel'
 import { useLoginViewModel } from '../viewmodel/useLoginViewModel'
 import { authPageStyles } from './AuthPage.styles'
 
 export function LoginPage() {
   const session = useAuthSessionViewModel()
+  const location = useLocation()
 
   if (session.isAuthenticated) {
-    return <Navigate replace to="/" />
+    return <Navigate replace to={readReturnPath(location.state)} />
   }
 
   return <LoginForm />

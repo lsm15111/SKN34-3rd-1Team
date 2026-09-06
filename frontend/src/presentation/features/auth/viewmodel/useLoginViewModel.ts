@@ -1,12 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 
 import { appContainer } from '../../../../app/appContainer'
 import { useAppDispatch } from '../../../../app/hooks'
 import type { LogInUseCase } from '../../../../domain/usecases/LogInUseCase'
 import { signedIn } from '../state/authSlice'
+import { readReturnPath } from './returnPath'
 import { loginFormSchema, type LoginFormValues } from '../validation/loginFormSchema'
 
 type AccountLogInUseCase = Pick<LogInUseCase, 'execute'>
@@ -22,6 +23,7 @@ export function useLoginViewModel(
 ) {
   const dispatchToStore = useAppDispatch()
   const navigate = useNavigate()
+  const location = useLocation()
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
     mode: 'onBlur',
@@ -51,7 +53,7 @@ export function useLoginViewModel(
         return
       }
       dispatchToStore(signedIn(result.session.account))
-      navigate('/', { replace: true })
+      navigate(readReturnPath(location.state), { replace: true })
     } catch {
       if (!isMounted.current) return
       setSubmitError(loginMessages.requestFailed)

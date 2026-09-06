@@ -225,6 +225,10 @@ export function ChatPage() {
             <span className={chatPageStyles.sampleButtonIcon}>▦</span>
             상태관리 비교 예제
           </Link>
+          <Link className={chatPageStyles.sampleButton} to="/partners">
+            <span className={chatPageStyles.sampleButtonIcon}>⇄</span>
+            파트너 모집
+          </Link>
           {session.isAdmin ? (
             <Link className={chatPageStyles.sampleButton} to="/admin/accounts">
               <span className={chatPageStyles.sampleButtonIcon}>⚙</span>

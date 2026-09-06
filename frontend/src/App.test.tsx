@@ -48,6 +48,155 @@ const sampleSession = {
   account: sampleAccount,
 }
 
+describe('Partner recruitment posts', () => {
+  const linkedProgram = {
+    sourceCode: supportPrograms[0].sourceCode,
+    sourceProgramId: supportPrograms[0].id,
+    title: supportPrograms[0].title,
+    organization: supportPrograms[0].organization,
+    status: 'OPEN',
+    applicationPeriod: supportPrograms[0].applicationPeriod,
+    applicationEndDate: supportPrograms[0].applicationEndDate,
+    targetDescription: supportPrograms[0].targetDescription,
+    sourceUrl: supportPrograms[0].sourceUrl,
+  }
+  const samplePost = {
+    id: 12,
+    status: 'OPEN',
+    title: 'AI 실증 과제 데이터 구축·라벨링 참여기관 구합니다',
+    body: '학습용 민원 문서 정제와 라벨링을 맡아 주실 참여기관을 찾습니다.',
+    ourRole: 'LEAD',
+    wantedRole: 'PARTICIPANT',
+    wantedCompanyCount: 1,
+    wantedRegion: '서울·경기·인천',
+    requiredCapabilities: ['데이터 구축', '라벨링 운영'],
+    closesOn: '2999-09-20',
+    closedEarlyAt: null,
+    createdAt: '2026-09-06T12:00:00+09:00',
+    updatedAt: '2026-09-06T12:00:00+09:00',
+    company: { businessNumber: '2208162517', companyName: '데이터브릿지 주식회사', businessStatus: '계속사업자' },
+    program: linkedProgram,
+    proposalCount: 0,
+    viewer: { isOwner: false },
+  }
+
+  it('모집글 목록에서 상세로 이동하고 연결 공고 링크를 보여 준다', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [samplePost], page: 0, size: 20, totalCount: 1 }))
+      .mockResolvedValueOnce(jsonResponse(samplePost))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/partners')
+
+    expect(await screen.findByRole('heading', { name: samplePost.title, level: 2 })).toBeTruthy()
+    expect(screen.getByText('모집 중 1건 · 마감 임박순')).toBeTruthy()
+    fireEvent.click(screen.getByRole('link', { name: '자세히 보기' }))
+
+    await screen.findByRole('heading', { name: samplePost.title, level: 1 })
+    expect(screen.getByText('데이터브릿지 주식회사')).toBeTruthy()
+    expect(screen.getByRole('link', { name: '공고 상세 보기' }).getAttribute('href'))
+      .toBe(`/support-programs/detail?sourceCode=BIZINFO&sourceProgramId=${supportPrograms[0].id}`)
+    expect(screen.queryByRole('button', { name: '조기 마감' })).toBeNull()
+    const [, listInit] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(listInit.headers).not.toHaveProperty('Authorization')
+  })
+
+  it('비로그인 사용자가 작성 화면에 들어오면 로그인 뒤 작성 화면으로 돌아온다', async () => {
+    const detail = { ...supportPrograms[0], matchedReasons: [], recommendationScore: null }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(sampleSession))
+      .mockResolvedValueOnce(jsonResponse(detail))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), `/partners/new?sourceCode=BIZINFO&sourceProgramId=${supportPrograms[0].id}`)
+
+    await screen.findByRole('heading', { name: '다시 만나서 반가워요' })
+    fireEvent.change(screen.getByLabelText('이메일'), { target: { value: 'manager@company.co.kr' } })
+    fireEvent.change(screen.getByLabelText('비밀번호'), { target: { value: 'password1' } })
+    fireEvent.click(screen.getByRole('button', { name: '로그인' }))
+
+    expect(await screen.findByRole('heading', { name: '모집글 작성' })).toBeTruthy()
+    expect(await screen.findByText(detail.title)).toBeTruthy()
+    expect(new URL(String(fetchMock.mock.calls[1]?.[0])).pathname).toBe('/api/v1/support-programs/detail')
+  })
+
+  it('공고를 검색해 선택하고 모집글을 등록하면 상세로 이동한다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
+    const createdPost = { ...samplePost, id: 30, title: '스마트공장 과제 참여기관 찾습니다', viewer: { isOwner: true } }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ account: sampleAccount }))
+      .mockResolvedValueOnce(jsonResponse({ query: '서울 AI', programs: [supportPrograms[0]] }))
+      .mockResolvedValueOnce(jsonResponse(createdPost, 201))
+      .mockResolvedValueOnce(jsonResponse(createdPost))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/partners/new')
+
+    await screen.findByRole('heading', { name: '모집글 작성' })
+    fireEvent.change(screen.getByRole('searchbox', { name: '공고 검색' }), { target: { value: '서울 AI' } })
+    fireEvent.click(screen.getByRole('button', { name: '공고 검색' }))
+    fireEvent.click(await screen.findByRole('button', { name: new RegExp(supportPrograms[0].title) }))
+    expect(screen.getByText(new RegExp(`공고 마감 ${supportPrograms[0].applicationEndDate} 이전이어야`))).toBeTruthy()
+
+    fireEvent.change(screen.getByLabelText(/^제목/), { target: { value: '연락은 010-1234-5678' } })
+    fireEvent.change(screen.getByLabelText(/^모집 소개/), { target: { value: '제조 현장을 보유한 참여기관을 찾습니다.' } })
+    fireEvent.change(screen.getByLabelText(/^모집 마감일/), { target: { value: '2999-09-01' } })
+    fireEvent.click(screen.getByRole('button', { name: '모집글 등록' }))
+    await screen.findByText(/제목에는 이메일·전화번호를 적지 마세요/)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    fireEvent.change(screen.getByLabelText(/^제목/), { target: { value: createdPost.title } })
+    fireEvent.click(screen.getByRole('button', { name: '모집글 등록' }))
+
+    await screen.findByRole('heading', { name: createdPost.title, level: 1 })
+    const createCall = fetchMock.mock.calls[2]
+    expect(new URL(String(createCall?.[0])).pathname).toBe('/api/v1/recruitment-posts')
+    expect(JSON.parse(String(createCall?.[1]?.body))).toMatchObject({
+      sourceCode: 'BIZINFO',
+      sourceProgramId: supportPrograms[0].id,
+      post: { title: createdPost.title, ourRole: 'LEAD', wantedRole: 'PARTICIPANT', wantedCompanyCount: 1, closesOn: '2999-09-01' },
+    })
+    expect(screen.getByRole('button', { name: '조기 마감' })).toBeTruthy()
+  })
+
+  it('작성 기업은 상세에서 조기 마감할 수 있다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
+    vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
+    const ownPost = { ...samplePost, viewer: { isOwner: true } }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(ownPost))
+      .mockResolvedValueOnce(jsonResponse({ account: sampleAccount }))
+      .mockResolvedValueOnce(jsonResponse({ ...ownPost, status: 'CLOSED', closedEarlyAt: '2026-09-07T10:00:00+09:00' }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/partners/12')
+
+    fireEvent.click(await screen.findByRole('button', { name: '조기 마감' }))
+
+    expect((await screen.findByRole('status')).textContent).toBe('모집을 마감했습니다. 목록에는 더 이상 표시되지 않습니다.')
+    expect(screen.getByText('모집 종료')).toBeTruthy()
+    expect(new URL(String(fetchMock.mock.calls[2]?.[0])).pathname).toBe('/api/v1/recruitment-posts/12/close')
+    expect((screen.getByRole('button', { name: '조기 마감' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('공고 상세에서 모집글 목록과 작성 화면으로 연결한다', async () => {
+    const detail = { ...supportPrograms[0], matchedReasons: [], recommendationScore: null }
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(jsonResponse(detail))
+      .mockResolvedValueOnce(jsonResponse({ items: [], page: 0, size: 20, totalCount: 0 })))
+
+    renderApp(createAppStore(), `/support-programs/detail?sourceCode=${detail.sourceCode}&sourceProgramId=${detail.id}`)
+
+    await screen.findByRole('heading', { name: detail.title })
+    expect(screen.getByRole('link', { name: '이 공고로 모집글 작성' }).getAttribute('href'))
+      .toBe(`/partners/new?sourceCode=BIZINFO&sourceProgramId=${detail.id}`)
+    fireEvent.click(screen.getByRole('link', { name: '이 공고의 모집글 보기' }))
+
+    expect((await screen.findByRole('status')).textContent).toContain(`선택한 공고(${detail.id})의 모집글만`)
+    await screen.findByText('아직 모집 중인 글이 없습니다. 첫 모집글을 올려 보세요.')
+  })
+})
+
 describe('Account sign-up and login', () => {
   it('회원가입은 기업 확인 뒤 가입 요청을 보내고 홈 헤더에 회사명을 표시한다', async () => {
     const fetchMock = vi.fn()
