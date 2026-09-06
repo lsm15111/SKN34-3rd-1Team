@@ -7,6 +7,12 @@ import ai.govbiz.core.account.service.exception.AuthenticationRequiredException
 import ai.govbiz.core.account.service.exception.BusinessNotFoundException
 import ai.govbiz.core.account.service.exception.EmailAlreadyRegisteredException
 import ai.govbiz.core.account.service.exception.InvalidCredentialsException
+import ai.govbiz.core.recruitment.service.exception.ContactInTextException
+import ai.govbiz.core.recruitment.service.exception.NotPostOwnerException
+import ai.govbiz.core.recruitment.service.exception.RecruitmentClosesOnInvalidException
+import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotFoundException
+import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotOpenException
+import ai.govbiz.core.recruitment.service.exception.SupportProgramNotOpenException
 import ai.govbiz.core.supportprogram.service.detail.exception.SupportProgramNotFoundException
 import ai.govbiz.core.supportprogram.service.evidence.exception.SupportProgramEvidenceNotSupportedException
 import ai.govbiz.core.supportprogram.service.evidence.exception.SupportProgramEvidenceUnavailableException
@@ -173,6 +179,84 @@ class ApiExceptionHandler {
                 "Account Not Found",
                 "The requested account does not exist.",
                 "ACCOUNT_NOT_FOUND",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(RecruitmentPostNotFoundException::class)
+    fun handleRecruitmentPostNotFoundException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.NOT_FOUND,
+                URI.create("urn:govbiz:problem:recruitment-post-not-found"),
+                "Recruitment Post Not Found",
+                "The requested recruitment post does not exist or is no longer visible.",
+                "RECRUITMENT_POST_NOT_FOUND",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(NotPostOwnerException::class)
+    fun handleNotPostOwnerException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.FORBIDDEN,
+                URI.create("urn:govbiz:problem:not-post-owner"),
+                "Not Post Owner",
+                "Only the company that wrote this recruitment post can manage it.",
+                "NOT_POST_OWNER",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(RecruitmentPostNotOpenException::class)
+    fun handleRecruitmentPostNotOpenException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.CONFLICT,
+                URI.create("urn:govbiz:problem:recruitment-post-not-open"),
+                "Recruitment Post Not Open",
+                "This recruitment post is no longer open.",
+                "RECRUITMENT_POST_NOT_OPEN",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(SupportProgramNotOpenException::class)
+    fun handleSupportProgramNotOpenException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                URI.create("urn:govbiz:problem:support-program-not-open"),
+                "Support Program Not Open",
+                "The linked support program is not currently available or has closed.",
+                "SUPPORT_PROGRAM_NOT_OPEN",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(RecruitmentClosesOnInvalidException::class)
+    fun handleRecruitmentClosesOnInvalidException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                URI.create("urn:govbiz:problem:recruitment-closes-on-invalid"),
+                "Recruitment Closing Date Invalid",
+                "The recruitment closing date must be today or later and no later than the program deadline.",
+                "RECRUITMENT_CLOSES_ON_INVALID",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(ContactInTextException::class)
+    fun handleContactInTextException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                URI.create("urn:govbiz:problem:contact-in-text"),
+                "Contact Details Not Allowed",
+                "Email addresses and phone numbers must not be written in the text.",
+                "CONTACT_IN_TEXT",
             ),
             request,
         )

@@ -48,6 +48,7 @@ class SupportProgramRepositoryIntegrationTest {
 
     @BeforeEach
     fun deleteSupportPrograms() {
+        jdbcTemplate.update("DELETE FROM recruitment_post")
         jdbcTemplate.update("DELETE FROM support_program_source_document")
         jdbcTemplate.update("DELETE FROM support_program")
         jdbcTemplate.update("DELETE FROM support_program_sync_status")

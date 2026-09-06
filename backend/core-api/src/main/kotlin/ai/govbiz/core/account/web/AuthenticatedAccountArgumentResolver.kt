@@ -12,7 +12,9 @@ import org.springframework.web.method.support.ModelAndViewContainer
 /**
  * Controller 메서드의 [Account] 파라미터를 `Authorization: Bearer` 세션으로 채웁니다.
  *
- * 세션이 없거나 만료됐으면 [AccountSessionService.requireAccount]가 던지는 예외가 그대로 401이 됩니다.
+ * 파라미터가 non-null이면 세션이 없거나 만료됐을 때 [AccountSessionService.requireAccount]의 예외가 그대로 401이
+ * 됩니다. nullable(`Account?`)이면 헤더가 없는 요청에는 null을 넣어 비로그인 조회를 허용하되, 헤더가 있는데
+ * 유효하지 않으면 여전히 401입니다.
  */
 class AuthenticatedAccountArgumentResolver(
     private val sessionServiceSupplier: () -> AccountSessionService,
@@ -28,5 +30,9 @@ class AuthenticatedAccountArgumentResolver(
         mavContainer: ModelAndViewContainer?,
         webRequest: NativeWebRequest,
         binderFactory: WebDataBinderFactory?,
-    ): Account = sessionServiceSupplier().requireAccount(webRequest.getHeader(HttpHeaders.AUTHORIZATION))
+    ): Account? {
+        val authorization = webRequest.getHeader(HttpHeaders.AUTHORIZATION)
+        if (authorization == null && parameter.isOptional) return null
+        return sessionServiceSupplier().requireAccount(authorization)
+    }
 }

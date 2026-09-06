@@ -39,6 +39,7 @@ class AccountRepositoryIntegrationTest {
 
     @BeforeEach
     fun deleteAccounts() {
+        jdbcTemplate.update("DELETE FROM recruitment_post")
         jdbcTemplate.update("DELETE FROM account_session")
         jdbcTemplate.update("DELETE FROM account")
         jdbcTemplate.update("DELETE FROM company")

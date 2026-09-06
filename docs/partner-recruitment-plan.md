@@ -229,9 +229,9 @@ ai.govbiz.core.account (기존 확장)
 │                          AdminRecruitmentPostService   (어드민 공개 계약은 account 기능 아래 admin 하위 디렉터리)
 ```
 
-- 보호 endpoint가 셋을 넘으므로 이 단계에서 `AuthenticatedAccount` 파라미터를 채우는
-  `HandlerMethodArgumentResolver`(`_common/web`)를 추가하고, 기존 `/me`·`/logout`도 그것을 쓰도록 바꾼다.
-  Resolver는 `AccountSessionService.requireAccount`를 호출할 뿐 새 추상화를 만들지 않는다.
+- 보호 endpoint가 셋을 넘으므로 P1에서 Controller의 `Account` 파라미터를 채우는 `HandlerMethodArgumentResolver`를
+  `account/web`에 두었다(아직 account 기능만 쓰므로 `_common`이 아님). `Account?`(nullable)이면 헤더가 없을 때 null을
+  넣어 비로그인 조회를 허용한다. Resolver는 `AccountSessionService.requireAccount`를 호출할 뿐 새 추상화를 만들지 않는다.
 - 공고 연결 검증은 `SupportProgramRepository.findPresentBySourceAndProgramId`를 그대로 사용한다(Service → 다른
   기능의 Repository 읽기 허용, 쓰기는 하지 않음).
 - 상태 계산은 Domain의 `RecruitmentPostStatusResolver(post, program, today)`,

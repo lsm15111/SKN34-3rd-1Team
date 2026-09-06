@@ -12,6 +12,7 @@
                        ├→ 공공데이터포털: 기업마당 전체 공고 수집
                        ├→ 기업마당 공식 HTTPS 상세 페이지: 명시적 원문 질문 시 HTML 수집
                        ├→ Bizno: 회원가입 전 사업자등록번호로 국세청 등록 기업 확인
+                       ├→ MySQL: 회원·기업·세션, 공고에 묶인 파트너 모집글
                        └→ AI Service
                            ├→ OpenAI: 문서·질의 임베딩, 후보 점수화·근거 답변
                            └→ Qdrant: 공고 검색·원문 근거 청크의 분리된 벡터 컬렉션
@@ -184,6 +185,28 @@ GET /api/v1/admin/accounts · POST /api/v1/admin/accounts/{id}/sessions/revoke
 
 `account.role`은 V6 컬럼이며 가입 시 `USER`, 관리자는 SQL로만 지정합니다. 운영자 조치는 별도 감사 테이블 없이
 서버 INFO 로그(관리자 id·대상 id·결과)에 남깁니다.
+
+## 파트너 모집글
+
+```text
+POST /api/v1/recruitment-posts
+  → RecruitmentPostController (Account 파라미터 = 작성자 세션, 필드 형식 검증)
+    → RecruitmentPostService
+        1. 제목·본문 연락처 패턴 검사 (ContactPatternPolicy) → 422
+        2. SupportProgramRepository.findPresentBySourceAndProgramId → 없거나 접수 CLOSED면 422
+        3. 모집 마감일: 오늘 이후·공고 마감 이하 → 아니면 422
+        4. RecruitmentPostRepository.create (기업·작성 계정·공고 FK, 역량 JSON)
+    → 201 상태·기업·공고 요약·viewer.isOwner
+
+GET /api/v1/recruitment-posts
+  → RecruitmentPostRepository.findOpenPage (숨김·조기 마감 없음, 마감일 ≥ 오늘, 공고 is_source_present, 마감 임박순)
+  → 글마다 연결 공고를 읽어 RecruitmentPostStatusResolver로 상태 계산
+```
+
+`recruitment` 기능은 `account`의 `Account`·`Company`와 `supportprogram`의 `SupportProgram`을 읽기 전용으로
+사용하고, 다른 기능의 테이블에 쓰지 않습니다. 모집 상태는 저장하지 않으며 `RecruitmentPostStatusResolver`가 숨김 >
+조기 마감·마감일 경과·공고 미공개·공고 접수 종료 > 모집 중 순으로 판정합니다. `Account?`처럼 nullable 파라미터는
+헤더가 없으면 null(비로그인 조회), 헤더가 있으면 세션을 검증합니다.
 
 ## 검색 품질 평가 fixture 내보내기와 캡처
 

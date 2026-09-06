@@ -102,6 +102,8 @@ capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 �
 | `POST /api/v1/auth/logout` | Bearer 세션 토큰 삭제 |
 | `GET /api/v1/admin/accounts` | 관리자: 회원·기업 목록(이메일 검색, 페이지) |
 | `POST /api/v1/admin/accounts/{id}/sessions/revoke` | 관리자: 계정의 모든 세션 종료 |
+| `GET /api/v1/recruitment-posts` · `/{id}` | 공고에 묶인 파트너 모집글 목록(모집 중, 마감 임박순)·상세. 로그인 선택 |
+| `POST /api/v1/recruitment-posts` · `PUT /{id}` · `POST /{id}/close` · `GET /mine` | 모집글 등록·수정·조기 마감·내 글. Bearer 필수 |
 | `POST /api/v1/sample-items/prepare` | 계층 연결 학습용 예제 |
 
 - 검색: 필수 `query`는 최대 500자이며 빈 문자열을 허용합니다. `acceptingOnly`의 기본값은 `true`이고
@@ -134,6 +136,9 @@ capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 �
   409, 미확인 사업자는 422, 자격 증명 불일치·세션 없음은 401입니다. `account.role`은 `USER`/`ADMIN`이며 관리자는 SQL로만
   지정합니다. 로그인이 필요한 Controller는 `Account` 파라미터를 선언하고 `AuthenticatedAccountArgumentResolver`가 Bearer
   세션으로 채웁니다. 관리자 API는 Service가 역할을 확인해 403 `ADMIN_REQUIRED`를 돌려줍니다.
+- 파트너 모집글: 현재 공개되고 접수가 끝나지 않은 공고 하나에 묶어 등록합니다. 상태(`OPEN`/`CLOSED`/`HIDDEN`)는
+  저장하지 않고 읽을 때 계산하며, 모집 마감일은 오늘 이후·공고 마감 이하여야 합니다. 제목·본문의 이메일·전화번호는
+  422로 거부합니다. 숨김·종료 글은 작성 기업만 봅니다. 계약은 [파트너 모집 API 계약](../../docs/partner-recruitment-contract.md)에 있습니다.
 - 현재 수집기는 `BIZINFO` 한 제공처만 구현되어 있습니다. 전체 검색·색인·평가 fixture는 현재 MySQL의
   모든 제공처 공고를 다루며, 내부 식별자 `sourceCode:sourceProgramId`로 같은 원본 ID를 구분합니다.
   다른 제공처를 실제로 수집하려면 별도 Client·Facade·동기화 설정을 구현해야 합니다.
@@ -222,6 +227,15 @@ account/
 ├── config                # BCrypt 인코더, 세션 유효 기간 설정
 └── client/
     └── bizno             # Bizno HTTP·응답 검증·등록 사업자 필터
+recruitment/
+├── controller            # 모집글 공개 HTTP 진입점
+│   └── dto               # 등록·수정 요청, 모집글·연결 공고 요약 응답
+├── service               # 공고 연결 검증, 소유·상태 확인, 목록·상세 조합
+│   ├── dto               # 상태·기업·공고를 채운 결과
+│   └── exception         # 403·404·409·422로 변환되는 업무 예외
+├── repository            # 모집글 저장·조회, 역량 JSON 변환
+│   └── mapper            # MyBatis Mapper, DbRow
+└── domain                # 모집글·역할·상태 계산·연락처 패턴 규칙
 _health                    # Core API Health
 _health_ai_service         # AI Service Health의 Controller → Service → Client
 _sampleitem                # 학습 예제
@@ -256,7 +270,9 @@ SQL은 기능별 [`SupportProgramMapper.xml`](src/main/resources/mybatis/support
   [V5](src/main/resources/db/migration/V5__create_account.sql)는 회원 기업(`company`, 사업자등록번호 고유키),
   계정(`account`, 이메일 고유키·비밀번호 해시), 로그인 세션(`account_session`, 토큰 해시·만료 시각, 계정 삭제 시
   함께 삭제)을 만들고, [V6](src/main/resources/db/migration/V6__add_account_role.sql)는 `account.role`(`USER`/`ADMIN`,
-  기본 `USER`)을 추가합니다. 적용된 migration은 수정하지 않고 새 버전을 추가합니다.
+  기본 `USER`)을 추가합니다. [V7](src/main/resources/db/migration/V7__create_recruitment_post.sql)은 파트너 모집글
+  (`recruitment_post`, 기업·작성 계정·공고 `(source_code, source_program_id)` FK, 역량 JSON, 모집 마감일, 조기 마감·숨김
+  시각)을 만듭니다. 모집 상태는 저장하지 않고 조회 시 계산합니다. 적용된 migration은 수정하지 않고 새 버전을 추가합니다.
 - 회원가입 저장은 기업 UPSERT → 계정 INSERT → 세션 INSERT를 하나의 짧은 transaction으로 묶습니다. Bizno 조회와
   비밀번호 해시는 transaction 밖에서 먼저 끝냅니다. 이메일 중복은 DB UNIQUE 제약(`utf8mb4_0900_ai_ci`, 대소문자 무시)이
   막고 Service가 409로 변환합니다.
@@ -308,6 +324,17 @@ Bizno 기업 확인 경계도 같은 형식으로 변환하며 요청 URL·API �
 | Bearer 세션 토큰 누락·형식 오류·만료·삭제 | 401 | `AUTHENTICATION_REQUIRED` (`WWW-Authenticate: Bearer`) |
 | 관리자 전용 API를 일반 계정이 호출 | 403 | `ADMIN_REQUIRED` |
 | 운영 대상 계정 없음 | 404 | `ACCOUNT_NOT_FOUND` |
+
+파트너 모집글의 업무 예외입니다.
+
+| 상황 | 공개 HTTP | `code` |
+|---|---:|---|
+| 작성 기업이 아님 | 403 | `NOT_POST_OWNER` |
+| 모집글 없음 또는 타인의 숨김·종료 글 | 404 | `RECRUITMENT_POST_NOT_FOUND` |
+| 모집 중이 아닌 글 수정·마감 | 409 | `RECRUITMENT_POST_NOT_OPEN` |
+| 연결 공고 미공개·접수 종료 | 422 | `SUPPORT_PROGRAM_NOT_OPEN` |
+| 모집 마감일 범위 밖 | 422 | `RECRUITMENT_CLOSES_ON_INVALID` |
+| 제목·본문에 연락처 | 422 | `CONTACT_IN_TEXT` |
 
 AI Service는 LLM 실행 실패와 색인 미준비·Qdrant 실패를 내부 503으로 반환하므로 일반적으로 공개 503이
 됩니다. Health API의 내부 408·504는 점수화 API와 달리 `UPSTREAM_ERROR`로 분류합니다.

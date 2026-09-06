@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+    PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+    "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="ai.govbiz.core.recruitment.repository.mapper.RecruitmentPostMapper">
+
+    <resultMap id="recruitmentPostDbRow"
+               type="ai.govbiz.core.recruitment.repository.mapper.RecruitmentPostDbRow">
+        <id column="id" property="id" />
+        <result column="company_id" property="companyId" />
+        <result column="author_account_id" property="authorAccountId" />
+        <result column="source_code" property="sourceCode" />
+        <result column="source_program_id" property="sourceProgramId" />
+        <result column="title" property="title" />
+        <result column="body" property="body" />
+        <result column="our_role" property="ourRole" />
+        <result column="wanted_role" property="wantedRole" />
+        <result column="wanted_company_count" property="wantedCompanyCount" />
+        <result column="wanted_region" property="wantedRegion" />
+        <result column="required_capabilities" property="requiredCapabilitiesJson" />
+        <result column="closes_on" property="closesOn" />
+        <result column="closed_early_at" property="closedEarlyAt" />
+        <result column="hidden_at" property="hiddenAt" />
+        <result column="hidden_reason" property="hiddenReason" />
+        <result column="created_at" property="createdAt" />
+        <result column="updated_at" property="updatedAt" />
+        <result column="company_business_number" property="companyBusinessNumber" />
+        <result column="company_name" property="companyName" />
+        <result column="company_business_status" property="companyBusinessStatus" />
+    </resultMap>
+
+    <sql id="postWithCompanyColumns">
+        post.id,
+        post.company_id,
+        post.author_account_id,
+        post.source_code,
+        post.source_program_id,
+        post.title,
+        post.body,
+        post.our_role,
+        post.wanted_role,
+        post.wanted_company_count,
+        post.wanted_region,
+        post.required_capabilities,
+        post.closes_on,
+        post.closed_early_at,
+        post.hidden_at,
+        post.hidden_reason,
+        post.created_at,
+        post.updated_at,
+        company.business_number AS company_business_number,
+        company.company_name,
+        company.business_status AS company_business_status
+    </sql>
+
+    <sql id="openFilter">
+        WHERE post.hidden_at IS NULL
+          AND post.closed_early_at IS NULL
+          AND post.closes_on &gt;= #{today}
+          AND program.is_source_present = TRUE
+        <if test="sourceCode != null and sourceProgramId != null">
+          AND post.source_code = #{sourceCode}
+          AND post.source_program_id = #{sourceProgramId}
+        </if>
+    </sql>
+
+    <insert id="insert"
+            parameterType="ai.govbiz.core.recruitment.repository.mapper.RecruitmentPostDbRow"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO recruitment_post (
+            company_id,
+            author_account_id,
+            source_code,
+            source_program_id,
+            title,
+            body,
+            our_role,
+            wanted_role,
+            wanted_company_count,
+            wanted_region,
+            required_capabilities,
+            closes_on,
+            created_at,
+            updated_at
+        ) VALUES (
+            #{companyId},
+            #{authorAccountId},
+            #{sourceCode},
+            #{sourceProgramId},
+            #{title},
+            #{body},
+            #{ourRole},
+            #{wantedRole},
+            #{wantedCompanyCount},
+            #{wantedRegion},
+            #{requiredCapabilitiesJson,jdbcType=VARCHAR},
+            #{closesOn,jdbcType=DATE},
+            #{createdAt},
+            #{updatedAt}
+        )
+    </insert>
+
+    <update id="update"
+            parameterType="ai.govbiz.core.recruitment.repository.mapper.RecruitmentPostDbRow">
+        UPDATE recruitment_post
+        SET title = #{title},
+            body = #{body},
+            our_role = #{ourRole},
+            wanted_role = #{wantedRole},
+            wanted_company_count = #{wantedCompanyCount},
+            wanted_region = #{wantedRegion},
+            required_capabilities = #{requiredCapabilitiesJson,jdbcType=VARCHAR},
+            closes_on = #{closesOn,jdbcType=DATE},
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+    </update>
+
+    <update id="closeEarly">
+        UPDATE recruitment_post
+        SET closed_early_at = #{closedEarlyAt},
+            updated_at = #{closedEarlyAt}
+        WHERE id = #{id}
+          AND closed_early_at IS NULL
+    </update>
+
+    <select id="findById" resultMap="recruitmentPostDbRow">
+        SELECT
+            <include refid="postWithCompanyColumns" />
+        FROM recruitment_post post
+        INNER JOIN company
+            ON company.id = post.company_id
+        WHERE post.id = #{id}
+    </select>
+
+    <select id="findOpenPage" resultMap="recruitmentPostDbRow">
+        SELECT
+            <include refid="postWithCompanyColumns" />
+        FROM recruitment_post post
+        INNER JOIN company
+            ON company.id = post.company_id
+        INNER JOIN support_program program
+            ON program.source_code = post.source_code
+            AND program.source_program_id = post.source_program_id
+        <include refid="openFilter" />
+        ORDER BY post.closes_on ASC, post.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countOpen" resultType="long">
+        SELECT COUNT(*)
+        FROM recruitment_post post
+        INNER JOIN support_program program
+            ON program.source_code = post.source_code
+            AND program.source_program_id = post.source_program_id
+        <include refid="openFilter" />
+    </select>
+
+    <select id="findByCompanyId" resultMap="recruitmentPostDbRow">
+        SELECT
+            <include refid="postWithCompanyColumns" />
+        FROM recruitment_post post
+        INNER JOIN company
+            ON company.id = post.company_id
+        WHERE post.company_id = #{companyId}
+        ORDER BY post.created_at DESC, post.id DESC
+    </select>
+</mapper>
