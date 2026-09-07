@@ -5,7 +5,7 @@ import { useAuthSessionViewModel } from '../../auth/viewmodel/useAuthSessionView
 import { adminShellStyles } from './AdminShell.styles'
 
 type AdminShellProps = {
-  activeMenu: 'accounts'
+  activeMenu: 'accounts' | 'recruitment-posts'
   eyebrow: string
   title: string
   headerNote?: string
@@ -45,7 +45,13 @@ export function AdminShell({ activeMenu, eyebrow, title, headerNote, children }:
           >
             회원·기업
           </Link>
-          <span className={adminShellStyles.menuDisabled} aria-disabled="true">모집글 (준비 중)</span>
+          <Link
+            className={`${adminShellStyles.menuLink} ${activeMenu === 'recruitment-posts' ? adminShellStyles.menuLinkActive : ''}`}
+            to="/admin/recruitment-posts"
+            aria-current={activeMenu === 'recruitment-posts' ? 'page' : undefined}
+          >
+            모집글
+          </Link>
         </nav>
         <Link className={adminShellStyles.backLink} to="/">← 검색 화면으로</Link>
       </aside>

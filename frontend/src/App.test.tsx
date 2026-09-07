@@ -400,6 +400,115 @@ describe('Partner recruitment proposals', () => {
   })
 })
 
+describe('Admin recruitment post control', () => {
+  const adminAccount = { ...sampleAccount, email: 'admin@govbiz.test', role: 'ADMIN' as const }
+  const adminPost = {
+    id: 12,
+    status: 'OPEN',
+    title: 'AI 실증 과제 데이터 구축·라벨링 참여기관 구합니다',
+    ourRole: 'LEAD',
+    wantedRole: 'PARTICIPANT',
+    closesOn: '2999-09-20',
+    closedEarlyAt: null,
+    hiddenAt: null,
+    hiddenReason: null,
+    createdAt: '2026-09-06T12:00:00+09:00',
+    company: { businessNumber: '2208162517', companyName: '데이터브릿지 주식회사', businessStatus: '계속사업자' },
+    program: {
+      sourceCode: supportPrograms[0].sourceCode,
+      sourceProgramId: supportPrograms[0].id,
+      title: supportPrograms[0].title,
+      organization: supportPrograms[0].organization,
+      status: 'OPEN',
+      applicationPeriod: supportPrograms[0].applicationPeriod,
+      applicationEndDate: supportPrograms[0].applicationEndDate,
+      targetDescription: supportPrograms[0].targetDescription,
+      sourceUrl: supportPrograms[0].sourceUrl,
+    },
+    proposalCount: 2,
+  }
+  const listPage = { items: [adminPost], page: 0, size: 20, totalCount: 1 }
+  const hiddenPost = { ...adminPost, status: 'HIDDEN', hiddenAt: '2026-09-07T10:00:00+09:00', hiddenReason: '연락처가 본문에 노출됨' }
+
+  it('관리자는 모집글을 사유와 함께 숨기고 숨김 필터로 다시 찾는다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'admin-token')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ account: adminAccount }))
+      .mockResolvedValueOnce(jsonResponse(listPage))
+      .mockResolvedValueOnce(jsonResponse(hiddenPost))
+      .mockResolvedValueOnce(jsonResponse({ ...listPage, items: [hiddenPost] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/admin/recruitment-posts')
+
+    expect(await screen.findByRole('heading', { name: '모집글' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '모집글' }).getAttribute('aria-current')).toBe('page')
+    await screen.findByText('데이터브릿지 주식회사')
+    expect(screen.getByText('2건')).toBeTruthy()
+    expect(screen.getByRole('link', { name: adminPost.title }).getAttribute('href')).toBe('/partners/12')
+    expect(new URL(String(fetchMock.mock.calls[1]?.[0])).pathname).toBe('/api/v1/admin/recruitment-posts')
+    expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ headers: { Authorization: 'Bearer admin-token' } })
+
+    fireEvent.click(screen.getByRole('button', { name: `${adminPost.title} 숨기기` }))
+    fireEvent.click(screen.getByRole('button', { name: '숨기기' }))
+    expect(await screen.findByText('사유를 입력해 주세요.')).toBeTruthy()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+
+    fireEvent.change(screen.getByLabelText(/^사유/), { target: { value: '연락처가 본문에 노출됨' } })
+    fireEvent.click(screen.getByRole('button', { name: '숨기기' }))
+
+    expect((await screen.findByRole('status')).textContent).toContain('모집글을 숨겼습니다')
+    expect(within(screen.getByRole('table')).getByText('운영자 숨김')).toBeTruthy()
+    expect(within(screen.getByRole('table')).getByText('연락처가 본문에 노출됨')).toBeTruthy()
+    expect(screen.getByRole('button', { name: `${adminPost.title} 숨김 해제` })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: `${adminPost.title} 강제 마감` })).toBeNull()
+    const [hideUrl, hideInit] = fetchMock.mock.calls[2] as [string, RequestInit]
+    expect(new URL(hideUrl).pathname).toBe('/api/v1/admin/recruitment-posts/12/hide')
+    expect(JSON.parse(String(hideInit.body))).toEqual({ reason: '연락처가 본문에 노출됨' })
+
+    fireEvent.change(screen.getByLabelText('상태'), { target: { value: 'HIDDEN' } })
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4))
+    expect(new URL(String(fetchMock.mock.calls[3]?.[0])).searchParams.get('status')).toBe('HIDDEN')
+  })
+
+  it('숨김 해제와 강제 마감을 처리하고 상태 충돌 409는 안내 뒤 목록을 다시 읽는다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'admin-token')
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ account: adminAccount }))
+      .mockResolvedValueOnce(jsonResponse({ ...listPage, items: [hiddenPost] }))
+      .mockResolvedValueOnce(jsonResponse(adminPost))
+      .mockResolvedValueOnce(problemResponse(409, 'RECRUITMENT_POST_NOT_OPEN'))
+      .mockResolvedValueOnce(jsonResponse({ ...listPage, items: [{ ...adminPost, status: 'CLOSED', closedEarlyAt: '2026-09-07T11:00:00+09:00' }] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderApp(createAppStore(), '/admin/recruitment-posts')
+
+    fireEvent.click(await screen.findByRole('button', { name: `${adminPost.title} 숨김 해제` }))
+
+    expect((await screen.findByRole('status')).textContent).toContain('다시 공개했습니다')
+    expect(new URL(String(fetchMock.mock.calls[2]?.[0])).pathname).toBe('/api/v1/admin/recruitment-posts/12/unhide')
+    expect(within(screen.getByRole('table')).getByText('모집 중')).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('button', { name: `${adminPost.title} 강제 마감` }))
+    fireEvent.change(screen.getByLabelText(/^사유/), { target: { value: '공고와 무관한 모집' } })
+    fireEvent.click(screen.getByRole('button', { name: '마감하기' }))
+
+    expect((await screen.findByRole('status')).textContent).toContain('이미 종료된 모집글입니다')
+    await waitFor(() => expect(within(screen.getByRole('table')).getByText('모집 종료')).toBeTruthy())
+    expect(new URL(String(fetchMock.mock.calls[3]?.[0])).pathname).toBe('/api/v1/admin/recruitment-posts/12/close')
+    expect(fetchMock).toHaveBeenCalledTimes(5)
+  })
+
+  it('일반 회원은 운영 모집글 화면에 들어오면 홈으로 보낸다', async () => {
+    window.localStorage.setItem('govbiz.sessionToken', 'stored-token')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(jsonResponse({ account: sampleAccount })))
+
+    renderApp(createAppStore(), '/admin/recruitment-posts')
+
+    expect(await screen.findByRole('textbox', { name: '지원사업 검색어' })).toBeTruthy()
+  })
+})
+
 describe('Account sign-up and login', () => {
   it('회원가입은 기업 확인 뒤 가입 요청을 보내고 홈 헤더에 회사명을 표시한다', async () => {
     const fetchMock = vi.fn()

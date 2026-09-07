@@ -14,6 +14,8 @@ import ai.govbiz.core.recruitment.service.dto.RecruitmentPostResult
 import ai.govbiz.core.recruitment.service.exception.ContactInTextException
 import ai.govbiz.core.recruitment.service.exception.NotPostOwnerException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentClosesOnInvalidException
+import ai.govbiz.core.recruitment.service.exception.RecruitmentPostAlreadyHiddenException
+import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotHiddenException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotFoundException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotOpenException
 import ai.govbiz.core.recruitment.service.exception.SupportProgramNotOpenException
@@ -77,6 +79,41 @@ class RecruitmentPostService(
         return toResults(listOf(requireNotNull(repository.findById(postId))), viewer = author).single()
     }
 
+    /** 운영자용 전체 목록입니다. 조회자 관계 없이 상태·공고·제안 수만 채웁니다. */
+    fun listForAdmin(status: RecruitmentPostStatus?, page: Int, size: Int): RecruitmentPostPageResult {
+        val stored = repository.findAllPage(status, page, size)
+        return RecruitmentPostPageResult(
+            posts = toResults(stored.posts, viewer = null),
+            page = stored.page,
+            size = stored.size,
+            totalCount = stored.totalCount,
+        )
+    }
+
+    /** 운영자 숨김입니다. 숨긴 글은 작성 기업 외에는 보이지 않고 제안도 받지 않습니다. */
+    fun hide(postId: Long, reason: String): RecruitmentPostResult {
+        requireStoredPost(postId)
+        if (!repository.hide(postId, reason)) throw RecruitmentPostAlreadyHiddenException()
+        return toResults(listOf(requireStoredPost(postId)), viewer = null).single()
+    }
+
+    fun unhide(postId: Long): RecruitmentPostResult {
+        requireStoredPost(postId)
+        if (!repository.unhide(postId)) throw RecruitmentPostNotHiddenException()
+        return toResults(listOf(requireStoredPost(postId)), viewer = null).single()
+    }
+
+    /** 운영자 강제 마감입니다. 작성자 조기 마감과 같은 조건부 갱신이며 이미 종료된 글이면 409입니다. */
+    fun closeByAdmin(postId: Long): RecruitmentPostResult {
+        val stored = requireStoredPost(postId)
+        val program = findPresentProgram(stored.post.sourceCode, stored.post.sourceProgramId)
+        if (RecruitmentPostStatusResolver.resolve(stored.post, program, LocalDate.now(clock)) != RecruitmentPostStatus.OPEN) {
+            throw RecruitmentPostNotOpenException()
+        }
+        check(repository.closeEarly(postId)) { "recruitment post was not closed" }
+        return toResults(listOf(requireStoredPost(postId)), viewer = null).single()
+    }
+
     /** 숨김·종료된 글은 작성 기업에게만 보이고 다른 사용자에게는 없는 글입니다. */
     fun get(postId: Long, viewer: Account?): RecruitmentPostResult {
         val stored = repository.findById(postId) ?: throw RecruitmentPostNotFoundException()
@@ -106,6 +143,9 @@ class RecruitmentPostService(
     /** 작성 기업의 글은 상태와 무관하게 모두 보입니다. */
     fun listMine(author: Account): List<RecruitmentPostResult> =
         toResults(repository.findByCompanyId(author.company.id), author)
+
+    private fun requireStoredPost(postId: Long): StoredRecruitmentPost =
+        repository.findById(postId) ?: throw RecruitmentPostNotFoundException()
 
     private fun requireOpenOwnedPost(author: Account, postId: Long): Pair<StoredRecruitmentPost, SupportProgram?> {
         val stored = repository.findById(postId) ?: throw RecruitmentPostNotFoundException()

@@ -32,3 +32,9 @@ class ProposalAlreadyExistsException : RuntimeException()
 
 /** 이미 결정됐거나 만료·마감으로 더 이상 PENDING이 아닌 제안을 수락·거절·철회하려 할 때 발생합니다. */
 class ProposalNotPendingException : RuntimeException()
+
+/** 이미 숨긴 글을 다시 숨기려 할 때 발생합니다. */
+class RecruitmentPostAlreadyHiddenException : RuntimeException()
+
+/** 숨기지 않은 글의 숨김을 해제하려 할 때 발생합니다. */
+class RecruitmentPostNotHiddenException : RuntimeException()

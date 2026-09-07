@@ -4,6 +4,12 @@ import { AskSupportProgramEvidenceQuestionUseCase } from '../../domain/usecases/
 import { GetCurrentAccountUseCase } from '../../domain/usecases/GetCurrentAccountUseCase'
 import { GetSupportProgramDetailUseCase } from '../../domain/usecases/GetSupportProgramDetailUseCase'
 import { GetSupportProgramSearchReadinessUseCase } from '../../domain/usecases/GetSupportProgramSearchReadinessUseCase'
+import {
+  CloseRecruitmentPostByAdminUseCase,
+  HideRecruitmentPostUseCase,
+  ListAdminRecruitmentPostsUseCase,
+  UnhideRecruitmentPostUseCase,
+} from '../../domain/usecases/AdminRecruitmentPostUseCases'
 import { ListAdminAccountsUseCase } from '../../domain/usecases/ListAdminAccountsUseCase'
 import { LogInUseCase } from '../../domain/usecases/LogInUseCase'
 import { LogOutUseCase } from '../../domain/usecases/LogOutUseCase'
@@ -35,11 +41,13 @@ export function registerUseCases(container: AppContainer) {
     askSupportProgramEvidenceQuestionUseCase: asFunction(
       createAskSupportProgramEvidenceQuestionUseCase,
     ).singleton(),
+    closeRecruitmentPostByAdminUseCase: asFunction(createCloseRecruitmentPostByAdminUseCase).singleton(),
     closeRecruitmentPostUseCase: asFunction(createCloseRecruitmentPostUseCase).singleton(),
     createRecruitmentPostUseCase: asFunction(createCreateRecruitmentPostUseCase).singleton(),
     decideProposalUseCase: asFunction(createDecideProposalUseCase).singleton(),
     getCurrentAccountUseCase: asFunction(createGetCurrentAccountUseCase).singleton(),
     getRecruitmentPostUseCase: asFunction(createGetRecruitmentPostUseCase).singleton(),
+    hideRecruitmentPostUseCase: asFunction(createHideRecruitmentPostUseCase).singleton(),
     getSupportProgramDetailUseCase: asFunction(
       createGetSupportProgramDetailUseCase,
     ).singleton(),
@@ -47,6 +55,7 @@ export function registerUseCases(container: AppContainer) {
       createGetSupportProgramSearchReadinessUseCase,
     ).singleton(),
     listAdminAccountsUseCase: asFunction(createListAdminAccountsUseCase).singleton(),
+    listAdminRecruitmentPostsUseCase: asFunction(createListAdminRecruitmentPostsUseCase).singleton(),
     listMyRecruitmentPostsUseCase: asFunction(createListMyRecruitmentPostsUseCase).singleton(),
     listReceivedProposalsUseCase: asFunction(createListReceivedProposalsUseCase).singleton(),
     listRecruitmentPostsUseCase: asFunction(createListRecruitmentPostsUseCase).singleton(),
@@ -63,6 +72,7 @@ export function registerUseCases(container: AppContainer) {
     ).singleton(),
     signUpUseCase: asFunction(createSignUpUseCase).singleton(),
     sendProposalUseCase: asFunction(createSendProposalUseCase).singleton(),
+    unhideRecruitmentPostUseCase: asFunction(createUnhideRecruitmentPostUseCase).singleton(),
     updateRecruitmentPostUseCase: asFunction(createUpdateRecruitmentPostUseCase).singleton(),
     withdrawProposalUseCase: asFunction(createWithdrawProposalUseCase).singleton(),
   })
@@ -90,6 +100,30 @@ function createGetSupportProgramSearchReadinessUseCase({
   supportProgramRepository,
 }: Pick<AppCradle, 'supportProgramRepository'>): GetSupportProgramSearchReadinessUseCase {
   return new GetSupportProgramSearchReadinessUseCase(supportProgramRepository)
+}
+
+function createListAdminRecruitmentPostsUseCase({
+  adminRepository,
+}: Pick<AppCradle, 'adminRepository'>): ListAdminRecruitmentPostsUseCase {
+  return new ListAdminRecruitmentPostsUseCase(adminRepository)
+}
+
+function createHideRecruitmentPostUseCase({
+  adminRepository,
+}: Pick<AppCradle, 'adminRepository'>): HideRecruitmentPostUseCase {
+  return new HideRecruitmentPostUseCase(adminRepository)
+}
+
+function createUnhideRecruitmentPostUseCase({
+  adminRepository,
+}: Pick<AppCradle, 'adminRepository'>): UnhideRecruitmentPostUseCase {
+  return new UnhideRecruitmentPostUseCase(adminRepository)
+}
+
+function createCloseRecruitmentPostByAdminUseCase({
+  adminRepository,
+}: Pick<AppCradle, 'adminRepository'>): CloseRecruitmentPostByAdminUseCase {
+  return new CloseRecruitmentPostByAdminUseCase(adminRepository)
 }
 
 function createListAdminAccountsUseCase({

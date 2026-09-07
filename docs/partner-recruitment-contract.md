@@ -186,3 +186,41 @@ Content-Type: application/json
 | 모집 중이 아닌 글에 제안 | 409 | `RECRUITMENT_POST_NOT_OPEN` |
 | 이미 결정·만료·마감된 제안 | 409 | `PROPOSAL_NOT_PENDING` |
 | 메시지에 연락처 | 422 | `CONTACT_IN_TEXT` |
+
+## 어드민 모집글 제어
+
+관리자 세션(`role = ADMIN`)이 필요하며, 로그인은 했지만 관리자가 아니면 `403 ADMIN_REQUIRED`입니다.
+
+| Method·Path | 설명 |
+|---|---|
+| `GET /api/v1/admin/recruitment-posts?status=&page=&size=` | 모든 상태의 모집글, 최근 작성순. `status`는 `OPEN`/`CLOSED`/`HIDDEN`(생략 시 전체), `size` 1~100 |
+| `POST /api/v1/admin/recruitment-posts/{id}/hide` | 숨김. body `{ "reason": "1~200자" }`. 사유는 모집글에 남음 |
+| `POST /api/v1/admin/recruitment-posts/{id}/unhide` | 숨김 해제. body 없음 |
+| `POST /api/v1/admin/recruitment-posts/{id}/close` | 강제 마감. body `{ "reason": "1~200자" }`. 사유는 서버 로그에만 |
+
+```json
+{
+  "id": 12, "status": "HIDDEN",
+  "title": "AI 실증 과제 데이터 구축·라벨링 참여기관 구합니다",
+  "ourRole": "LEAD", "wantedRole": "PARTICIPANT", "closesOn": "2026-09-20",
+  "closedEarlyAt": null, "hiddenAt": "2026-09-07T10:00:00+09:00", "hiddenReason": "연락처가 본문에 노출됨",
+  "createdAt": "2026-09-06T12:00:00+09:00",
+  "company": { "businessNumber": "1248100998", "companyName": "데이터브릿지 주식회사", "businessStatus": "계속사업자" },
+  "program": { "sourceCode": "BIZINFO", "sourceProgramId": "PBLN_000000091203", "title": "…", "organization": "…", "status": "OPEN",
+               "applicationPeriod": "…", "applicationEndDate": "2026-09-30", "targetDescription": "…", "sourceUrl": "…" },
+  "proposalCount": 3
+}
+```
+
+목록은 `{ items: [...], page, size, totalCount }`이고 조치는 바뀐 글 한 건을 `200`으로 돌려줍니다. 숨긴 글은 작성 기업 외에는
+목록·상세에서 `404`이고 제안을 받지 않으며(`409 RECRUITMENT_POST_NOT_OPEN`), 작성 기업의 `/mine`에서는 `HIDDEN`으로 보입니다.
+조치는 관리자 id·대상 id·사유와 함께 서버 INFO 로그에 남깁니다.
+
+| 상황 | HTTP | `code` |
+|---|---:|---|
+| `reason` 검증 실패(빈 값, 200자 초과) | 400 | `REQUEST_VALIDATION_FAILED` |
+| 관리자가 아님 | 403 | `ADMIN_REQUIRED` |
+| 모집글 없음 | 404 | `RECRUITMENT_POST_NOT_FOUND` |
+| 이미 숨긴 글을 다시 숨김 | 409 | `RECRUITMENT_POST_ALREADY_HIDDEN` |
+| 숨기지 않은 글의 해제 | 409 | `RECRUITMENT_POST_NOT_HIDDEN` |
+| 이미 종료·숨김된 글의 강제 마감 | 409 | `RECRUITMENT_POST_NOT_OPEN` |

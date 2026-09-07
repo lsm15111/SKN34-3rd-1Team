@@ -3,6 +3,7 @@ package ai.govbiz.core.recruitment.repository
 import ai.govbiz.core.account.domain.Company
 import ai.govbiz.core.recruitment.domain.RecruitmentPost
 import ai.govbiz.core.recruitment.domain.RecruitmentPostDraft
+import ai.govbiz.core.recruitment.domain.RecruitmentPostStatus
 import ai.govbiz.core.recruitment.domain.RecruitmentRole
 import ai.govbiz.core.recruitment.repository.mapper.RecruitmentPostDbRow
 import ai.govbiz.core.recruitment.repository.mapper.RecruitmentPostMapper
@@ -97,6 +98,34 @@ class RecruitmentPostRepository(
     fun findByCompanyId(companyId: Long): List<StoredRecruitmentPost> =
         java.util.List.copyOf(mapper.findByCompanyId(companyId).map { it.toStored() })
 
+    /** 운영자용 전체 목록입니다. 상태 필터는 저장값·마감일·공고 공개 여부로 SQL에서 가르고, 최근 작성순입니다. */
+    fun findAllPage(status: RecruitmentPostStatus?, page: Int, size: Int): RecruitmentPostPage {
+        require(page >= 0) { "page must not be negative" }
+        require(size in 1..MAX_ADMIN_PAGE_SIZE) { "size must be between 1 and $MAX_ADMIN_PAGE_SIZE" }
+        val today = LocalDate.now(clock)
+        return RecruitmentPostPage(
+            posts = java.util.List.copyOf(
+                mapper.findAllPage(status?.name, today, page * size, size).map { it.toStored() },
+            ),
+            page = page,
+            size = size,
+            totalCount = mapper.countAll(status?.name, today),
+        )
+    }
+
+    /** 아직 숨기지 않은 글만 숨깁니다. 이미 숨긴 글이면 false입니다. */
+    @Transactional
+    fun hide(id: Long, reason: String): Boolean {
+        require(reason.isNotBlank() && reason.length <= MAX_HIDDEN_REASON_LENGTH) {
+            "reason must be 1..$MAX_HIDDEN_REASON_LENGTH characters"
+        }
+        return mapper.hide(id, now(), reason) == 1
+    }
+
+    /** 숨긴 글만 되돌립니다. 숨기지 않은 글이면 false입니다. */
+    @Transactional
+    fun unhide(id: Long): Boolean = mapper.unhide(id, now()) == 1
+
     private fun now(): LocalDateTime = LocalDateTime.now(clock).truncatedTo(ChronoUnit.MICROS)
 
     private fun RecruitmentPostDbRow.applyDraft(draft: RecruitmentPostDraft): RecruitmentPostDbRow = apply {
@@ -144,8 +173,10 @@ class RecruitmentPostRepository(
             ),
         )
 
-    private companion object {
-        const val MAX_PAGE_SIZE = 50
-        val STRING_LIST_TYPE = object : TypeReference<List<String>>() {}
+    companion object {
+        const val MAX_HIDDEN_REASON_LENGTH = 200
+        private const val MAX_PAGE_SIZE = 50
+        private const val MAX_ADMIN_PAGE_SIZE = 100
+        private val STRING_LIST_TYPE = object : TypeReference<List<String>>() {}
     }
 }

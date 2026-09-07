@@ -5,6 +5,7 @@ import ai.govbiz.core.account.domain.NewAccount
 import ai.govbiz.core.account.domain.NewAccountSession
 import ai.govbiz.core.account.domain.VerifiedCompany
 import ai.govbiz.core.account.repository.AccountRepository
+import ai.govbiz.core.recruitment.domain.RecruitmentPostStatus
 import ai.govbiz.core.recruitment.helper.RecruitmentTestHelper
 import ai.govbiz.core.supportprogram.helper.SupportProgramTestHelper
 import ai.govbiz.core.supportprogram.repository.SupportProgramRepository
@@ -111,6 +112,37 @@ class RecruitmentPostRepositoryIntegrationTest {
 
         assertThrows(IllegalArgumentException::class.java) { repository.findOpenPage("BIZINFO", null, 0, 10) }
         assertThrows(IllegalArgumentException::class.java) { repository.findOpenPage(null, null, 0, 51) }
+    }
+
+    @Test
+    fun listsEveryPostForAdministratorsByStoredStateAndHidesOnlyOnce() {
+        val today = LocalDate.now(java.time.ZoneId.of("Asia/Seoul"))
+        val open = repository.create(companyId, authorId, "BIZINFO", "PBLN_OPEN", RecruitmentTestHelper.draft(closesOn = today.plusDays(3)))
+        val closed = repository.create(companyId, authorId, "BIZINFO", "PBLN_OPEN", RecruitmentTestHelper.draft(closesOn = today.plusDays(3)))
+        assertTrue(repository.closeEarly(closed.post.id))
+        val hidden = repository.create(companyId, authorId, "BIZINFO", "PBLN_OTHER", RecruitmentTestHelper.draft(closesOn = today.plusDays(3)))
+
+        assertTrue(repository.hide(hidden.post.id, "연락처 노출"))
+        assertFalse(repository.hide(hidden.post.id, "다시 숨김"))
+        assertFalse(repository.unhide(open.post.id))
+        assertThrows(IllegalArgumentException::class.java) { repository.hide(open.post.id, " ") }
+        assertThrows(IllegalArgumentException::class.java) { repository.findAllPage(null, 0, 101) }
+
+        val stored = requireNotNull(repository.findById(hidden.post.id)).post
+        assertEquals("연락처 노출", stored.hiddenReason)
+        assertNotNull(stored.hiddenAt)
+
+        val all = repository.findAllPage(null, 0, 10)
+        assertEquals(3, all.totalCount)
+        assertEquals(listOf(hidden.post.id, closed.post.id, open.post.id), all.posts.map { it.post.id })
+        assertEquals(listOf(open.post.id), repository.findAllPage(RecruitmentPostStatus.OPEN, 0, 10).posts.map { it.post.id })
+        assertEquals(listOf(closed.post.id), repository.findAllPage(RecruitmentPostStatus.CLOSED, 0, 10).posts.map { it.post.id })
+        assertEquals(listOf(hidden.post.id), repository.findAllPage(RecruitmentPostStatus.HIDDEN, 0, 10).posts.map { it.post.id })
+        assertEquals(0, repository.findOpenPage(null, null, 0, 10).posts.count { it.post.id == hidden.post.id })
+
+        assertTrue(repository.unhide(hidden.post.id))
+        assertNull(requireNotNull(repository.findById(hidden.post.id)).post.hiddenReason)
+        assertEquals(2, repository.findAllPage(RecruitmentPostStatus.OPEN, 0, 10).totalCount)
     }
 
     @Test

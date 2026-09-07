@@ -181,6 +181,10 @@ GET /api/v1/admin/accounts · POST /api/v1/admin/accounts/{id}/sessions/revoke
   → AdminAccountController (Account 파라미터 = 관리자 세션)
     → AdminAccountService (role이 ADMIN이 아니면 403)
       → AccountRepository.findPage / findById + deleteSessionsByAccountId
+
+GET /api/v1/admin/recruitment-posts · POST …/{id}/hide | unhide | close
+  → AdminRecruitmentPostController → AdminRecruitmentPostService (관리자 확인, 조치 INFO 로그)
+      → RecruitmentPostService.listForAdmin / hide / unhide / closeByAdmin (상태 규칙·조건부 갱신은 recruitment 기능 소유)
 ```
 
 `account.role`은 V6 컬럼이며 가입 시 `USER`, 관리자는 SQL로만 지정합니다. 운영자 조치는 별도 감사 테이블 없이

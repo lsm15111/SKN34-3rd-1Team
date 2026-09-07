@@ -102,6 +102,8 @@ capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 �
 | `POST /api/v1/auth/logout` | Bearer 세션 토큰 삭제 |
 | `GET /api/v1/admin/accounts` | 관리자: 회원·기업 목록(이메일 검색, 페이지) |
 | `POST /api/v1/admin/accounts/{id}/sessions/revoke` | 관리자: 계정의 모든 세션 종료 |
+| `GET /api/v1/admin/recruitment-posts` | 관리자: 모든 상태의 모집글 목록(상태 필터, 페이지) |
+| `POST /api/v1/admin/recruitment-posts/{id}/hide` · `/unhide` · `/close` | 관리자: 모집글 숨김(사유 필수)·해제·강제 마감(사유 필수) |
 | `GET /api/v1/recruitment-posts` · `/{id}` | 공고에 묶인 파트너 모집글 목록(모집 중, 마감 임박순)·상세. 로그인 선택 |
 | `POST /api/v1/recruitment-posts` · `PUT /{id}` · `POST /{id}/close` · `GET /mine` | 모집글 등록·수정·조기 마감·내 글. Bearer 필수 |
 | `POST /api/v1/recruitment-posts/{id}/proposals` · `GET …/proposals` | 참여 제안 보내기(다른 기업)·받은 제안(작성 기업). Bearer 필수 |
@@ -145,6 +147,8 @@ capture의 기준 날짜가 다르면 점수 계산을 거부합니다. 실제 �
   상태는 저장값(`PENDING`/`ACCEPTED`/`DECLINED`/`WITHDRAWN`)에 7일 만료(`EXPIRED`)·모집글 종료(`CLOSED`)를 조회 시
   계산해 얹습니다. 담당자 이메일은 `ACCEPTED`일 때만 상대 기업 응답에 넣고, 메시지의 연락처 문구는 모집글과 같은 규칙으로
   거부합니다.
+- 운영자 모집글 제어: 관리자 세션으로 모든 상태의 글을 보고 숨김(사유는 `hidden_reason`에 저장)·해제·강제 마감(사유는
+  로그에만)합니다. 상태 변경 규칙은 recruitment Service가 맡고 admin Service는 관리자 확인과 INFO 로그만 담당합니다.
 - 현재 수집기는 `BIZINFO` 한 제공처만 구현되어 있습니다. 전체 검색·색인·평가 fixture는 현재 MySQL의
   모든 제공처 공고를 다루며, 내부 식별자 `sourceCode:sourceProgramId`로 같은 원본 ID를 구분합니다.
   다른 제공처를 실제로 수집하려면 별도 Client·Facade·동기화 설정을 구현해야 합니다.
@@ -221,7 +225,7 @@ supportprogram/
 account/
 ├── controller            # 기업 확인·가입·로그인·세션 공개 HTTP 진입점
 │   └── dto               # 공개 요청·응답 계약
-├── admin                 # 관리자 전용 회원 목록·세션 종료 Controller·Service·dto
+├── admin                 # 관리자 전용 회원 목록·세션 종료, 모집글 목록·숨김·해제·강제 마감 Controller·Service·dto
 ├── web                   # Bearer 세션을 Controller의 Account 파라미터로 채우는 ArgumentResolver·설정
 ├── service               # Bizno 조회, 가입, 로그인, 세션 발급·확인·로그아웃
 │   ├── dto               # 세션 발급 결과
@@ -348,6 +352,8 @@ Bizno 기업 확인 경계도 같은 형식으로 변환하며 요청 URL·API �
 | 제안 없음 | 404 | `PROPOSAL_NOT_FOUND` |
 | 같은 글에 이미 제안함 | 409 | `PROPOSAL_ALREADY_EXISTS` |
 | 이미 결정·만료·마감된 제안 결정 | 409 | `PROPOSAL_NOT_PENDING` |
+| 이미 숨긴 글을 다시 숨김 | 409 | `RECRUITMENT_POST_ALREADY_HIDDEN` |
+| 숨기지 않은 글의 숨김 해제 | 409 | `RECRUITMENT_POST_NOT_HIDDEN` |
 
 AI Service는 LLM 실행 실패와 색인 미준비·Qdrant 실패를 내부 503으로 반환하므로 일반적으로 공개 503이
 됩니다. Health API의 내부 408·504는 점수화 API와 달리 `UPSTREAM_ERROR`로 분류합니다.

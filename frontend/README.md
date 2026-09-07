@@ -55,6 +55,7 @@ pnpm dev
 | `/partners/new`, `/partners/:postId/edit` | 로그인 필요. 공고 검색·선택 후 모집 조건·소개 작성, 수정 |
 | `/partners/mine` | 로그인 필요. 내 기업의 모집글(종료·숨김 포함). `?tab=sent`는 보낸 제안(상태·철회·수락 시 상대 이메일) |
 | `/admin/accounts` | 관리자 전용 운영 콘솔: 회원·기업 목록, 이메일 검색, 세션 강제 종료 |
+| `/admin/recruitment-posts` | 관리자 전용: 모든 상태의 모집글 목록(상태 필터), 사유를 받아 숨김·강제 마감, 숨김 해제 |
 | `/examples/sample-item/hook` | React Hook Form·로컬 요청 상태 예제 |
 | `/examples/sample-item/redux` | Redux 상태 유지 예제 |
 
@@ -87,6 +88,10 @@ allowlist에 명시적으로 추가합니다. 테스트용 제공처는 producti
 뒤에는 상세를 조용히 다시 읽어 제안 수·내 제안 상태를 맞춥니다. 작성 기업은 받은 제안 화면에서 수락·거절하며, 수락된
 제안에서만 서로의 담당자 이메일이 보입니다. 서버의 409(중복·대기 아님)는 안내 문구로 바꿉니다.
 
+운영 콘솔의 모집글 화면은 모든 상태의 글을 보여 주고, 숨김·강제 마감은 사유(200자)를 받은 뒤 실행합니다. 숨긴 글은 작성
+기업 외에는 목록·상세에서 사라지고 제안도 받지 않으며, 작성 기업의 내 모집글에는 "운영자 숨김"으로 보입니다. 이미
+숨김·종료된 글에 대한 409는 안내 뒤 목록을 다시 읽습니다.
+
 채팅 형태의 화면이지만 각 검색 요청에는 현재 입력한 검색어만 전달합니다. 이전 대화를 이해하는
 다중 턴 대화, 기업 프로필 편집, 북마크, 알림, 대화 이력의 서버 저장은 아직 구현하지 않았습니다.
 
@@ -97,7 +102,7 @@ src/
 ├── app/                         # Redux Store, typed hook, Awilix 조립·등록
 ├── presentation/features/chat/ # 검색·상세 View, ViewModel, chat slice
 ├── presentation/features/auth/ # 회원가입·로그인 View, ViewModel, 폼 검증, auth slice
-├── presentation/features/admin/ # 운영 콘솔 셸·회원 목록 View, ViewModel (관리자 role만 진입)
+├── presentation/features/admin/ # 운영 콘솔 셸·회원 목록·모집글 제어 View, ViewModel (관리자 role만 진입)
 ├── presentation/features/recruitment/ # 파트너 모집글 목록·상세·작성, 참여 제안 보내기·받은/보낸 제안 View, ViewModel, 폼 검증
 ├── presentation/features/sample-item/ # 상태관리 비교 예제
 ├── presentation/shared/        # Core API 상태 표시

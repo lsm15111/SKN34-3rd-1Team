@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router'
 
 import { AdminAccountsPage } from './presentation/features/admin/view/AdminAccountsPage'
+import { AdminRecruitmentPostsPage } from './presentation/features/admin/view/AdminRecruitmentPostsPage'
 import { LoginPage } from './presentation/features/auth/view/LoginPage'
 import { SignupPage } from './presentation/features/auth/view/SignupPage'
 import { useRestoreAuthSession } from './presentation/features/auth/viewmodel/useAuthSessionViewModel'
@@ -35,6 +36,7 @@ function App() {
       <Route path="/partners/:postId/proposals" element={<ReceivedProposalsPage />} />
       <Route path="/admin" element={<Navigate replace to="/admin/accounts" />} />
       <Route path="/admin/accounts" element={<AdminAccountsPage />} />
+      <Route path="/admin/recruitment-posts" element={<AdminRecruitmentPostsPage />} />
       <Route path="/examples/sample-item/hook" element={<SampleItemPage />} />
       <Route path="/examples/sample-item/redux" element={<ReduxSampleItemPage />} />
       <Route path="*" element={<Navigate replace to="/" />} />

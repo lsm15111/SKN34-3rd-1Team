@@ -52,7 +52,7 @@ export const recruitmentPostListDtoSchema = z.object({
 export type RecruitmentPostDto = z.infer<typeof recruitmentPostDtoSchema>
 export type RecruitmentPostPageDto = z.infer<typeof recruitmentPostPageDtoSchema>
 
-function toLinkedProgram(dto: z.infer<typeof linkedProgramDtoSchema>): LinkedProgram {
+export function toLinkedProgram(dto: z.infer<typeof linkedProgramDtoSchema>): LinkedProgram {
   return {
     sourceCode: dto.sourceCode,
     sourceProgramId: dto.sourceProgramId,

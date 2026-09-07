@@ -10,6 +10,8 @@ import ai.govbiz.core.recruitment.repository.RecruitmentProposalRepository
 import ai.govbiz.core.recruitment.service.exception.ContactInTextException
 import ai.govbiz.core.recruitment.service.exception.NotPostOwnerException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentClosesOnInvalidException
+import ai.govbiz.core.recruitment.service.exception.RecruitmentPostAlreadyHiddenException
+import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotHiddenException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotFoundException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotOpenException
 import ai.govbiz.core.recruitment.service.exception.SupportProgramNotOpenException
@@ -176,6 +178,44 @@ class RecruitmentPostServiceTest {
         assertEquals(ProposalStatus.PENDING, asProposer.myProposalStatus)
         assertEquals(3, anonymous.proposalCount)
         assertNull(anonymous.myProposalStatus)
+        verify(proposalRepository, never()).findByPostIdsAndCompanyId(listOf(1L), 1L)
+    }
+
+    @Test
+    fun hidesUnhidesAndClosesForAdministratorsOnlyWhenTheStateAllowsIt() {
+        val hidden = RecruitmentTestHelper.stored(RecruitmentTestHelper.post(hiddenAt = RecruitmentTestHelper.NOW, hiddenReason = "연락처 노출"))
+        doReturn(RecruitmentTestHelper.stored(), hidden).`when`(repository).findById(1L)
+        doReturn(true).`when`(repository).hide(1L, "연락처 노출")
+        stubProgram(RecruitmentTestHelper.program())
+
+        assertEquals(RecruitmentPostStatus.HIDDEN, service.hide(1L, "연락처 노출").status)
+
+        doReturn(hidden).`when`(repository).findById(1L)
+        doReturn(false).`when`(repository).hide(1L, "다시 숨김")
+        assertThrows(RecruitmentPostAlreadyHiddenException::class.java) { service.hide(1L, "다시 숨김") }
+        assertThrows(RecruitmentPostNotOpenException::class.java) { service.closeByAdmin(1L) }
+        verify(repository, never()).closeEarly(1L)
+
+        doReturn(RecruitmentTestHelper.stored()).`when`(repository).findById(1L)
+        doReturn(false).`when`(repository).unhide(1L)
+        assertThrows(RecruitmentPostNotHiddenException::class.java) { service.unhide(1L) }
+
+        doReturn(null).`when`(repository).findById(404L)
+        assertThrows(RecruitmentPostNotFoundException::class.java) { service.hide(404L, "사유") }
+        verify(repository, never()).hide(404L, "사유")
+    }
+
+    @Test
+    fun listsEveryStatusForAdministratorsWithoutAViewer() {
+        doReturn(RecruitmentPostPage(listOf(RecruitmentTestHelper.stored()), 0, 20, 1))
+            .`when`(repository).findAllPage(null, 0, 20)
+        stubProgram(RecruitmentTestHelper.program())
+
+        val page = service.listForAdmin(null, 0, 20)
+
+        assertEquals(1, page.totalCount)
+        assertFalse(page.posts[0].isOwner)
+        assertNull(page.posts[0].myProposalStatus)
         verify(proposalRepository, never()).findByPostIdsAndCompanyId(listOf(1L), 1L)
     }
 

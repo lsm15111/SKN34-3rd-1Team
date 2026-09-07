@@ -64,6 +64,30 @@
         </if>
     </sql>
 
+    <sql id="adminStatusFilter">
+        <where>
+            <choose>
+                <when test="status == 'HIDDEN'">
+                    post.hidden_at IS NOT NULL
+                </when>
+                <when test="status == 'OPEN'">
+                    post.hidden_at IS NULL
+                    AND post.closed_early_at IS NULL
+                    AND post.closes_on &gt;= #{today}
+                    AND program.is_source_present = TRUE
+                </when>
+                <when test="status == 'CLOSED'">
+                    post.hidden_at IS NULL
+                    AND (
+                        post.closed_early_at IS NOT NULL
+                        OR post.closes_on &lt; #{today}
+                        OR program.is_source_present = FALSE
+                    )
+                </when>
+            </choose>
+        </where>
+    </sql>
+
     <insert id="insert"
             parameterType="ai.govbiz.core.recruitment.repository.mapper.RecruitmentPostDbRow"
             useGeneratedKeys="true"
@@ -155,6 +179,47 @@
             AND program.source_program_id = post.source_program_id
         <include refid="openFilter" />
     </select>
+
+    <select id="findAllPage" resultMap="recruitmentPostDbRow">
+        SELECT
+            <include refid="postWithCompanyColumns" />
+        FROM recruitment_post post
+        INNER JOIN company
+            ON company.id = post.company_id
+        INNER JOIN support_program program
+            ON program.source_code = post.source_code
+            AND program.source_program_id = post.source_program_id
+        <include refid="adminStatusFilter" />
+        ORDER BY post.created_at DESC, post.id DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countAll" resultType="long">
+        SELECT COUNT(*)
+        FROM recruitment_post post
+        INNER JOIN support_program program
+            ON program.source_code = post.source_code
+            AND program.source_program_id = post.source_program_id
+        <include refid="adminStatusFilter" />
+    </select>
+
+    <update id="hide">
+        UPDATE recruitment_post
+        SET hidden_at = #{hiddenAt},
+            hidden_reason = #{hiddenReason},
+            updated_at = #{hiddenAt}
+        WHERE id = #{id}
+          AND hidden_at IS NULL
+    </update>
+
+    <update id="unhide">
+        UPDATE recruitment_post
+        SET hidden_at = NULL,
+            hidden_reason = NULL,
+            updated_at = #{updatedAt}
+        WHERE id = #{id}
+          AND hidden_at IS NOT NULL
+    </update>
 
     <select id="findByCompanyId" resultMap="recruitmentPostDbRow">
         SELECT

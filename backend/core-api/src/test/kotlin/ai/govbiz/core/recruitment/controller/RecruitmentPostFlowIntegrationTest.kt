@@ -153,6 +153,63 @@ class RecruitmentPostFlowIntegrationTest {
             .andExpect(jsonPath("$.code").value("RECRUITMENT_CLOSES_ON_INVALID"))
     }
 
+    @Test
+    fun administratorHidesAndUnhidesAPostThatOnlyTheOwnerCanStillSee() {
+        val ownerToken = signUp("owner@company.co.kr", "1248100998")
+        val adminToken = signUp("admin@govbiz.test", "2208162517")
+        jdbcTemplate.update("UPDATE account SET role = 'ADMIN' WHERE email = ?", "admin@govbiz.test")
+        val created = mockMvc.perform(
+            post(PATH).header(HttpHeaders.AUTHORIZATION, "Bearer $ownerToken")
+                .contentType(MediaType.APPLICATION_JSON).content(createBody(closesOn = LocalDate.now().plusDays(7))),
+        ).andExpect(status().isCreated()).andReturn().response.contentAsString
+        val postId = objectMapper.readTree(created).path("id").asLong()
+
+        mockMvc.perform(get(ADMIN_PATH).header(HttpHeaders.AUTHORIZATION, "Bearer $ownerToken"))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("ADMIN_REQUIRED"))
+
+        mockMvc.perform(
+            post("$ADMIN_PATH/$postId/hide").header(HttpHeaders.AUTHORIZATION, "Bearer $adminToken")
+                .contentType(MediaType.APPLICATION_JSON).content("""{"reason":"연락처가 본문에 노출됨"}"""),
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("HIDDEN"))
+            .andExpect(jsonPath("$.hiddenReason").value("연락처가 본문에 노출됨"))
+
+        mockMvc.perform(get(PATH)).andExpect(jsonPath("$.totalCount").value(0))
+        mockMvc.perform(get("$PATH/$postId")).andExpect(status().isNotFound())
+        mockMvc.perform(get("$PATH/mine").header(HttpHeaders.AUTHORIZATION, "Bearer $ownerToken"))
+            .andExpect(jsonPath("$.items[0].status").value("HIDDEN"))
+        mockMvc.perform(get(ADMIN_PATH).queryParam("status", "HIDDEN").header(HttpHeaders.AUTHORIZATION, "Bearer $adminToken"))
+            .andExpect(jsonPath("$.totalCount").value(1))
+            .andExpect(jsonPath("$.items[0].company.companyName").value("데이터브릿지 주식회사"))
+        mockMvc.perform(
+            post("$ADMIN_PATH/$postId/hide").header(HttpHeaders.AUTHORIZATION, "Bearer $adminToken")
+                .contentType(MediaType.APPLICATION_JSON).content("""{"reason":"다시"}"""),
+        )
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("RECRUITMENT_POST_ALREADY_HIDDEN"))
+
+        mockMvc.perform(post("$ADMIN_PATH/$postId/unhide").header(HttpHeaders.AUTHORIZATION, "Bearer $adminToken"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("OPEN"))
+        mockMvc.perform(get(PATH)).andExpect(jsonPath("$.totalCount").value(1))
+
+        mockMvc.perform(
+            post("$ADMIN_PATH/$postId/close").header(HttpHeaders.AUTHORIZATION, "Bearer $adminToken")
+                .contentType(MediaType.APPLICATION_JSON).content("""{"reason":"공고와 무관한 모집"}"""),
+        )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("CLOSED"))
+        mockMvc.perform(get(PATH)).andExpect(jsonPath("$.totalCount").value(0))
+        mockMvc.perform(
+            post("$ADMIN_PATH/$postId/close").header(HttpHeaders.AUTHORIZATION, "Bearer $adminToken")
+                .contentType(MediaType.APPLICATION_JSON).content("""{"reason":"다시"}"""),
+        )
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("RECRUITMENT_POST_NOT_OPEN"))
+    }
+
     private fun signUp(email: String, businessNumber: String): String {
         val body = mockMvc.perform(
             post("/api/v1/auth/signup").contentType(MediaType.APPLICATION_JSON)
@@ -183,5 +240,6 @@ class RecruitmentPostFlowIntegrationTest {
 
     private companion object {
         const val PATH = "/api/v1/recruitment-posts"
+        const val ADMIN_PATH = "/api/v1/admin/recruitment-posts"
     }
 }

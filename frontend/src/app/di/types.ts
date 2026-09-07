@@ -11,6 +11,12 @@ import type { AskSupportProgramEvidenceQuestionUseCase } from '../../domain/usec
 import type { GetCurrentAccountUseCase } from '../../domain/usecases/GetCurrentAccountUseCase'
 import type { GetSupportProgramDetailUseCase } from '../../domain/usecases/GetSupportProgramDetailUseCase'
 import type { GetSupportProgramSearchReadinessUseCase } from '../../domain/usecases/GetSupportProgramSearchReadinessUseCase'
+import type {
+  CloseRecruitmentPostByAdminUseCase,
+  HideRecruitmentPostUseCase,
+  ListAdminRecruitmentPostsUseCase,
+  UnhideRecruitmentPostUseCase,
+} from '../../domain/usecases/AdminRecruitmentPostUseCases'
 import type { ListAdminAccountsUseCase } from '../../domain/usecases/ListAdminAccountsUseCase'
 import type { LogInUseCase } from '../../domain/usecases/LogInUseCase'
 import type { LogOutUseCase } from '../../domain/usecases/LogOutUseCase'
@@ -42,15 +48,18 @@ export type AppCradle = {
   accountRepository: AccountRepository
   adminRepository: AdminRepository
   askSupportProgramEvidenceQuestionUseCase: AskSupportProgramEvidenceQuestionUseCase
+  closeRecruitmentPostByAdminUseCase: CloseRecruitmentPostByAdminUseCase
   closeRecruitmentPostUseCase: CloseRecruitmentPostUseCase
   createRecruitmentPostUseCase: CreateRecruitmentPostUseCase
   decideProposalUseCase: DecideProposalUseCase
   fetchCoreApiHealth: FetchCoreApiHealth
   getCurrentAccountUseCase: GetCurrentAccountUseCase
   getRecruitmentPostUseCase: GetRecruitmentPostUseCase
+  hideRecruitmentPostUseCase: HideRecruitmentPostUseCase
   getSupportProgramDetailUseCase: GetSupportProgramDetailUseCase
   getSupportProgramSearchReadinessUseCase: GetSupportProgramSearchReadinessUseCase
   listAdminAccountsUseCase: ListAdminAccountsUseCase
+  listAdminRecruitmentPostsUseCase: ListAdminRecruitmentPostsUseCase
   listMyRecruitmentPostsUseCase: ListMyRecruitmentPostsUseCase
   listReceivedProposalsUseCase: ListReceivedProposalsUseCase
   listRecruitmentPostsUseCase: ListRecruitmentPostsUseCase
@@ -67,6 +76,7 @@ export type AppCradle = {
   signUpUseCase: SignUpUseCase
   supportProgramRepository: SupportProgramRepository
   sendProposalUseCase: SendProposalUseCase
+  unhideRecruitmentPostUseCase: UnhideRecruitmentPostUseCase
   updateRecruitmentPostUseCase: UpdateRecruitmentPostUseCase
   withdrawProposalUseCase: WithdrawProposalUseCase
 }

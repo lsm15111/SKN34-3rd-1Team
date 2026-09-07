@@ -15,6 +15,8 @@ import ai.govbiz.core.recruitment.service.exception.ProposalAlreadyExistsExcepti
 import ai.govbiz.core.recruitment.service.exception.ProposalNotFoundException
 import ai.govbiz.core.recruitment.service.exception.ProposalNotPendingException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentClosesOnInvalidException
+import ai.govbiz.core.recruitment.service.exception.RecruitmentPostAlreadyHiddenException
+import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotHiddenException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotFoundException
 import ai.govbiz.core.recruitment.service.exception.RecruitmentPostNotOpenException
 import ai.govbiz.core.recruitment.service.exception.SupportProgramNotOpenException
@@ -262,6 +264,32 @@ class ApiExceptionHandler {
                 "Contact Details Not Allowed",
                 "Email addresses and phone numbers must not be written in the text.",
                 "CONTACT_IN_TEXT",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(RecruitmentPostAlreadyHiddenException::class)
+    fun handleRecruitmentPostAlreadyHiddenException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.CONFLICT,
+                URI.create("urn:govbiz:problem:recruitment-post-already-hidden"),
+                "Recruitment Post Already Hidden",
+                "This recruitment post is already hidden.",
+                "RECRUITMENT_POST_ALREADY_HIDDEN",
+            ),
+            request,
+        )
+
+    @ExceptionHandler(RecruitmentPostNotHiddenException::class)
+    fun handleRecruitmentPostNotHiddenException(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.CONFLICT,
+                URI.create("urn:govbiz:problem:recruitment-post-not-hidden"),
+                "Recruitment Post Not Hidden",
+                "This recruitment post is not hidden.",
+                "RECRUITMENT_POST_NOT_HIDDEN",
             ),
             request,
         )

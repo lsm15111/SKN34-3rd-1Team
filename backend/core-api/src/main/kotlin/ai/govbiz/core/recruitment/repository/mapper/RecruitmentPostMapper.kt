@@ -36,4 +36,30 @@ interface RecruitmentPostMapper {
     ): Long
 
     fun findByCompanyId(@Param("companyId") companyId: Long): List<RecruitmentPostDbRow>
+
+    /** 운영자용 전체 목록입니다. status는 OPEN/CLOSED/HIDDEN 또는 null(전체)이며 최근 작성순입니다. */
+    fun findAllPage(
+        @Param("status") status: String?,
+        @Param("today") today: LocalDate,
+        @Param("offset") offset: Int,
+        @Param("limit") limit: Int,
+    ): List<RecruitmentPostDbRow>
+
+    fun countAll(
+        @Param("status") status: String?,
+        @Param("today") today: LocalDate,
+    ): Long
+
+    /** 아직 숨기지 않은 글만 숨깁니다. */
+    fun hide(
+        @Param("id") id: Long,
+        @Param("hiddenAt") hiddenAt: LocalDateTime,
+        @Param("hiddenReason") hiddenReason: String,
+    ): Int
+
+    /** 숨긴 글만 되돌립니다. */
+    fun unhide(
+        @Param("id") id: Long,
+        @Param("updatedAt") updatedAt: LocalDateTime,
+    ): Int
 }
