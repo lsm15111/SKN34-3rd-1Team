@@ -319,6 +319,9 @@ IME 조합, 스크롤 effect와 검색 결과 안내도 페이지 ViewModel이 �
 `/app` 화면으로 보내는 래퍼로, 단계는 보지 않습니다. 같은 내용을 두 세계에서 보여 줄 때 할 수 있는 일이 같으면
 `layout` prop 하나로(요금제·채팅), 할 수 있는 일이 다르면 별도 feature로(파트너 모집) 만듭니다. 단계(`tier`)는 서버의 `/auth/me`가 계산해 내려 주며
 로그인 화면의 `useLoginViewModel`은 `LogInUseCase → AccountRepository → accountApi` 경로로 세션을 받습니다.
+Google·카카오 버튼(`features/auth/view/SocialLoginButtons`)은 `GetOAuthProvidersUseCase`로 설정된 제공처만 그리고 `StartOAuthLogInUseCase`가 만든
+Core API 시작 주소로 브라우저를 통째로 보냅니다. 제공처 동의 뒤 Core가 `/oauth/callback?next=`(또는 `?error=`)로 돌려보내면
+`OAuthCallbackPage`가 `CompleteOAuthLogInUseCase`로 세션 쿠키의 계정을 읽어 Store에 올리고 이동합니다. 토큰·시크릿은 프런트에 없습니다.
 새 검색 시작·현재 적용 조건 요약은
 채팅 입력창 위에 간결하게 둡니다. 정상 공고 데이터 통계 패널은 표시하지 않습니다.
 화면 전용 상태와 DOM ref는 Redux에 넣지 않고 Hook 로컬로 유지합니다.

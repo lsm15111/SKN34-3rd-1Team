@@ -6,10 +6,14 @@ import ai.govbiz.core.account.domain.AccountRole
 import ai.govbiz.core.account.domain.CompanySummary
 import ai.govbiz.core.account.domain.NewAccount
 import ai.govbiz.core.account.domain.NewAccountSession
+import ai.govbiz.core.account.domain.NewSocialIdentity
+import ai.govbiz.core.account.domain.OAuthProvider
+import ai.govbiz.core.account.domain.SocialIdentity
 import ai.govbiz.core.account.domain.StoredAccountSession
 import ai.govbiz.core.account.repository.mapper.AccountDbRow
 import ai.govbiz.core.account.repository.mapper.AccountMapper
 import ai.govbiz.core.account.repository.mapper.AccountSessionDbRow
+import ai.govbiz.core.account.repository.mapper.AccountSocialIdentityDbRow
 import java.time.Clock
 import java.time.LocalDateTime
 import org.springframework.beans.factory.annotation.Qualifier
@@ -54,11 +58,38 @@ class AccountRepository(
     fun findByEmail(email: String): Account? =
         accountMapper.findAccountByEmail(email)?.toAccount()
 
-    /** 로그인 검증을 위해 비밀번호 해시를 포함해 조회합니다. */
+    /** 로그인 검증을 위해 비밀번호 해시를 포함해 조회합니다. 소셜 로그인으로만 만든 계정(해시 없음)은 비밀번호 로그인이 안 되므로 null입니다. */
     fun findCredentialByEmail(email: String): AccountCredential? =
         accountMapper.findAccountByEmail(email)?.let { row ->
-            AccountCredential(account = row.toAccount(), passwordHash = row.passwordHash)
+            row.passwordHash?.let { hash -> AccountCredential(account = row.toAccount(), passwordHash = hash) }
         }
+
+    /** 제공처가 같은 이메일을 인증해 줬을 때 계정의 이메일 인증 시각을 채웁니다. 이미 인증된 계정은 그대로 둡니다. */
+    @Transactional
+    fun markEmailVerified(accountId: Long, verifiedAt: LocalDateTime) {
+        accountMapper.updateEmailVerifiedAtIfNull(accountId, verifiedAt)
+    }
+
+    /** 제공처 회원번호로 연결된 소셜 계정을 찾습니다. 삭제된 계정의 연결은 제외합니다. */
+    fun findSocialIdentity(provider: OAuthProvider, providerUserId: String): SocialIdentity? =
+        accountMapper.findSocialIdentity(provider.name, providerUserId)?.toSocialIdentity()
+
+    /**
+     * 소셜 계정을 연결합니다. 같은 제공처 회원번호나 같은 계정·제공처 조합이 이미 있으면 DB UNIQUE 제약이 막으며
+     * 그때 던져지는 [org.springframework.dao.DuplicateKeyException]은 호출한 Service가 처리합니다.
+     */
+    @Transactional
+    fun linkSocialIdentity(identity: NewSocialIdentity): SocialIdentity {
+        val row = AccountSocialIdentityDbRow(
+            accountId = identity.accountId,
+            provider = identity.provider.name,
+            providerUserId = identity.providerUserId,
+            email = identity.email,
+            linkedAt = identity.linkedAt,
+        )
+        check(accountMapper.insertSocialIdentity(row) == 1) { "social identity row was not created" }
+        return row.toSocialIdentity()
+    }
 
     /** 로그인 성공 시 새 세션을 저장하고 같은 계정의 만료 세션을 정리합니다. */
     @Transactional
@@ -96,6 +127,16 @@ class AccountRepository(
     @Transactional
     fun deleteSessionByTokenHash(tokenHash: String): Boolean =
         accountMapper.deleteSessionByTokenHash(tokenHash) == 1
+
+    private fun AccountSocialIdentityDbRow.toSocialIdentity(): SocialIdentity =
+        SocialIdentity(
+            id = id,
+            accountId = accountId,
+            provider = OAuthProvider.valueOf(provider),
+            providerUserId = providerUserId,
+            email = email,
+            linkedAt = requireNotNull(linkedAt) { "social identity linkedAt must not be null" },
+        )
 
     private fun AccountDbRow.toAccount(): Account =
         Account(

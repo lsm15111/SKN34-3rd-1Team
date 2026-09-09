@@ -119,6 +119,8 @@ Controller의 `SupportProgramRequestAdmissionService.execute`가 공개 요청 �
 | `POST /api/v1/auth/logout` | 세션 행 삭제와 쿠키 만료 |
 | `GET /api/v1/auth/me` | 세션 쿠키로 현재 계정·권한 단계 조회 |
 | `POST /api/v1/auth/dev-login` | `ACCOUNT_DEV_LOGIN_ENABLED=true`일 때만 등록되는 개발용 시드 로그인 |
+| `GET /api/v1/auth/oauth/providers` | 클라이언트 ID가 설정된 소셜 로그인 제공처(`google`·`kakao`) 목록 |
+| `GET /api/v1/auth/oauth/{provider}/start`, `GET .../callback` | Google·카카오 Authorization Code 흐름. 시작은 동의 화면으로 302, 콜백은 세션 쿠키를 발급하고 프런트 `/oauth/callback`으로 302 |
 | `GET /api/v1/me/company/lookup` | 로그인한 회원이 사업자등록번호로 국세청 등록 여부·상호·사업자 상태를 미리 보기(Bizno) |
 | `GET` `POST` `PUT /api/v1/me/company` | 내 기업 조회·등록(계속사업자만, 201)·담당자 입력 항목 수정 |
 | `GET /api/v1/partners/recruitments`, `GET .../{id}` | 파트너 모집글 목록(검색·찾는 역할·지역·내 글·정렬·페이지)과 상세. 세션 없이도 읽기 가능 |
@@ -293,6 +295,11 @@ Compose는 일부 주소·CORS 값을 내부 네트워크에 맞게 덮어씁니
 | `ACCOUNT_DEV_LOGIN_PASSWORD` | `govbiz-admin1` | 시드 계정 생성 시 저장하는 비밀번호 |
 | `BIZNO_API_KEY` | 빈 값 | 기업 등록 시 사업자등록번호를 확인하는 Bizno API 키. 비어 있으면 조회·등록이 503 `BIZNO_NOT_CONFIGURED` |
 | `BIZNO_URL` | `https://bizno.net/api/fapi` | Bizno 조회 endpoint |
+| `OAUTH_GOOGLE_CLIENT_ID` / `OAUTH_GOOGLE_CLIENT_SECRET` | 빈 값 | Google Cloud OAuth 클라이언트(웹 애플리케이션). ID가 비어 있으면 Google 버튼·시작이 막힘 |
+| `OAUTH_KAKAO_CLIENT_ID` / `OAUTH_KAKAO_CLIENT_SECRET` | 빈 값 | 카카오 REST API 키와(콘솔에서 켠 경우) 클라이언트 시크릿 |
+| `OAUTH_REDIRECT_BASE_URL` | `http://localhost:8080` | 제공처 콘솔에 등록한 콜백 URL의 origin. Compose는 `/api`를 대신 받는 웹 origin `http://127.0.0.1:5173` |
+| `OAUTH_FRONTEND_BASE_URL` | `http://localhost:5173` | 결과를 알려 줄 프런트 origin(`/oauth/callback`) |
+| `OAUTH_CONNECT_TIMEOUT` / `OAUTH_READ_TIMEOUT` | `2s` / `10s` | 제공처 토큰·사용자 정보 호출 제한시간 |
 | `BIZNO_API_CONNECT_TIMEOUT` / `BIZNO_API_READ_TIMEOUT` | `2s` / `10s` | Bizno 연결·응답 제한시간 |
 | `BIZINFO_API_BASE_URL` | `https://apis.data.go.kr` | 기업마당 API 주소 |
 | `BIZINFO_API_CONNECT_TIMEOUT` | `2s` | 기업마당 연결 제한시간 |
@@ -360,15 +367,15 @@ supportprogram/
 ├── domain                 # 업무 모델·서울 날짜 기준 접수 상태 규칙
 └── helper                 # 지원사업 하위 흐름이 함께 쓰는 보조 작업
 account/
-├── controller            # 로그인·로그아웃·내 계정, 개발용 로그인, 기업 등록·수정 HTTP 진입점
+├── controller            # 로그인·로그아웃·내 계정, Google·카카오 소셜 로그인 시작·콜백, 개발용 로그인, 기업 등록·수정 HTTP 진입점
 │   └── dto               # 공개 요청·응답 계약
-├── service               # 회원가입, 로그인 검증·시도 제한, JWT 세션, 기업 등록(사업자등록번호 조회)
+├── service               # 회원가입, 로그인 검증·시도 제한, JWT 세션, 소셜 로그인 계정 찾기·연결·생성, 기업 등록(사업자등록번호 조회)
 ├── client/bizno          # Bizno 사업자등록번호 조회 HTTP·응답 검증·오류 변환
+├── client/oauth          # Google·카카오 동의 URL·토큰 교환·사용자 정보 HTTP, 제공처별 설정, 오류 변환
 ├── repository            # 계정·세션·기업 저장과 조회, DbRow 변환
 │   └── mapper            # MyBatis Mapper, DbRow
-├── domain                # 계정·역할·세션·기업 업무 모델
-├── client/bizno          # Bizno 사업자등록번호 조회 HTTP·응답 검증·오류 변환
-├── helper                # HS256 JWT 발급·검증·해시, 세션 쿠키 발급·읽기, 이메일 정규화
+├── domain                # 계정·역할·세션·기업·소셜 연결 업무 모델
+├── helper                # HS256 JWT 발급·검증·해시, 세션·소셜 state 쿠키 발급·읽기, PKCE, 이메일 정규화
 ├── web                   # Account 파라미터 resolver, Origin 검사 interceptor와 MVC 등록
 └── config                # BCrypt, 세션·개발 로그인 설정
 partner/
@@ -412,7 +419,8 @@ SQL은 [`SupportProgramMapper.xml`](src/main/resources/mybatis/supportprogram/re
   [V6](src/main/resources/db/migration/V6__create_company.sql)는 계정당 하나인 기업 테이블(사업자번호 UNIQUE),
   [V7](src/main/resources/db/migration/V7__add_support_program_startup_details.sql)은 K-Startup 전용 분류 JSON과 형식·제공처 제약,
   [V8](src/main/resources/db/migration/V8__create_partner_recruitment.sql)은 계정·기업·공고에 묶인 파트너 모집글 테이블,
-  [V9](src/main/resources/db/migration/V9__create_partner_proposal.sql)은 모집글과 제안 계정·기업에 묶인 파트너 제안 테이블을 만듭니다.
+  [V9](src/main/resources/db/migration/V9__create_partner_proposal.sql)은 모집글과 제안 계정·기업에 묶인 파트너 제안 테이블,
+  [V10](src/main/resources/db/migration/V10__create_account_social_identity.sql)은 비밀번호 없는 계정을 허용하고 제공처 회원번호를 계정에 묶는 소셜 연결 테이블을 만듭니다.
   적용된 migration은 수정하지 않고 새 버전을 추가합니다.
 - 전체 수집·검증·색인이 끝난 뒤 최신 시작 세대만 공개합니다. 해당 제공처 행 미노출 처리와 UPSERT를
   하나의 짧은 DB transaction으로 묶고, 같은 transaction에서 스냅샷 지문·공고 수·`indexReady=true`·성공

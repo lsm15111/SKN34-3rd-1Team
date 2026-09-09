@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 
 import { useSignupViewModel } from '../viewmodel/useSignupViewModel'
 import { AuthBrandPanel } from './AuthBrandPanel'
+import { SocialLoginButtons } from './SocialLoginButtons'
 import { authPageStyles } from './AuthPage.styles'
 
 /**
@@ -94,6 +95,8 @@ export function SignupPage() {
             {isSubmitting ? '가입 중…' : '가입하고 시작하기'}
           </button>
           <p className={authPageStyles.fieldHint}>가입하면 이용약관과 개인정보 처리방침에 동의한 것으로 봅니다.</p>
+
+          <SocialLoginButtons intent="signup" />
 
           <div className={authPageStyles.divider}>
             <span className={authPageStyles.dividerLine} aria-hidden="true" />

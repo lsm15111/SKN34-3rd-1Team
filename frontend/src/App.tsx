@@ -2,6 +2,7 @@ import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router'
 
 import { AdminMembersPage } from './presentation/features/admin/view/AdminMembersPage'
 import { LoginPage } from './presentation/features/auth/view/LoginPage'
+import { OAuthCallbackPage } from './presentation/features/auth/view/OAuthCallbackPage'
 import { SignupPage } from './presentation/features/auth/view/SignupPage'
 import { SupportProgramSearchPage } from './presentation/features/support-program-catalog/view/SupportProgramSearchPage'
 import { CompanyProfilePage } from './presentation/features/company-profile/view/CompanyProfilePage'
@@ -61,6 +62,8 @@ function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
       </Route>
+      {/* 소셜 로그인 콜백은 세션 복원보다 먼저 쿠키로 계정을 읽어야 하므로 guard 밖에 둡니다. */}
+      <Route path={publicPaths.oauthCallback} element={<OAuthCallbackPage />} />
 
       <Route element={<RequireAuth />}>
         <Route element={<WorkspaceLayout />}>

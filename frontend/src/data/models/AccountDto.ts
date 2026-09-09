@@ -29,6 +29,11 @@ export const currentAccountResponseDtoSchema = z.object({
   account: accountDtoSchema,
 })
 
+/** 설정된 소셜 로그인 제공처 키입니다. 모르는 값은 버리고 아는 것만 남깁니다. */
+export const oauthProvidersResponseDtoSchema = z.object({
+  providers: z.array(z.string()),
+})
+
 export type AccountDto = z.infer<typeof accountDtoSchema>
 export type AuthSessionResponseDto = z.infer<typeof authSessionResponseDtoSchema>
 

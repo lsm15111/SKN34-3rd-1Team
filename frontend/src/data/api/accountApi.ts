@@ -1,10 +1,12 @@
 import type { AccountRole } from '../../domain/entities/Account'
+import { isOAuthProvider, type OAuthProvider } from '../../domain/entities/OAuthProvider'
 import type { AccountLogIn, AccountSignUp } from '../../domain/repositories/AccountRepository'
 import { getCoreApiBaseUrl } from './coreApiConfig'
 import {
   accountDtoSchema,
   authSessionResponseDtoSchema,
   currentAccountResponseDtoSchema,
+  oauthProvidersResponseDtoSchema,
   type AccountDto,
   type AuthSessionResponseDto,
 } from '../models/AccountDto'
@@ -14,6 +16,7 @@ const LOGIN_PATH = '/api/v1/auth/login'
 const DEV_LOGIN_PATH = '/api/v1/auth/dev-login'
 const LOGOUT_PATH = '/api/v1/auth/logout'
 const CURRENT_ACCOUNT_PATH = '/api/v1/auth/me'
+const OAUTH_PATH = '/api/v1/auth/oauth'
 
 /** 계정 endpoint의 HTTP 상태와 ProblemDetail `code`를 Repository가 업무 결과로 바꿀 수 있게 합니다. */
 export class AccountApiError extends Error {
@@ -102,6 +105,21 @@ export async function getCurrentAccountApi(signal?: AbortSignal): Promise<Accoun
   await rejectFailedResponse(response)
 
   return accountDtoSchema.parse(currentAccountResponseDtoSchema.parse(await response.json()).account)
+}
+
+export async function getOAuthProvidersApi(signal?: AbortSignal): Promise<OAuthProvider[]> {
+  const response = await fetch(`${getCoreApiBaseUrl()}${OAUTH_PATH}/providers`, {
+    headers: { Accept: 'application/json' },
+    signal,
+  })
+  await rejectFailedResponse(response)
+
+  return oauthProvidersResponseDtoSchema.parse(await response.json()).providers.filter(isOAuthProvider)
+}
+
+/** fetch가 아니라 `window.location`으로 여는 주소입니다. Core가 제공처 동의 화면으로 302 합니다. */
+export function oauthStartUrl(provider: OAuthProvider, next: string): string {
+  return `${getCoreApiBaseUrl()}${OAUTH_PATH}/${provider}/start?${new URLSearchParams({ next })}`
 }
 
 async function rejectFailedResponse(response: Response): Promise<void> {

@@ -23,6 +23,11 @@ import { GetCurrentAccountUseCase } from '../../domain/usecases/GetCurrentAccoun
 import { GetSupportProgramDetailUseCase } from '../../domain/usecases/GetSupportProgramDetailUseCase'
 import { GetSupportProgramSearchReadinessUseCase } from '../../domain/usecases/GetSupportProgramSearchReadinessUseCase'
 import { LogInUseCase } from '../../domain/usecases/LogInUseCase'
+import {
+  CompleteOAuthLogInUseCase,
+  GetOAuthProvidersUseCase,
+  StartOAuthLogInUseCase,
+} from '../../domain/usecases/OAuthLogInUseCases'
 import { LogOutUseCase } from '../../domain/usecases/LogOutUseCase'
 import { PrepareSampleItemUseCase } from '../../domain/usecases/PrepareSampleItemUseCase'
 import { SearchSupportProgramsUseCase } from '../../domain/usecases/SearchSupportProgramsUseCase'
@@ -82,6 +87,15 @@ export function registerUseCases(container: AppContainer) {
     ).singleton(),
     logInUseCase: asFunction(createLogInUseCase).singleton(),
     logOutUseCase: asFunction(createLogOutUseCase).singleton(),
+    getOAuthProvidersUseCase: asFunction(
+      ({ accountRepository }: Pick<AppCradle, 'accountRepository'>) => new GetOAuthProvidersUseCase(accountRepository),
+    ).singleton(),
+    startOAuthLogInUseCase: asFunction(
+      ({ accountRepository }: Pick<AppCradle, 'accountRepository'>) => new StartOAuthLogInUseCase(accountRepository),
+    ).singleton(),
+    completeOAuthLogInUseCase: asFunction(
+      ({ accountRepository }: Pick<AppCradle, 'accountRepository'>) => new CompleteOAuthLogInUseCase(accountRepository),
+    ).singleton(),
     prepareSampleItemUseCase: asFunction(
       createPrepareSampleItemUseCase,
     ).singleton(),

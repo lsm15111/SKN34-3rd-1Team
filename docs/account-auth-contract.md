@@ -1,6 +1,6 @@
 # 계정·인증 HTTP 계약
 
-이메일 로그인과 세션 확인·로그아웃, 개발용 시드 로그인의 공개 API를 정리합니다. 회원가입·이메일 인증·기업 등록은
+이메일 로그인과 세션 확인·로그아웃, Google·카카오 소셜 로그인, 개발용 시드 로그인의 공개 API를 정리합니다. 회원가입·이메일 인증·기업 등록은
 다음 단계에서 추가합니다. 구현 범위는 [구현 현황](implementation-status.md)을 참고하세요.
 
 ```text
@@ -16,6 +16,9 @@ Browser
 |---|---|---|
 | `POST /api/v1/auth/login` | 없음 | 200 세션 응답 + `Set-Cookie` |
 | `POST /api/v1/auth/dev-login` | 없음 | 200 세션 응답 + `Set-Cookie` (개발 환경 전용) |
+| `GET /api/v1/auth/oauth/providers` | 없음 | 200 설정된 소셜 제공처 목록 |
+| `GET /api/v1/auth/oauth/{google\|kakao}/start?next=` | 없음 | 302 제공처 동의 화면 + state 쿠키 |
+| `GET /api/v1/auth/oauth/{provider}/callback` | state 쿠키 | 302 `/oauth/callback` + 세션 `Set-Cookie` |
 | `GET /api/v1/auth/me` | 세션 쿠키 | 200 계정 |
 | `POST /api/v1/auth/logout` | 세션 쿠키 | 204 + 쿠키 만료 |
 
@@ -135,6 +138,69 @@ Content-Type: application/json
 |---|---|
 | 계정(정규화한 이메일) | 연속 실패 5회부터 잠금. 30초에서 시작해 실패가 이어질 때마다 두 배, 최대 15분. 성공하면 초기화 |
 | 접속 주소 | 최근 60초 20회 |
+
+## 소셜 로그인 (Google·카카오)
+
+비밀번호 없이 Google 또는 카카오 계정으로 가입·로그인합니다. 방식은 **서버 리다이렉트형 Authorization Code**입니다.
+클라이언트 시크릿과 토큰 교환은 Core API 안에서만 일어나고, 브라우저는 제공처 동의 화면으로 갔다가 Core의 콜백으로
+돌아오며, 결과는 이메일 로그인과 같은 HttpOnly 세션 쿠키로 받습니다. 프런트는 액세스 토큰을 다루지 않습니다.
+
+```text
+Browser ── GET /api/v1/auth/oauth/google/start?next=/app/partners ──▶ Core
+        ◀── 302 Location: accounts.google.com/...&state=S&code_challenge=C  + Set-Cookie: govbiz_oauth (서명한 S·verifier·next, 10분)
+Browser ──▶ Google 동의 ──▶ 302 http://127.0.0.1:5173/api/v1/auth/oauth/google/callback?code=X&state=S
+Browser ── GET .../google/callback?code=X&state=S  (govbiz_oauth 쿠키 자동 첨부) ──▶ Core
+            Core: 쿠키의 S == 돌아온 S 확인 → 토큰 교환(code, code_verifier) → userinfo(sub·email·email_verified)
+                  → 계정 찾기/연결/생성 → 세션 발급
+        ◀── 302 Location: http://127.0.0.1:5173/oauth/callback?next=%2Fapp%2Fpartners  + Set-Cookie: govbiz_session (30일)
+Browser ── /oauth/callback 화면이 GET /api/v1/auth/me 로 계정을 읽고 next 로 이동
+```
+
+| 단계 | Google | 카카오 |
+|---|---|---|
+| 동의 화면 | `https://accounts.google.com/o/oauth2/v2/auth`, scope `openid email`, PKCE S256, `prompt=select_account` | `https://kauth.kakao.com/oauth/authorize`, scope `account_email` |
+| 토큰 교환 | `https://oauth2.googleapis.com/token` (client_secret + code_verifier) | `https://kauth.kakao.com/oauth/token` (client_secret은 콘솔에서 켠 경우만) |
+| 사용자 정보 | `https://openidconnect.googleapis.com/v1/userinfo` → `sub`, `email`, `email_verified` | `https://kapi.kakao.com/v2/user/me` → `id`, `kakao_account.email`, `is_email_verified`·`is_email_valid` |
+| 콜백 URL(콘솔 등록값) | `{OAUTH_REDIRECT_BASE_URL}/api/v1/auth/oauth/google/callback` | `{OAUTH_REDIRECT_BASE_URL}/api/v1/auth/oauth/kakao/callback` |
+
+### 계정 결정 규칙
+
+1. 제공처 회원번호(`provider`, `provider_user_id`)가 `account_social_identity`에 있으면 그 계정으로 로그인합니다.
+   제공처의 이메일이 바뀌어도 계정은 그대로입니다.
+2. 없으면 제공처가 준 이메일로 기존 계정을 찾습니다. **제공처가 그 이메일을 인증했다고 답한 경우에만** 기존 계정에
+   연결하고, 계정이 아직 미인증이면 `email_verified_at`을 채웁니다. 인증되지 않은 이메일이면 남의 이메일을 적은
+   제공처 계정으로 계정을 가로챌 수 있으므로 연결하지 않고 `EMAIL_NOT_VERIFIED`로 돌려보냅니다.
+3. 같은 이메일의 계정이 없으면 비밀번호 없는 계정(`password_hash NULL`)을 만들고 연결합니다. 약관 동의 시각은
+   첫 로그인 시각, 이메일 인증 여부는 제공처 답변을 따릅니다. 이 계정은 이메일·비밀번호 로그인이 401입니다.
+4. 제공처가 이메일을 주지 않으면(카카오 이메일 동의 거부) 계정을 만들지 않고 `EMAIL_REQUIRED`입니다.
+5. 정지된 계정은 `ACCOUNT_SUSPENDED`, 접속 주소 한도(분당 20회)를 넘으면 `RATE_LIMITED`입니다.
+
+### 시작
+
+`GET /api/v1/auth/oauth/{provider}/start?next=/app/partners`. `next`는 앱 안 절대 경로만 받고 그 외는 `/app/chat`입니다.
+설정되지 않은 제공처는 302 `/oauth/callback?error=PROVIDER_NOT_CONFIGURED`, 모르는 제공처 경로는 404입니다.
+`govbiz_oauth` 쿠키는 HttpOnly·`SameSite=Lax`·`Path=/api/v1/auth/oauth`·10분이며 값은 세션 JWT와 같은 비밀키로
+서명한 `state`·PKCE verifier·`next`입니다. 제공처에서 돌아오는 요청은 최상위 GET 이동이라 Lax 쿠키가 붙습니다.
+
+### 콜백
+
+`GET /api/v1/auth/oauth/{provider}/callback?code=&state=` 또는 `?error=access_denied&state=`. 어느 경우든 state 쿠키를
+지우고 프런트 `/oauth/callback`으로 302 합니다. 성공은 `?next=<경로>`와 세션 쿠키(`rememberMe=true`와 같은 30일),
+실패는 `?error=<코드>`이고 세션 쿠키는 없습니다.
+
+| `error` | 뜻 |
+|---|---|
+| `PROVIDER_NOT_CONFIGURED` | 클라이언트 ID가 비어 있음 |
+| `PROVIDER_DENIED` | 동의 화면에서 취소했거나 `code`가 없음 |
+| `STATE_MISMATCH` | state 쿠키가 없거나 다르거나 만료(10분) |
+| `EMAIL_REQUIRED` | 제공처가 이메일을 주지 않음 |
+| `EMAIL_NOT_VERIFIED` | 같은 이메일의 계정이 있으나 제공처가 이메일을 인증하지 않아 연결하지 않음 |
+| `PROVIDER_UNAVAILABLE` | 토큰 교환·사용자 정보 호출 실패 |
+| `ACCOUNT_SUSPENDED` | 연결된 계정이 정지됨 |
+| `RATE_LIMITED` | 접속 주소 한도 초과 |
+
+`GET /api/v1/auth/oauth/providers`는 `{"providers":["google","kakao"]}`처럼 클라이언트 ID가 설정된 제공처만 돌려주고
+프런트는 이 목록으로 버튼을 그립니다.
 
 ## 개발용 시드 로그인
 
@@ -298,6 +364,7 @@ non-null 파라미터는 세션이 없을 때 401이고, `Account?`는 쿠키가
 | 이메일 형식·비밀번호 누락 등 요청 검증 실패 | 400 | `REQUEST_VALIDATION_FAILED` (`errors[].field`) |
 | 이메일 없음 또는 비밀번호 불일치 | 401 | `INVALID_CREDENTIALS` |
 | 이미 가입된(또는 탈퇴한) 이메일로 회원가입 | 409 | `EMAIL_ALREADY_REGISTERED` |
+| 소셜 로그인으로만 만든 계정(비밀번호 없음)의 이메일 로그인 | 401 | `INVALID_CREDENTIALS` |
 | 기업을 등록하지 않은 계정의 기업 조회·수정 | 404 | `COMPANY_NOT_REGISTERED` |
 | 등록되지 않은 사업자등록번호 | 404 | `BUSINESS_NOT_FOUND` |
 | 휴업·폐업 사업자 등록 시도 | 422 | `BUSINESS_NOT_ACTIVE` (`businessStatus`) |

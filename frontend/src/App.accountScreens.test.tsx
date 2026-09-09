@@ -12,6 +12,7 @@ import { receivedAcceptedProposal, receivedPendingProposal, receivedProposalBox,
 import { partnerRecruitmentDetail, partnerRecruitmentPage } from './data/fixtures/partnerRecruitments'
 import { supportPrograms } from './data/fixtures/supportPrograms'
 import type { Account } from './domain/entities/Account'
+import { oauthCallbackMessages } from './presentation/features/auth/viewmodel/useOAuthCallbackViewModel'
 import { loginMessages } from './presentation/features/auth/viewmodel/useLoginViewModel'
 import { signupMessages } from './presentation/features/auth/viewmodel/useSignupViewModel'
 import { sessionRestored } from './presentation/shared/auth/state/authSlice'
@@ -67,6 +68,53 @@ describe('계정 화면', () => {
 
     expect(screen.queryByRole('link', { name: /비밀번호 재설정/ })).toBeNull()
     expect(screen.getByText('비밀번호 재설정 · 준비 중')).toBeTruthy()
+  })
+
+  it('설정된 소셜 제공처만 로그인·회원가입 화면에 링크 버튼으로 보여 주고 돌아갈 경로를 싣는다', async () => {
+    vi.spyOn(appContainer.resolve('getOAuthProvidersUseCase'), 'execute').mockResolvedValue(['google', 'kakao'])
+    renderApp('/login?next=%2Fapp%2Fpartners')
+
+    const social = await screen.findByRole('link', { name: 'Google로 계속하기' })
+    const google = new URL(social.getAttribute('href') ?? '')
+    expect(google.pathname).toBe('/api/v1/auth/oauth/google/start')
+    expect(google.searchParams.get('next')).toBe('/app/partners')
+    expect(screen.getByRole('link', { name: '카카오로 계속하기' })).toBeTruthy()
+
+    fireEvent.click(screen.getByRole('link', { name: '기업 계정 만들기' }))
+    expect(await screen.findByRole('link', { name: 'Google로 시작하기' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: '카카오로 시작하기' })).toBeTruthy()
+  })
+
+  it('소셜 제공처가 설정되지 않았으면 버튼 없이 이메일 폼만 보여 준다', async () => {
+    vi.spyOn(appContainer.resolve('getOAuthProvidersUseCase'), 'execute').mockResolvedValue([])
+    renderApp('/login')
+
+    expect(screen.getByRole('form', { name: '로그인' })).toBeTruthy()
+    await waitFor(() => expect(appContainer.resolve('getOAuthProvidersUseCase').execute).toHaveBeenCalled())
+    expect(screen.queryByRole('link', { name: /로 계속하기/ })).toBeNull()
+  })
+
+  it('소셜 로그인 콜백은 세션 쿠키로 계정을 읽어 돌아갈 화면으로 이동한다', async () => {
+    const complete = vi.spyOn(appContainer.resolve('completeOAuthLogInUseCase'), 'execute').mockResolvedValue(memberAccount)
+    renderApp('/oauth/callback?next=%2Fapp%2Fpartners', null)
+
+    expect(screen.getByRole('status').textContent).toContain('로그인하는 중')
+    await waitFor(() => expect(screen.getByRole('heading', { name: '함께 신청할 기업 찾기' })).toBeTruthy())
+    expect(complete).toHaveBeenCalledTimes(1)
+    expect(within(screen.getByRole('complementary', { name: '작업 사이드바' })).getByText('member@govbiz.local')).toBeTruthy()
+  })
+
+  it('소셜 로그인 콜백이 오류를 알리면 이유와 로그인 링크를 보여 주고 세션은 읽지 않는다', () => {
+    const complete = vi.spyOn(appContainer.resolve('completeOAuthLogInUseCase'), 'execute')
+    renderApp('/oauth/callback?error=EMAIL_NOT_VERIFIED', null)
+
+    expect(screen.getByRole('alert').textContent).toBe(oauthCallbackMessages.EMAIL_NOT_VERIFIED)
+    expect(screen.getByRole('link', { name: '로그인으로 돌아가기' }).getAttribute('href')).toBe('/login')
+    expect(complete).not.toHaveBeenCalled()
+
+    cleanup()
+    renderApp('/oauth/callback?error=SOMETHING_NEW', null)
+    expect(screen.getByRole('alert').textContent).toBe(oauthCallbackMessages.FAILED)
   })
 
   it('회원가입 입력이 비어 있으면 서버에 보내지 않고 이메일부터 안내한다', () => {

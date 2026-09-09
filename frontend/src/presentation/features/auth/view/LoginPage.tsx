@@ -2,6 +2,7 @@ import { Link } from 'react-router'
 
 import { useLoginViewModel } from '../viewmodel/useLoginViewModel'
 import { AuthBrandPanel } from './AuthBrandPanel'
+import { SocialLoginButtons } from './SocialLoginButtons'
 import { authPageStyles } from './AuthPage.styles'
 
 /** 로그인 화면입니다. 공용 헤더의 로그인 버튼이 이 화면으로 옵니다. */
@@ -87,6 +88,8 @@ export function LoginPage() {
           <button className={authPageStyles.submitButton} type="submit" disabled={isSubmitting}>
             {isSubmitting ? '로그인 중…' : '로그인'}
           </button>
+
+          <SocialLoginButtons intent="login" />
 
           <div className={authPageStyles.divider}>
             <span className={authPageStyles.dividerLine} aria-hidden="true" />

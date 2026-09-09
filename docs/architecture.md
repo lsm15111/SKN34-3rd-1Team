@@ -527,6 +527,10 @@ Frontend에서 로그인 상태는 헤더와 여러 화면이 함께 읽으므�
 `useAuthSession`·`useRestoreAuthSession` Hook이 소유하고, 로그인 화면은 `presentation/features/auth`가 소유합니다.
 세션 토큰은 브라우저의 HttpOnly 쿠키가 관리하므로 앱은 다루지 않고, `data/storage`에는 앱 시작 시 `/me`를 부를지
 정하는 힌트만 둡니다. Repository가 로그인·로그아웃과 함께 힌트를 저장·삭제합니다.
+소셜 로그인은 `AccountOAuthController → AccountOAuthService → GoogleOAuthClient · KakaoOAuthClient(제공처 HTTP) · AccountRepository`로,
+Bizno처럼 외부 호출을 Client 경계 뒤에 두고 Service가 계정 찾기·연결·생성 규칙을 맡습니다. 브라우저는 시작 endpoint로 이동해
+제공처 동의 뒤 Core 콜백으로 돌아오고, 서명한 state 쿠키로 요청을 잇습니다. 프런트는 `SocialLoginButtons`(링크)와
+`/oauth/callback` 화면(`CompleteOAuthLogInUseCase`로 `/me` 조회)만 가지며 액세스 토큰·시크릿을 다루지 않습니다.
 화면은 로그인 전 `/` 아래 공개 경로(공용 헤더)와 로그인 뒤 `/app` 아래 내부 경로(사이드바)로 나뉩니다. `PublicOnly`는
 로그인한 사용자를 공개 URL에서 같은 내용의 `/app` 화면으로, `GuestOnly`는 로그인·회원가입에서 복귀 경로로, `RequireAuth`는
 비로그인 사용자를 `/login?next=`로 보냅니다. 경로 상수와 공개↔내부 대응은 `presentation/shared/routes/appPaths.ts`가 소유합니다.

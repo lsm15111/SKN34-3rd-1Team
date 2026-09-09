@@ -22,6 +22,7 @@ export const publicPaths = {
   landing: '/',
   login: '/login',
   signup: '/signup',
+  oauthCallback: '/oauth/callback',
   pricing: '/pricing',
   partners: '/partners',
   partnerDetail: '/partners/detail',

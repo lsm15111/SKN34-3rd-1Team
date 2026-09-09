@@ -1,5 +1,6 @@
 import type { Account, AccountRole } from '../entities/Account'
 import type { AuthSession } from '../entities/AuthSession'
+import type { OAuthProvider } from '../entities/OAuthProvider'
 
 export type AccountLogIn = {
   email: string
@@ -35,4 +36,10 @@ export interface AccountRepository {
   logOut(signal?: AbortSignal): Promise<void>
   /** 저장된 세션이 없거나 만료됐으면 null입니다. */
   getCurrentAccount(signal?: AbortSignal): Promise<Account | null>
+  /** Core API에 클라이언트 ID가 설정된 소셜 로그인 제공처입니다. 비어 있으면 버튼을 그리지 않습니다. */
+  getOAuthProviders(signal?: AbortSignal): Promise<OAuthProvider[]>
+  /** 브라우저를 통째로 보낼 소셜 로그인 시작 주소입니다. 제공처 동의 뒤 Core가 `/oauth/callback`으로 돌려보냅니다. */
+  oauthStartUrl(provider: OAuthProvider, next: string): string
+  /** 콜백 화면에서 세션 쿠키로 계정을 읽고 "세션 있음" 힌트를 남깁니다. 세션이 없으면 null입니다. */
+  completeOAuthLogIn(signal?: AbortSignal): Promise<Account | null>
 }

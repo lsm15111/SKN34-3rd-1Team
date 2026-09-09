@@ -6,8 +6,10 @@ import {
   AccountApiError,
   devLogInApi,
   getCurrentAccountApi,
+  getOAuthProvidersApi,
   logInApi,
   logOutApi,
+  oauthStartUrl,
   signUpApi,
 } from '../accountApi'
 
@@ -114,7 +116,36 @@ describe('logOutApi and getCurrentAccountApi', () => {
   })
 })
 
+describe('getOAuthProvidersApi and oauthStartUrl', () => {
+  it('keeps only known providers from the configured list and builds a browser start url', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ providers: ['kakao', 'naver', 'google'] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(getOAuthProvidersApi()).resolves.toEqual(['kakao', 'google'])
+    const [requestUrl, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    expect(new URL(requestUrl).pathname).toBe('/api/v1/auth/oauth/providers')
+    expect(init.method).toBeUndefined()
+
+    const start = new URL(oauthStartUrl('google', '/app/partners?tab=mine'))
+    expect(start.pathname).toBe('/api/v1/auth/oauth/google/start')
+    expect(start.searchParams.get('next')).toBe('/app/partners?tab=mine')
+  })
+})
+
 describe('AccountRepositoryImpl', () => {
+  it('completes a social login by marking the hint and reading the account, and clears it when no session came back', async () => {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ account }))
+      .mockResolvedValueOnce(problemResponse(401, 'AUTHENTICATION_REQUIRED')))
+    const storage = createMemorySessionHintStorage()
+    const repository = new AccountRepositoryImpl({ sessionHintStorage: storage })
+
+    await expect(repository.completeOAuthLogIn()).resolves.toEqual(account)
+    expect(storage.hasSession()).toBe(true)
+    await expect(repository.completeOAuthLogIn()).resolves.toBeNull()
+    expect(storage.hasSession()).toBe(false)
+  })
+
   it('marks the session hint after a successful login', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(sessionResponse)))
     const storage = createMemorySessionHintStorage()

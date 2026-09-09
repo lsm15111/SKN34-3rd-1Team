@@ -29,4 +29,16 @@ interface AccountMapper {
         @Param("accountId") accountId: Long,
         @Param("now") now: LocalDateTime,
     ): Int
+
+    fun updateEmailVerifiedAtIfNull(
+        @Param("accountId") accountId: Long,
+        @Param("verifiedAt") verifiedAt: LocalDateTime,
+    ): Int
+
+    fun findSocialIdentity(
+        @Param("provider") provider: String,
+        @Param("providerUserId") providerUserId: String,
+    ): AccountSocialIdentityDbRow?
+
+    fun insertSocialIdentity(row: AccountSocialIdentityDbRow): Int
 }

@@ -1,6 +1,7 @@
 import type { AppCradle } from '../../app/di/types'
 import type { Account, AccountRole } from '../../domain/entities/Account'
 import type { AuthSession } from '../../domain/entities/AuthSession'
+import type { OAuthProvider } from '../../domain/entities/OAuthProvider'
 import type {
   AccountLogIn,
   AccountRepository,
@@ -12,8 +13,10 @@ import {
   AccountApiError,
   devLogInApi,
   getCurrentAccountApi,
+  getOAuthProvidersApi,
   logInApi,
   logOutApi,
+  oauthStartUrl,
   signUpApi,
 } from '../api/accountApi'
 import { toAccount, toAuthSession, type AuthSessionResponseDto } from '../models/AccountDto'
@@ -88,6 +91,20 @@ export class AccountRepositoryImpl implements AccountRepository {
       }
       throw error
     }
+  }
+
+  getOAuthProviders(signal?: AbortSignal): Promise<OAuthProvider[]> {
+    return getOAuthProvidersApi(signal)
+  }
+
+  oauthStartUrl(provider: OAuthProvider, next: string): string {
+    return oauthStartUrl(provider, next)
+  }
+
+  /** 세션 쿠키는 Core 콜백이 이미 발급했으므로 힌트만 남기고 계정을 읽습니다. 쿠키가 없으면 힌트를 되돌립니다. */
+  async completeOAuthLogIn(signal?: AbortSignal): Promise<Account | null> {
+    this.sessionHintStorage.markSignedIn()
+    return this.getCurrentAccount(signal)
   }
 
   private rememberSession(dto: AuthSessionResponseDto): AuthSession {

@@ -36,3 +36,28 @@ class BusinessNotActiveException(val businessStatus: String) : RuntimeException(
 
 /** 다른 계정이 이미 같은 사업자등록번호를 등록했을 때 발생합니다. */
 class BusinessNumberAlreadyRegisteredException : RuntimeException()
+
+/**
+ * 소셜 로그인 흐름이 끝나지 못한 이유입니다. 콜백은 JSON이 아니라 프런트 콜백 화면으로 302 하므로
+ * [code]가 그대로 `?error=` 값이 됩니다.
+ */
+class OAuthLoginFailedException(val code: Code, message: String, cause: Throwable? = null) : RuntimeException(message, cause) {
+    enum class Code {
+        /** 제공처 설정(클라이언트 ID)이 비어 있어 이 제공처를 쓸 수 없습니다. */
+        PROVIDER_NOT_CONFIGURED,
+        /** 사용자가 제공처 동의 화면에서 취소했습니다. */
+        PROVIDER_DENIED,
+        /** state 쿠키가 없거나 값이 다르거나 만료됐습니다. 다른 탭·오래된 링크·CSRF 시도입니다. */
+        STATE_MISMATCH,
+        /** 제공처가 이메일을 주지 않았습니다(카카오 이메일 동의 안 함 등). */
+        EMAIL_REQUIRED,
+        /** 같은 이메일의 계정이 이미 있는데 제공처가 그 이메일을 인증해 주지 않아 자동 연결하지 않았습니다. */
+        EMAIL_NOT_VERIFIED,
+        /** 제공처 호출 실패·잘못된 응답입니다. */
+        PROVIDER_UNAVAILABLE,
+        /** 연결된 계정이 정지됐습니다. */
+        ACCOUNT_SUSPENDED,
+        /** 같은 접속 주소의 로그인 시도가 한도를 넘었습니다. */
+        RATE_LIMITED,
+    }
+}

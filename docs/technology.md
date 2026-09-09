@@ -20,6 +20,7 @@
 | DB 접근 | MyBatis Spring Boot Starter 4.0.0, Flyway | XML SQL 실행과 스키마 버전 관리 | [build.gradle](../backend/core-api/build.gradle) |
 | 원문 파싱 | jsoup 1.23.2 | 기업마당 상세 HTML의 제목 확인과 공고 본문 추출 | [build.gradle](../backend/core-api/build.gradle) |
 | 비밀번호 해시 | spring-security-crypto(BCrypt) | 회원 비밀번호 해시·비교. Security filter chain은 사용하지 않음 | [build.gradle](../backend/core-api/build.gradle) |
+| 소셜 로그인 | Google OAuth 2.0(OpenID Connect userinfo, PKCE), 카카오 로그인 REST API | 서버 리다이렉트형 Authorization Code. Core가 토큰을 교환하고 세션 쿠키를 발급. 키는 `OAUTH_GOOGLE_*`·`OAUTH_KAKAO_*` | [계정·인증 계약](account-auth-contract.md#소셜-로그인-google카카오) |
 | 사업자 확인 | Bizno(bizno.net) 사업자등록번호 조회 API | 기업 등록 시 등록 여부·상호·사업자 상태 확인. 키는 `BIZNO_API_KEY` | [계정·인증 계약](account-auth-contract.md) |
 | AI API | Python 3.11(Docker·CI), FastAPI 0.139.x, Pydantic 2 | 내부 API와 구조화된 요청·응답 검증 | [pyproject.toml](../backend/ai-service/pyproject.toml) |
 | AI 호출 | OpenAI SDK 3.x, Agents SDK 0.22.x, tiktoken | 임베딩, 후보 점수화, 입력 토큰 제한 | [pyproject.toml](../backend/ai-service/pyproject.toml) |

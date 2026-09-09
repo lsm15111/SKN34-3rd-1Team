@@ -6,7 +6,8 @@ import java.time.LocalDateTime
 data class AccountDbRow(
     var id: Long = 0,
     var email: String = "",
-    var passwordHash: String = "",
+    /** 소셜 로그인으로만 만든 계정은 null입니다. */
+    var passwordHash: String? = null,
     var role: String = "USER",
     var emailVerifiedAt: LocalDateTime? = null,
     var suspendedAt: LocalDateTime? = null,

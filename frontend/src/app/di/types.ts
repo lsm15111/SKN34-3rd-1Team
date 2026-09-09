@@ -32,6 +32,11 @@ import type { GetSupportProgramDetailUseCase } from '../../domain/usecases/GetSu
 import type { GetSupportProgramSearchReadinessUseCase } from '../../domain/usecases/GetSupportProgramSearchReadinessUseCase'
 import type { LogInUseCase } from '../../domain/usecases/LogInUseCase'
 import type { LogOutUseCase } from '../../domain/usecases/LogOutUseCase'
+import type {
+  CompleteOAuthLogInUseCase,
+  GetOAuthProvidersUseCase,
+  StartOAuthLogInUseCase,
+} from '../../domain/usecases/OAuthLogInUseCases'
 import type { SignUpUseCase } from '../../domain/usecases/SignUpUseCase'
 import type { PrepareSampleItemUseCase } from '../../domain/usecases/PrepareSampleItemUseCase'
 import type { SearchSupportProgramsUseCase } from '../../domain/usecases/SearchSupportProgramsUseCase'
@@ -61,6 +66,9 @@ export type AppCradle = {
   getSupportProgramSearchReadinessUseCase: GetSupportProgramSearchReadinessUseCase
   logInUseCase: LogInUseCase
   logOutUseCase: LogOutUseCase
+  getOAuthProvidersUseCase: GetOAuthProvidersUseCase
+  startOAuthLogInUseCase: StartOAuthLogInUseCase
+  completeOAuthLogInUseCase: CompleteOAuthLogInUseCase
   partnerProposalRepository: PartnerProposalRepository
   partnerRecruitmentRepository: PartnerRecruitmentRepository
   respondPartnerProposalUseCase: RespondPartnerProposalUseCase

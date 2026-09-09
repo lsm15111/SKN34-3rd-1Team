@@ -80,6 +80,9 @@ OPENAI_API_KEY=발급받은_OpenAI_API_키
 | `ACCOUNT_DEV_LOGIN_PASSWORD` | `govbiz-admin1` | 시드 계정을 만들 때 저장하는 비밀번호. 로그인 폼으로도 쓸 수 있으므로 공유 환경에서는 교체 |
 | `BIZNO_API_KEY` | 빈 값 | 기업 등록 시 사업자등록번호를 확인하는 Bizno API 키. 비어 있으면 프로필의 기업 조회·등록이 503 |
 | `BIZNO_URL` | `https://bizno.net/api/fapi` | Bizno 조회 endpoint |
+| `OAUTH_GOOGLE_CLIENT_ID` / `OAUTH_GOOGLE_CLIENT_SECRET` | 빈 값 | Google 로그인 클라이언트. 비어 있으면 Google 버튼이 나오지 않음 |
+| `OAUTH_KAKAO_CLIENT_ID` / `OAUTH_KAKAO_CLIENT_SECRET` | 빈 값 | 카카오 로그인 REST API 키·시크릿. 비어 있으면 카카오 버튼이 나오지 않음 |
+| `OAUTH_REDIRECT_BASE_URL` / `OAUTH_FRONTEND_BASE_URL` | `http://127.0.0.1:5173` | 제공처 콘솔에 등록할 콜백 origin과 결과를 받을 프런트 origin. Compose는 웹이 `/api`를 대신 받으므로 둘 다 웹 origin |
 | `OPENAI_API_KEY` | 없음(필수) | AI Service만 사용하는 OpenAI 인증키 |
 | `OPENAI_MODEL` | `gpt-5.6-luna` | 대화·원문 답변의 모델, 랭킹 전용 모델 미설정 시 상속 |
 | `OPENAI_RANKING_MODEL` | 미설정 | 랭킹 전용 모델. `.env.example`은 정확도 우선 `gpt-5.6-sol` 설정 |

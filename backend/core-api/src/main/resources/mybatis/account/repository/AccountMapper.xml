@@ -20,6 +20,16 @@
         <result column="company_business_number" property="companyBusinessNumber" />
     </resultMap>
 
+    <resultMap id="accountSocialIdentityDbRow"
+               type="ai.govbiz.core.account.repository.mapper.AccountSocialIdentityDbRow">
+        <id column="id" property="id" />
+        <result column="account_id" property="accountId" />
+        <result column="provider" property="provider" />
+        <result column="provider_user_id" property="providerUserId" />
+        <result column="email" property="email" />
+        <result column="linked_at" property="linkedAt" />
+    </resultMap>
+
     <resultMap id="accountSessionDbRow"
                type="ai.govbiz.core.account.repository.mapper.AccountSessionDbRow">
         <id column="id" property="id" />
@@ -128,4 +138,45 @@
         WHERE account_id = #{accountId}
           AND expires_at &lt;= #{now}
     </delete>
+
+    <update id="updateEmailVerifiedAtIfNull">
+        UPDATE account
+        SET email_verified_at = #{verifiedAt}
+        WHERE id = #{accountId}
+          AND email_verified_at IS NULL
+    </update>
+
+    <select id="findSocialIdentity" resultMap="accountSocialIdentityDbRow">
+        SELECT
+            identity.id,
+            identity.account_id,
+            identity.provider,
+            identity.provider_user_id,
+            identity.email,
+            identity.linked_at
+        FROM account_social_identity identity
+        JOIN account ON account.id = identity.account_id
+        WHERE identity.provider = #{provider}
+          AND identity.provider_user_id = #{providerUserId}
+          AND account.deleted_at IS NULL
+    </select>
+
+    <insert id="insertSocialIdentity"
+            parameterType="ai.govbiz.core.account.repository.mapper.AccountSocialIdentityDbRow"
+            useGeneratedKeys="true"
+            keyProperty="id">
+        INSERT INTO account_social_identity (
+            account_id,
+            provider,
+            provider_user_id,
+            email,
+            linked_at
+        ) VALUES (
+            #{accountId},
+            #{provider},
+            #{providerUserId},
+            #{email},
+            #{linkedAt}
+        )
+    </insert>
 </mapper>
