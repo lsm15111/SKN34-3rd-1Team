@@ -1,6 +1,7 @@
 package ai.govbiz.core.account.controller.dto
 
 import ai.govbiz.core.account.domain.AccountRole
+import ai.govbiz.core.account.domain.AccountTier
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Size
@@ -33,7 +34,14 @@ class SignupRequest(
     override fun toString(): String = "SignupRequest(email=$email)"
 }
 
-/** 개발용 로그인에서 어떤 시드 계정으로 들어갈지 고릅니다. 본문이 없으면 관리자입니다. */
+/**
+ * 개발용 로그인에서 어떤 시드 계정으로 들어갈지 고릅니다. 본문이 없으면 관리자입니다.
+ * `tier`(ADMIN·MEMBER·COMPANY)가 우선하고, 없으면 예전 계약대로 `role`(ADMIN·USER)로 관리자·회원을 고릅니다.
+ */
 data class DevLoginRequest(
     val role: AccountRole = AccountRole.ADMIN,
-)
+    val tier: AccountTier? = null,
+) {
+    val resolvedTier: AccountTier
+        get() = tier ?: if (role == AccountRole.ADMIN) AccountTier.ADMIN else AccountTier.MEMBER
+}

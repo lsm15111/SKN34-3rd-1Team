@@ -59,17 +59,17 @@ describe('logInApi and devLogInApi', () => {
     expect(JSON.parse(String(init.body))).toEqual(logInCommand)
   })
 
-  it('posts the developer login with the requested seed role', async () => {
+  it('posts the developer login with the requested seed tier', async () => {
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(sessionResponse))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(devLogInApi('USER')).resolves.toEqual(sessionResponse)
+    await expect(devLogInApi('COMPANY')).resolves.toEqual(sessionResponse)
 
     const [requestUrl, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(new URL(requestUrl).pathname).toBe('/api/v1/auth/dev-login')
     expect(init.method).toBe('POST')
     expect(init.credentials).toBe('include')
-    expect(JSON.parse(String(init.body))).toEqual({ role: 'USER' })
+    expect(JSON.parse(String(init.body))).toEqual({ tier: 'COMPANY' })
   })
 
   it('rejects a session response without an expiry, tier, or with an unknown role', async () => {

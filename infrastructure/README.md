@@ -77,9 +77,10 @@ OPENAI_API_KEY=발급받은_OpenAI_API_키
 | `ACCOUNT_SESSION_IDLE_TTL` | `P7D` | 마지막 사용 뒤 세션을 끝내는 유휴 기간 |
 | `ACCOUNT_JWT_SECRET` | 로컬 개발용 문자열 | 세션 JWT 서명 비밀키(32자 이상). Core API 코드에는 기본값이 없으며 운영 환경에서는 반드시 교체 |
 | `ACCOUNT_COOKIE_SECURE` | `false` | 세션 쿠키 `Secure` 속성. Compose는 http라 끄고, HTTPS 운영에서는 `true` |
-| `ACCOUNT_DEV_LOGIN_ENABLED` | `true` | Compose 개발 환경에서는 `POST /api/v1/auth/dev-login`으로 관리자(`admin@govbiz.local`) 또는 회원(`member@govbiz.local`) 시드 세션을 바로 발급. 운영에서는 `false` |
+| `ACCOUNT_DEV_LOGIN_ENABLED` | `true` | Compose 개발 환경에서는 `POST /api/v1/auth/dev-login`으로 관리자(`admin@govbiz.local`)·회원(`member@govbiz.local`)·기업 회원(`company@govbiz.local`) 시드 세션을 바로 발급. 운영에서는 `false` |
 | `ACCOUNT_DEV_LOGIN_EMAIL` | `admin@govbiz.local` | 개발용 관리자 시드 계정 이메일 |
 | `ACCOUNT_DEV_LOGIN_MEMBER_EMAIL` | `member@govbiz.local` | 개발용 회원 시드 계정 이메일 |
+| `ACCOUNT_DEV_LOGIN_COMPANY_EMAIL` | `company@govbiz.local` | 개발용 기업 회원 시드 계정 이메일. 예시 기업(그루브데이터)을 함께 등록 |
 | `ACCOUNT_DEV_LOGIN_PASSWORD` | `govbiz-admin1` | 시드 계정을 만들 때 저장하는 비밀번호. 로그인 폼으로도 쓸 수 있으므로 공유 환경에서는 교체 |
 | `BIZNO_API_KEY` | 빈 값 | 기업 등록 시 사업자등록번호를 확인하는 Bizno API 키. 비어 있으면 프로필의 기업 조회·등록이 503 |
 | `BIZNO_URL` | `https://bizno.net/api/fapi` | Bizno 조회 endpoint |
@@ -264,3 +265,17 @@ Web/Core는 검증 전용 `15173`/`18080` 포트를 사용해 기존 개발 서�
 ```bash
 python3 -B -m unittest discover -s infrastructure/scripts -p 'test_*.py'
 ```
+
+## 개발용 목데이터
+
+파트너 모집 화면을 채우는 예시 공고·기업·모집글·제안은 [dev-seed.sql](dev-seed.sql)로 넣습니다. 스택이 떠 있는 상태에서
+저장소 루트에서 실행합니다.
+
+```bash
+docker exec -i govbiz-mysql-1 sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' < infrastructure/dev-seed.sql
+```
+
+몇 번을 다시 실행해도 됩니다. 시드 계정과 딸린 행을 지우고 오늘 기준 날짜로 다시 만들기 때문에 충돌이 없고, 며칠 지나
+대기 제안이 만료로 바뀌면 다시 실행해 처음 모양으로 되돌립니다. 모든 시드 계정(`company@govbiz.local`, `coop@<기업>.example`)은
+`ACCOUNT_DEV_LOGIN_PASSWORD`로 로그인됩니다. 자세한 구성은
+[계정·인증 계약](../docs/account-auth-contract.md#개발용-목데이터)을 보세요.

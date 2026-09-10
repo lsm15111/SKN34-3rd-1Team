@@ -42,6 +42,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
         "app.account.dev-login.enabled=true",
         "app.account.dev-login.email=admin@govbiz.local",
         "app.account.dev-login.member-email=member@govbiz.local",
+        "app.account.dev-login.company-email=company@govbiz.local",
         "app.account.dev-login.password=govbiz-admin1",
     ],
 )
@@ -220,8 +221,18 @@ class AccountAuthFlowIntegrationTest {
             .andExpect(jsonPath("$.account.email").value("member@govbiz.local"))
             .andExpect(jsonPath("$.account.tier").value("MEMBER"))
 
+        mockMvc.perform(post("/api/v1/auth/dev-login").contentType(MediaType.APPLICATION_JSON).content("""{"tier":"COMPANY"}"""))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.account.email").value("company@govbiz.local"))
+            .andExpect(jsonPath("$.account.tier").value("COMPANY"))
+            .andExpect(jsonPath("$.account.company.companyName").value("그루브데이터 주식회사"))
+        mockMvc.perform(post("/api/v1/auth/dev-login").contentType(MediaType.APPLICATION_JSON).content("""{"tier":"COMPANY"}"""))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.account.tier").value("COMPANY"))
+
         assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM account WHERE role = 'ADMIN'", Int::class.java))
-        assertEquals(3, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM account", Int::class.java))
+        assertEquals(4, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM account", Int::class.java))
+        assertEquals(1, jdbcTemplate.queryForObject("SELECT COUNT(*) FROM company WHERE business_number = '2208800042'", Int::class.java))
 
         mockMvc.perform(get("/api/v1/auth/me").cookie(requireNotNull(firstSession)))
             .andExpect(status().isOk())
@@ -229,6 +240,7 @@ class AccountAuthFlowIntegrationTest {
 
         logIn("admin@govbiz.local", "govbiz-admin1", rememberMe = true)
         logIn("member@govbiz.local", "govbiz-admin1", rememberMe = true)
+        logIn("company@govbiz.local", "govbiz-admin1", rememberMe = true)
     }
 
     private fun logIn(email: String, password: String, rememberMe: Boolean): Cookie {

@@ -21,12 +21,12 @@ class AccountDevLoginController(
     private val cookieHelper: SessionCookieHelper,
 ) {
 
-    /** 본문 없이 부르면 관리자, `{"role":"USER"}`면 기업 정보가 없는 회원 시드 계정입니다. */
+    /** 본문 없이 부르면 관리자, `{"tier":"MEMBER"}`면 기업 정보가 없는 회원, `{"tier":"COMPANY"}`면 예시 기업을 등록한 회원 시드 계정입니다. */
     @PostMapping("/dev-login")
     fun logInAsSeedAccount(
         @RequestBody(required = false) request: DevLoginRequest?,
     ): ResponseEntity<AuthSessionResponse> {
-        val result = devLoginService.logInAs((request ?: DevLoginRequest()).role)
+        val result = devLoginService.logInAs((request ?: DevLoginRequest()).resolvedTier)
         return ResponseEntity.ok()
             .header(HttpHeaders.SET_COOKIE, cookieHelper.issue(result.sessionToken, result.rememberMe).toString())
             .body(AuthSessionResponse.from(result))

@@ -1,4 +1,4 @@
-import type { AccountRole } from '../../domain/entities/Account'
+import type { AccountTier } from '../../domain/entities/Account'
 import type { AccountLogIn, AccountSignUp } from '../../domain/repositories/AccountRepository'
 import { getCoreApiBaseUrl } from './coreApiConfig'
 import {
@@ -72,11 +72,12 @@ export async function logInApi(
 }
 
 /** Core API가 개발용 로그인을 켰을 때만 존재하는 endpoint입니다. 꺼져 있으면 404입니다. */
-export async function devLogInApi(role: AccountRole, signal?: AbortSignal): Promise<AuthSessionResponseDto> {
+/** 개발용 시드 로그인입니다. `tier`로 관리자(ADMIN)·회원(MEMBER)·예시 기업 회원(COMPANY) 시드 계정을 고릅니다. */
+export async function devLogInApi(tier: AccountTier, signal?: AbortSignal): Promise<AuthSessionResponseDto> {
   const response = await fetch(`${getCoreApiBaseUrl()}${DEV_LOGIN_PATH}`, {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ role }),
+    body: JSON.stringify({ tier }),
     credentials: withSessionCookie,
     signal,
   })

@@ -1,4 +1,4 @@
-import type { Account, AccountRole } from '../entities/Account'
+import type { Account, AccountTier } from '../entities/Account'
 import type { AccountDeletionPreview } from '../entities/AccountDeletionPreview'
 import type { AuthSession } from '../entities/AuthSession'
 
@@ -42,8 +42,8 @@ export type DeleteAccountResult =
 export interface AccountRepository {
   signUp(command: AccountSignUp, signal?: AbortSignal): Promise<SignUpResult>
   logIn(command: AccountLogIn, signal?: AbortSignal): Promise<LogInResult>
-  /** 개발 환경 전용. Core API가 개발용 로그인을 켰을 때만 성공하며, 역할별 시드 계정으로 들어갑니다. */
-  logInAsDeveloper(role: AccountRole, signal?: AbortSignal): Promise<AuthSession>
+  /** 개발 환경 전용. Core API가 개발용 로그인을 켰을 때만 성공하며, 단계별(관리자·회원·예시 기업 회원) 시드 계정으로 들어갑니다. */
+  logInAsDeveloper(tier: AccountTier, signal?: AbortSignal): Promise<AuthSession>
   logOut(signal?: AbortSignal): Promise<void>
   /** 저장된 세션이 없거나 만료됐으면 null입니다. */
   getCurrentAccount(signal?: AbortSignal): Promise<Account | null>

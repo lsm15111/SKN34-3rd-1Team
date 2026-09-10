@@ -1,5 +1,5 @@
 import type { AppCradle } from '../../app/di/types'
-import type { Account, AccountRole } from '../../domain/entities/Account'
+import type { Account, AccountTier } from '../../domain/entities/Account'
 import type { AccountDeletionPreview } from '../../domain/entities/AccountDeletionPreview'
 import type { AuthSession } from '../../domain/entities/AuthSession'
 import type {
@@ -63,8 +63,8 @@ export class AccountRepositoryImpl implements AccountRepository {
     }
   }
 
-  async logInAsDeveloper(role: AccountRole, signal?: AbortSignal): Promise<AuthSession> {
-    return this.rememberSession(await devLogInApi(role, signal))
+  async logInAsDeveloper(tier: AccountTier, signal?: AbortSignal): Promise<AuthSession> {
+    return this.rememberSession(await devLogInApi(tier, signal))
   }
 
   /** 서버 삭제가 실패하더라도 힌트는 지워 다음 시작에 복원을 시도하지 않게 합니다. 이미 없는 세션(401)은 성공으로 봅니다. */

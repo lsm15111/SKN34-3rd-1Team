@@ -70,7 +70,7 @@ describe('useAuthSession', () => {
     expect(result.current.account).toBeNull()
   })
 
-  it('signs in as the requested seed role and reports a failure without changing the state', async () => {
+  it('signs in as the requested seed tier and reports a failure without changing the state', async () => {
     const store = createAppStore()
     store.dispatch(sessionRestored(null))
     const execute = vi.fn().mockResolvedValueOnce(adminSession).mockRejectedValueOnce(new Error('404'))
@@ -88,9 +88,9 @@ describe('useAuthSession', () => {
       await result.current.logOut()
     })
     await act(async () => {
-      await expect(result.current.logInAsDeveloper('USER')).resolves.toBe(false)
+      await expect(result.current.logInAsDeveloper('MEMBER')).resolves.toBe(false)
     })
-    expect(execute).toHaveBeenLastCalledWith('USER')
+    expect(execute).toHaveBeenLastCalledWith('MEMBER')
     expect(result.current.isAuthenticated).toBe(false)
     expect(result.current.devLogInError).toBe(authSessionMessages.devLogInFailed)
   })

@@ -558,7 +558,8 @@ Service가 제안자의 기업, 모집글의 모집 상태, 당사자 여부를 
 절대 만료와 7일 유휴 만료를 함께 검사합니다. 화면 권한 단계(`tier`)는 `Account`가 역할·인증 상태로 계산해 `/me`에
 내려 주고, 프런트의 `RequireAuth`는 이 값으로만 `/app` 아래 라우트를 나누며 서버가 모든 쓰기 API에서 다시 검사합니다.
 Spring Security filter chain은 쓰지 않고 `spring-security-crypto`의 BCrypt만 사용합니다. 개발용 시드 로그인은
-설정이 켜졌을 때만 별도 Controller가 등록되며 관리자·회원 시드 계정을 만듭니다.
+설정이 켜졌을 때만 별도 Controller가 등록되며 관리자·회원·기업 회원(예시 기업 포함) 시드 계정을 만듭니다.
+파트너 모집 화면용 개발 목데이터는 Core 코드가 아니라 `infrastructure/dev-seed.sql`로 MySQL에 직접 넣습니다.
 
 Frontend에서 로그인 상태는 헤더와 여러 화면이 함께 읽으므로 `presentation/shared/auth`의 Redux slice와
 `useAuthSession`·`useRestoreAuthSession` Hook이 소유하고, 로그인 화면은 `presentation/features/auth`가 소유합니다.

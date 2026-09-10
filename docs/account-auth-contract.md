@@ -142,12 +142,37 @@ Content-Type: application/json
 ## 개발용 시드 로그인
 
 `ACCOUNT_DEV_LOGIN_ENABLED=true`(Compose 기본값)일 때만 `POST /api/v1/auth/dev-login`이 등록됩니다.
-본문 없이 부르면 `ACCOUNT_DEV_LOGIN_EMAIL`(기본 `admin@govbiz.local`)의 관리자 계정, `{ "role": "USER" }`를
-보내면 `ACCOUNT_DEV_LOGIN_MEMBER_EMAIL`(기본 `member@govbiz.local`)의 회원 계정으로 30일 세션 쿠키를 발급합니다.
-계정이 없으면 이메일 인증이 끝난 상태로 만들고 `ACCOUNT_DEV_LOGIN_PASSWORD`(기본 `govbiz-admin1`)를 비밀번호로
-저장하므로 일반 로그인 화면에서도 같은 값으로 로그인됩니다. 회원가입 API가 붙기 전까지 로그인 흐름을 확인하는
-용도이며, 운영 환경에서는 반드시 `false`로 두고 꺼져 있으면 404입니다. 프런트의 `개발 로그인 · 관리자`·`개발 로그인 · 회원`
-버튼은 개발 빌드(`import.meta.env.DEV`)에서만 렌더링됩니다.
+본문의 `tier`로 시드 계정을 고릅니다. 본문이 없으면 `ACCOUNT_DEV_LOGIN_EMAIL`(기본 `admin@govbiz.local`)의 관리자,
+`{ "tier": "MEMBER" }`는 `ACCOUNT_DEV_LOGIN_MEMBER_EMAIL`(기본 `member@govbiz.local`)의 기업 없는 회원,
+`{ "tier": "COMPANY" }`는 `ACCOUNT_DEV_LOGIN_COMPANY_EMAIL`(기본 `company@govbiz.local`)의 기업 회원으로 30일 세션
+쿠키를 발급합니다. 예전 계약의 `{ "role": "USER" }`도 회원으로 받습니다. 계정이 없으면 이메일 인증이 끝난 상태로 만들고
+`ACCOUNT_DEV_LOGIN_PASSWORD`(기본 `govbiz-admin1`)를 비밀번호로 저장하므로 일반 로그인 화면에서도 같은 값으로
+로그인됩니다. 기업 회원은 사업자등록번호 조회 없이 예시 기업 `그루브데이터 주식회사`(가상 사업자등록번호
+`2208800042`)를 함께 등록합니다. 운영 환경에서는 반드시 `false`로 두고 꺼져 있으면 404입니다. 프런트의
+`개발 로그인 · 관리자`·`회원`·`기업` 버튼은 개발 빌드(`import.meta.env.DEV`)에서만 렌더링됩니다.
+
+## 개발용 목데이터
+
+[`infrastructure/dev-seed.sql`](../infrastructure/dev-seed.sql)을 MySQL에 흘려 넣으면 파트너 모집 화면을 채우는 예시 데이터가
+들어갑니다. Core API 코드는 관여하지 않고, 화면은 이 행들을 보통 회원이 만든 것과 똑같이 읽어 모집 상태·제안 상태·제안 수·
+연락처 공개를 계산합니다.
+
+```bash
+docker exec -i govbiz-mysql-1 sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' < infrastructure/dev-seed.sql
+```
+
+| 항목 | 내용 |
+|---|---|
+| 예시 공고 7건 | 제공처 코드 `DEMO`로 upsert. 제공처 동기화는 출처별 스냅샷이라 지우지 않고, 검색 카탈로그는 색인 준비 제공처만 보여 주므로 모집글에서만 보임 |
+| 파트너 기업 9곳 | `coop@<기업>.example` 이메일의 기업 회원 계정(개발 로그인 비밀번호로 로그인 가능). 사업자등록번호·도메인은 가상 값, 협업·파트너 설정까지 채움 |
+| 내 기업 | 기업 회원 개발 로그인 계정(`company@govbiz.local`, 그루브데이터). 협업·파트너 설정도 채움 |
+| 모집글 10건 | 모집 중 8건, 모집 마감일 경과 1건, 공고 접수 종료 1건. 그중 1건이 내 글 |
+| 제안 22건 | 내 글로 받은 5건(대기 2·수락 1·거절 1·만료 1), 내가 보낸 5건(대기·수락·철회·거절·모집 마감 만료), 나머지는 다른 기업끼리 |
+
+날짜는 실행하는 날(`CURDATE()`) 기준 상대값입니다. 같은 파일을 몇 번 실행해도 됩니다. 시드 계정과 FK CASCADE로 딸린
+기업·협업 설정·모집글·제안을 먼저 지우고 다시 만들기 때문에 UNIQUE 충돌이 없고, 며칠 지나 대기 제안이 7일 응답 기한으로
+만료되거나 모집 마감일이 지나면 다시 실행해 처음 모양으로 되돌립니다. 시드 계정이 아닌 회원의 행은 건드리지 않지만, 그
+회원이 시드 모집글에 보낸 제안은 모집글과 함께 지워집니다.
 
 ## 사업자등록번호 확인
 
@@ -418,6 +443,7 @@ Origin: http://127.0.0.1:5173
 | `ACCOUNT_DEV_LOGIN_ENABLED` | `false` (Compose는 `true`) | 개발용 시드 로그인 endpoint 등록 여부 |
 | `ACCOUNT_DEV_LOGIN_EMAIL` | `admin@govbiz.local` | 관리자 시드 계정 이메일 |
 | `ACCOUNT_DEV_LOGIN_MEMBER_EMAIL` | `member@govbiz.local` | 회원 시드 계정 이메일 |
+| `ACCOUNT_DEV_LOGIN_COMPANY_EMAIL` | `company@govbiz.local` | 예시 기업을 등록한 기업 회원 시드 계정 이메일 |
 | `ACCOUNT_DEV_LOGIN_PASSWORD` | `govbiz-admin1` | 시드 계정을 만들 때 저장하는 비밀번호(8~72자) |
 | `BIZNO_API_KEY` | 빈 값 | 사업자등록번호 조회용 Bizno(bizno.net) API 키. 비어 있으면 기업 조회·등록이 503 |
 | `BIZNO_URL` | `https://bizno.net/api/fapi` | Bizno 조회 endpoint. 경로는 `/api/fapi` 고정 |

@@ -112,9 +112,17 @@ function AccountMenu({ isMarketingPage }: { isMarketingPage: boolean }) {
             className={appHeaderStyles.devLoginButton}
             type="button"
             disabled={isDevLoggingIn}
-            onClick={() => void logInAsDeveloper('USER')}
+            onClick={() => void logInAsDeveloper('MEMBER')}
           >
             개발 로그인 · 회원
+          </button>
+          <button
+            className={appHeaderStyles.devLoginButton}
+            type="button"
+            disabled={isDevLoggingIn}
+            onClick={() => void logInAsDeveloper('COMPANY')}
+          >
+            개발 로그인 · 기업
           </button>
           {devLogInError ? <span className={appHeaderStyles.devLoginError} role="alert">{devLogInError}</span> : null}
         </span>

@@ -38,8 +38,9 @@ object AccountTestHelper {
         email: String = "admin@govbiz.local",
         password: String = "govbiz-admin1",
         memberEmail: String = "member@govbiz.local",
+        companyEmail: String = "company@govbiz.local",
     ): AccountDevLoginProperties =
-        AccountDevLoginProperties(true, email, password, memberEmail)
+        AccountDevLoginProperties(true, email, password, memberEmail, companyEmail)
 
     fun account(
         id: Long = 1L,

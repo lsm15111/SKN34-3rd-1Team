@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { appContainer } from '../../../../app/appContainer'
 import { useAppDispatch, useAppSelector } from '../../../../app/hooks'
-import type { AccountRole } from '../../../../domain/entities/Account'
+import type { AccountTier } from '../../../../domain/entities/Account'
 import type { DevLogInUseCase } from '../../../../domain/usecases/DevLogInUseCase'
 import type { GetCurrentAccountUseCase } from '../../../../domain/usecases/GetCurrentAccountUseCase'
 import type { LogOutUseCase } from '../../../../domain/usecases/LogOutUseCase'
@@ -71,13 +71,13 @@ export function useAuthSession(
   }
 
   /** 개발 환경 전용입니다. 성공하면 시드 계정으로 로그인되고, 실패하면 이유를 짧게 알립니다. */
-  async function logInAsDeveloper(role: AccountRole): Promise<boolean> {
+  async function logInAsDeveloper(tier: AccountTier): Promise<boolean> {
     if (isDevLoggingIn) return false
 
     setIsDevLoggingIn(true)
     setDevLogInError(null)
     try {
-      const session = await devLogInUseCase.execute(role)
+      const session = await devLogInUseCase.execute(tier)
       dispatchToStore(signedIn(session.account))
       return true
     } catch {

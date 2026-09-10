@@ -1,5 +1,7 @@
 package ai.govbiz.core.account.controller
 
+import ai.govbiz.core.account.domain.CompanySummary
+import ai.govbiz.core.account.domain.AccountTier
 import ai.govbiz.core._common.exception.ApiExceptionHandler
 import ai.govbiz.core.account.domain.Account
 import ai.govbiz.core.account.domain.AccountRole
@@ -321,9 +323,12 @@ class AccountAuthControllerTest {
     @Test
     fun devLoginSetsTheAdminSessionCookieWithoutABodyAndTheMemberSessionWithARole() {
         doReturn(sessionResult(AccountTestHelper.account(email = "admin@govbiz.local", role = AccountRole.ADMIN, emailVerifiedAt = NOW), rememberMe = true))
-            .`when`(devLoginService).logInAs(AccountRole.ADMIN)
+            .`when`(devLoginService).logInAs(AccountTier.ADMIN)
         doReturn(sessionResult(AccountTestHelper.account(email = "member@govbiz.local", emailVerifiedAt = NOW), rememberMe = true))
-            .`when`(devLoginService).logInAs(AccountRole.USER)
+            .`when`(devLoginService).logInAs(AccountTier.MEMBER)
+        val seedCompany = CompanySummary(id = 21L, companyName = "그루브데이터 주식회사", businessNumber = "2208800042")
+        doReturn(sessionResult(AccountTestHelper.account(email = "company@govbiz.local", emailVerifiedAt = NOW, company = seedCompany), rememberMe = true))
+            .`when`(devLoginService).logInAs(AccountTier.COMPANY)
 
         mockMvc.perform(post(DEV_LOGIN_PATH))
             .andExpect(status().isOk())
@@ -338,6 +343,12 @@ class AccountAuthControllerTest {
             .andExpect(jsonPath("$.account.role").value("USER"))
             .andExpect(jsonPath("$.account.tier").value("MEMBER"))
             .andExpect(jsonPath("$.account.emailVerified").value(true))
+
+        mockMvc.perform(post(DEV_LOGIN_PATH).contentType(MediaType.APPLICATION_JSON).content("""{"tier":"COMPANY"}"""))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.account.email").value("company@govbiz.local"))
+            .andExpect(jsonPath("$.account.tier").value("COMPANY"))
+            .andExpect(jsonPath("$.account.company.companyName").value("그루브데이터 주식회사"))
     }
 
     private fun sessionCookie() = Cookie(SessionCookieHelper.COOKIE_NAME, "session-token")
