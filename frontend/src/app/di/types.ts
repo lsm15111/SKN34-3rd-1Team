@@ -4,6 +4,8 @@ import type { BrowseSupportProgramsUseCase } from '../../domain/usecases/BrowseS
 import type { CoreApiHealth } from '../../data/api/coreApiHealth'
 import type { SessionHintStorage } from '../../data/storage/sessionHintStorage'
 import type { AccountRepository } from '../../domain/repositories/AccountRepository'
+import type { HelpRepository } from '../../domain/repositories/HelpRepository'
+import type { AskHelpQuestionUseCase } from '../../domain/usecases/AskHelpQuestionUseCase'
 import type { ApplicationPreparationRepository } from '../../domain/repositories/ApplicationPreparationRepository'
 import type { ApplicationPreparationUseCase } from '../../domain/usecases/ApplicationPreparationUseCase'
 import type { CompanyRepository } from '../../domain/repositories/CompanyRepository'
@@ -108,6 +110,8 @@ export type AppCradle = {
   updateCompanyPartnerProfileUseCase: UpdateCompanyPartnerProfileUseCase
   interpretSupportProgramConversationUseCase: InterpretSupportProgramConversationUseCase
   askSupportProgramEvidenceQuestionUseCase: AskSupportProgramEvidenceQuestionUseCase
+  helpRepository: HelpRepository
+  askHelpQuestionUseCase: AskHelpQuestionUseCase
   devLogInUseCase: DevLogInUseCase
   startOAuthSignInUseCase: StartOAuthSignInUseCase
   completeOAuthSignInUseCase: CompleteOAuthSignInUseCase

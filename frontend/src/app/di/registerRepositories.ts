@@ -8,6 +8,7 @@ import { AccountRepositoryImpl } from '../../data/repositories/AccountRepository
 import { AdminAccountRepositoryImpl } from '../../data/repositories/AdminAccountRepositoryImpl'
 import { SavedSupportProgramRepositoryImpl } from '../../data/repositories/SavedSupportProgramRepositoryImpl'
 import { CompanyRepositoryImpl } from '../../data/repositories/CompanyRepositoryImpl'
+import { HelpRepositoryImpl } from '../../data/repositories/HelpRepositoryImpl'
 import { PartnerProposalRepositoryImpl } from '../../data/repositories/PartnerProposalRepositoryImpl'
 import { PartnerRecruitmentRepositoryImpl } from '../../data/repositories/PartnerRecruitmentRepositoryImpl'
 import { SampleItemRepositoryImpl } from '../../data/repositories/SampleItemRepositoryImpl'
@@ -25,6 +26,7 @@ export function registerRepositories(container: AppContainer) {
     adminAccountRepository: asClass(AdminAccountRepositoryImpl).singleton(),
     savedSupportProgramRepository: asClass(SavedSupportProgramRepositoryImpl).singleton(),
     companyRepository: asClass(CompanyRepositoryImpl).singleton(),
+    helpRepository: asClass(HelpRepositoryImpl).singleton(),
     partnerProposalRepository: asClass(PartnerProposalRepositoryImpl).singleton(),
     partnerRecruitmentRepository: asClass(PartnerRecruitmentRepositoryImpl).singleton(),
     sampleItemRepository: asClass(SampleItemRepositoryImpl).singleton(),

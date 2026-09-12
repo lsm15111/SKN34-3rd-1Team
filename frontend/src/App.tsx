@@ -12,6 +12,7 @@ import { useReviewSessionIsolation } from './presentation/features/combination-r
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router'
 
 import { AdminAccountDetailPage } from './presentation/features/admin/view/AdminAccountDetailPage'
+import { HelpLauncher } from './presentation/features/help/view/HelpLauncher'
 import { AdminAccountsPage } from './presentation/features/admin/view/AdminAccountsPage'
 import { ForgotPasswordPage } from './presentation/features/auth/view/ForgotPasswordPage'
 import { LoginPage } from './presentation/features/auth/view/LoginPage'
@@ -80,71 +81,74 @@ function App() {
   }, [authStatus, dispatchToStore, pathname])
 
   return (
-    <Routes>
-      <Route element={<PublicLayout />}>
-        <Route path={publicPaths.reportEmail} element={<DailyReportEmailPage />} />
-        <Route element={<PublicOnly />}>
-          <Route path={publicPaths.landing} element={<SupportProgramSearchPage />} />
-          <Route path={publicPaths.pricing} element={<PricingPage />} />
-          <Route path={publicPaths.partners} element={<PublicPartnerRecruitmentListPage />} />
-          <Route path={publicPaths.partnerDetail} element={<PublicPartnerRecruitmentDetailPage />} />
-          {/* 상세·원문 질문은 검색 화면의 헤더·검색 탭을 그대로 둔 채 그 아래에 띄웁니다. */}
-          <Route element={<GuestSearchDetailLayout />}>
-            <Route path={publicPaths.supportProgramDetail} element={<SupportProgramDetailPage />} />
-            <Route path={publicPaths.supportProgramQuestion} element={<SupportProgramEvidenceQuestionPage />} />
+    <>
+      <Routes>
+        <Route element={<PublicLayout />}>
+          <Route path={publicPaths.reportEmail} element={<DailyReportEmailPage />} />
+          <Route element={<PublicOnly />}>
+            <Route path={publicPaths.landing} element={<SupportProgramSearchPage />} />
+            <Route path={publicPaths.pricing} element={<PricingPage />} />
+            <Route path={publicPaths.partners} element={<PublicPartnerRecruitmentListPage />} />
+            <Route path={publicPaths.partnerDetail} element={<PublicPartnerRecruitmentDetailPage />} />
+            {/* 상세·원문 질문은 검색 화면의 헤더·검색 탭을 그대로 둔 채 그 아래에 띄웁니다. */}
+            <Route element={<GuestSearchDetailLayout />}>
+              <Route path={publicPaths.supportProgramDetail} element={<SupportProgramDetailPage />} />
+              <Route path={publicPaths.supportProgramQuestion} element={<SupportProgramEvidenceQuestionPage />} />
+            </Route>
+          </Route>
+          {/* 상태관리 비교 예제는 개발용 화면이라 로그인 여부와 무관하게 같은 헤더 아래에서 엽니다. */}
+          <Route path="/examples/sample-item/hook" element={<SampleItemPage />} />
+          <Route path="/examples/sample-item/redux" element={<ReduxSampleItemPage />} />
+        </Route>
+
+        {/* 소셜 로그인 완료 화면은 세션을 막 받은 순간이라 로그인 여부로 가르지 않고 스스로 복귀 경로로 옮깁니다. */}
+        <Route path={publicPaths.oauthComplete} element={<OAuthCompletePage />} />
+
+        <Route element={<GuestOnly />}>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/signup" element={<SignupPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+        </Route>
+
+        <Route element={<RequireAuth />}>
+          <Route element={<WorkspaceLayout />}>
+            <Route path={appPaths.reports} element={<DailyReportPage />} />
+            <Route path={appPaths.savedPrograms} element={<SavedSupportProgramsPage />} />
+            <Route path={appPaths.applicationPreparations} element={<ApplicationPreparationListPage />} />
+            <Route path={appPaths.applicationPreparationNew} element={<ApplicationPreparationEditorPage create />} />
+            <Route path={appPaths.applicationPreparationDetail} element={<ApplicationPreparationEditorPage />} />
+            <Route path={appPaths.combinationReviews} element={<CombinationReviewListPage />} />
+            <Route path={appPaths.combinationReviewNew} element={<CombinationReviewEditorPage create />} />
+            <Route path={appPaths.combinationReviewDetail} element={<CombinationReviewEditorPage />} />
+            <Route path={appPaths.chat} element={<SupportProgramSearchPage layout="workspace" />} />
+            <Route path={appPaths.pricing} element={<PricingPage layout="workspace" />} />
+            <Route path={appPaths.partners} element={<PartnerRecruitmentListPage />} />
+            <Route path={appPaths.partnerNew} element={<PartnerRecruitmentCreatePage />} />
+            <Route path={appPaths.partnerEdit} element={<PartnerRecruitmentEditPage />} />
+            <Route path={appPaths.myPartners} element={<MyPartnerRecruitmentsPage />} />
+            <Route path={appPaths.partnerDetail} element={<PartnerRecruitmentDetailPage />} />
+            <Route path={appPaths.proposals} element={<PartnerProposalBoxPage />} />
+            <Route path={appPaths.profile} element={<CompanyProfilePage />} />
+            <Route path={appPaths.supportProgramDetail} element={<SupportProgramDetailPage />} />
+            <Route path={appPaths.supportProgramQuestion} element={<SupportProgramEvidenceQuestionPage />} />
           </Route>
         </Route>
-        {/* 상태관리 비교 예제는 개발용 화면이라 로그인 여부와 무관하게 같은 헤더 아래에서 엽니다. */}
-        <Route path="/examples/sample-item/hook" element={<SampleItemPage />} />
-        <Route path="/examples/sample-item/redux" element={<ReduxSampleItemPage />} />
-      </Route>
 
-      {/* 소셜 로그인 완료 화면은 세션을 막 받은 순간이라 로그인 여부로 가르지 않고 스스로 복귀 경로로 옮깁니다. */}
-      <Route path={publicPaths.oauthComplete} element={<OAuthCompletePage />} />
-
-      <Route element={<GuestOnly />}>
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/signup" element={<SignupPage />} />
-        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-      </Route>
-
-      <Route element={<RequireAuth />}>
-        <Route element={<WorkspaceLayout />}>
-          <Route path={appPaths.reports} element={<DailyReportPage />} />
-          <Route path={appPaths.savedPrograms} element={<SavedSupportProgramsPage />} />
-          <Route path={appPaths.applicationPreparations} element={<ApplicationPreparationListPage />} />
-          <Route path={appPaths.applicationPreparationNew} element={<ApplicationPreparationEditorPage create />} />
-          <Route path={appPaths.applicationPreparationDetail} element={<ApplicationPreparationEditorPage />} />
-          <Route path={appPaths.combinationReviews} element={<CombinationReviewListPage />} />
-          <Route path={appPaths.combinationReviewNew} element={<CombinationReviewEditorPage create />} />
-          <Route path={appPaths.combinationReviewDetail} element={<CombinationReviewEditorPage />} />
-          <Route path={appPaths.chat} element={<SupportProgramSearchPage layout="workspace" />} />
-          <Route path={appPaths.pricing} element={<PricingPage layout="workspace" />} />
-          <Route path={appPaths.partners} element={<PartnerRecruitmentListPage />} />
-          <Route path={appPaths.partnerNew} element={<PartnerRecruitmentCreatePage />} />
-          <Route path={appPaths.partnerEdit} element={<PartnerRecruitmentEditPage />} />
-          <Route path={appPaths.myPartners} element={<MyPartnerRecruitmentsPage />} />
-          <Route path={appPaths.partnerDetail} element={<PartnerRecruitmentDetailPage />} />
-          <Route path={appPaths.proposals} element={<PartnerProposalBoxPage />} />
-          <Route path={appPaths.profile} element={<CompanyProfilePage />} />
-          <Route path={appPaths.supportProgramDetail} element={<SupportProgramDetailPage />} />
-          <Route path={appPaths.supportProgramQuestion} element={<SupportProgramEvidenceQuestionPage />} />
+        <Route element={<RequireAuth minimumTier="ADMIN" />}>
+          <Route element={<WorkspaceLayout />}>
+            <Route path={appPaths.adminAccounts} element={<AdminAccountsPage />} />
+            <Route path={appPaths.adminAccountDetail} element={<AdminAccountDetailPage />} />
+            {/* 예전 데모 화면 주소는 계정 관리로 보냅니다. */}
+            <Route path={`${appPaths.admin}/members`} element={<Navigate replace to={appPaths.adminAccounts} />} />
+          </Route>
         </Route>
-      </Route>
 
-      <Route element={<RequireAuth minimumTier="ADMIN" />}>
-        <Route element={<WorkspaceLayout />}>
-          <Route path={appPaths.adminAccounts} element={<AdminAccountsPage />} />
-          <Route path={appPaths.adminAccountDetail} element={<AdminAccountDetailPage />} />
-          {/* 예전 데모 화면 주소는 계정 관리로 보냅니다. */}
-          <Route path={`${appPaths.admin}/members`} element={<Navigate replace to={appPaths.adminAccounts} />} />
-        </Route>
-      </Route>
-
-      <Route path={APP_PREFIX} element={<Navigate replace to={appPaths.chat} />} />
-      <Route path="*" element={<Navigate replace to={publicPaths.landing} />} />
-    </Routes>
+        <Route path={APP_PREFIX} element={<Navigate replace to={appPaths.chat} />} />
+        <Route path="*" element={<Navigate replace to={publicPaths.landing} />} />
+      </Routes>
+      <HelpLauncher />
+    </>
   )
 }
 

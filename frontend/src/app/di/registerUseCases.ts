@@ -8,6 +8,7 @@ import { asFunction } from 'awilix/browser'
 import { BrowseSupportProgramsUseCase } from '../../domain/usecases/BrowseSupportProgramsUseCase'
 
 import { AskSupportProgramEvidenceQuestionUseCase } from '../../domain/usecases/AskSupportProgramEvidenceQuestionUseCase'
+import { AskHelpQuestionUseCase } from '../../domain/usecases/AskHelpQuestionUseCase'
 import {
   GetCompanyPartnerProfileUseCase,
   UpdateCompanyPartnerProfileUseCase,
@@ -85,6 +86,7 @@ export function registerUseCases(container: AppContainer) {
     askSupportProgramEvidenceQuestionUseCase: asFunction(
       createAskSupportProgramEvidenceQuestionUseCase,
     ).singleton(),
+    askHelpQuestionUseCase: asFunction(createAskHelpQuestionUseCase).singleton(),
     devLogInUseCase: asFunction(createDevLogInUseCase).singleton(),
     startOAuthSignInUseCase: asFunction(
       ({ accountRepository }: Pick<AppCradle, 'accountRepository'>) => new StartOAuthSignInUseCase(accountRepository),
@@ -196,6 +198,12 @@ function createAskSupportProgramEvidenceQuestionUseCase({
   supportProgramRepository,
 }: Pick<AppCradle, 'supportProgramRepository'>): AskSupportProgramEvidenceQuestionUseCase {
   return new AskSupportProgramEvidenceQuestionUseCase(supportProgramRepository)
+}
+
+function createAskHelpQuestionUseCase({
+  helpRepository,
+}: Pick<AppCradle, 'helpRepository'>): AskHelpQuestionUseCase {
+  return new AskHelpQuestionUseCase(helpRepository)
 }
 
 function createDevLogInUseCase({

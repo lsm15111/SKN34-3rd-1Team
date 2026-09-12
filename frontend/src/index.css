@@ -17,6 +17,18 @@
   --animate-search-intro-enter: search-intro-enter 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-search-intro-highlight: search-intro-highlight 3s ease-in-out 450ms both;
   --animate-search-intro-type: search-intro-type 1ms linear both;
+  --animate-help-panel-enter: help-panel-enter 200ms ease-out both;
+
+  @keyframes help-panel-enter {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 
   /* 자식 opacity는 부모의 gradient text를 숨기지 못하므로 글자 공간을 유지하는 visibility를 씁니다. */
   /* steps(1, end)는 긴 delay 뒤 소수점 오차로 hidden에 멈출 수 있어 짧은 linear 전환을 씁니다. */

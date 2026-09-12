@@ -8,6 +8,8 @@ from app.application_preparation.agent import ApplicationPreparationAgent
 from app.application_preparation.router import router as application_preparation_router
 
 from app.health.router import router as health_router
+from app.help_answer.agent import HelpAnswerAgent
+from app.help_answer.router import router as help_answer_router
 from app.support_program_evidence.agent import SupportProgramEvidenceAnswerAgent
 from app.support_program_evidence.router import router as support_program_evidence_router
 from app.support_program_ranking.agent import SupportProgramRecommendationAgent
@@ -26,6 +28,7 @@ def create_app(
     support_program_evidence_answer_agent: SupportProgramEvidenceAnswerAgent | None = None,
     support_program_conversation_agent: SupportProgramConversationAgent | None = None,
     application_preparation_agent: ApplicationPreparationAgent | None = None,
+    help_answer_agent: HelpAnswerAgent | None = None,
 ) -> FastAPI:
     """FastAPI 객체를 조립하는 애플리케이션 팩토리다."""
     container = build_application_container(
@@ -34,6 +37,7 @@ def create_app(
         support_program_evidence_answer_agent=support_program_evidence_answer_agent,
         support_program_conversation_agent=support_program_conversation_agent,
         application_preparation_agent=application_preparation_agent,
+        help_answer_agent=help_answer_agent,
     )
 
     @asynccontextmanager
@@ -66,4 +70,5 @@ def create_app(
     application.include_router(support_program_index_router)
     application.include_router(support_program_evidence_router)
     application.include_router(support_program_conversation_router)
+    application.include_router(help_answer_router)
     return application

@@ -68,6 +68,7 @@ PUT /internal/v1/support-program-evidence/chunks
 POST /internal/v1/support-program-evidence/search
 POST /internal/v1/support-program-evidence/answers
 POST /internal/v1/support-program-conversation/interpret
+POST /internal/v1/help/answers
 ```
 
 점수화 요청은 최대 20개 후보와 상위 결과 개수 1~5개를 받습니다. 응답 `rankings`는 적격 공고가
@@ -274,6 +275,26 @@ payload 불일치, 검증 실패는 `EVIDENCE_UNAVAILABLE`입니다. 부분 검�
 [추가 실제 검증](../../evaluation/support-program-evidence/runs/official-flow-20260907-v2/README.md)에서
 가상 6건·공식 6건의 답변을 대조했고, H01의 누락 보완을 관찰했습니다. 단회 AI-only 결과이며 일반적인
 정확도나 반복 실험으로 입증한 개선을 뜻하지 않습니다.
+
+## 도움말 답변
+
+제품 사용법 답변은 화면이 보낸 도움말 항목만 근거로 씁니다. 항목이 10~50건이라 전량이 컨텍스트에
+들어가므로 색인·검색 단계가 없고, 고정된 앞부분 덕분에 프롬프트 캐시가 걸립니다. 항목이 이 범위를
+넘어가면 그때 색인을 붙입니다.
+
+| 요청 | 입력 | 응답 |
+|---|---|---|
+| `POST /internal/v1/help/answers` | `question`: 앞뒤 공백 제거 후 1~500자, `entries: [{id, title, summary, body, limitation, status}]` 1~50개 | `{answer, answerStatus, citationEntryIds}` |
+
+`answerStatus`는 `ANSWERED`, `OUT_OF_SCOPE_PROGRAM`, `OUT_OF_SCOPE_GENERAL`, `NOT_IN_HELP`입니다.
+공고 내용과 지원사업 제도 일반은 근거가 없어 답하지 않고, 항목에 없는 내용도 비슷한 항목을 끌어다
+답하지 않습니다. 기권일 때 `answer`는 빈 문자열이며 화면이 상태별 문구를 가집니다. 모델이 기권하면서
+문장을 써도 Service가 지웁니다.
+
+인용은 상세 근거 RAG와 같은 방식으로 이번 요청 배열의 짧은 `index`만 고르게 하고 Agent가 항목 ID로
+되돌립니다. 모델에는 항목 ID를 주지 않습니다. `ANSWERED`는 본문과 인용이 모두 있어야 하고, 요청 밖
+항목을 가리키면 503으로 실패합니다. 준비 중(`status: preparing`) 항목을 인용하면 준비 중이라는 사실을
+답변에 함께 쓰도록 지시합니다.
 
 ## 평가 기준
 
