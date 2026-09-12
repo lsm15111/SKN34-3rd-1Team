@@ -43,14 +43,25 @@ export const helpAssistantStyles = {
   // 메뉴는 오른쪽으로 붙는 흰 알약 버튼입니다. 줄이 넘치면 오른쪽 정렬을 유지한 채 접힙니다.
   menu: 'flex flex-wrap justify-end gap-2',
   menuDock: 'mt-auto flex flex-wrap justify-end gap-2 pt-2',
+
+  // 도우미 안에서 보여 주는 요금제 소개입니다. 좁은 패널이라 카드를 세로로 쌓습니다.
+  planList: 'flex flex-col gap-2.5',
+  planCard: 'flex flex-col rounded-[1rem] border border-sample-border bg-white px-4 py-3.5',
+  planCardFeatured: 'border-brand-primary',
+  planTop: 'flex items-center justify-between gap-2',
+  planLabel: 'text-[0.65rem] font-extrabold tracking-[0.12em] text-sample-muted',
+  planStatus: 'rounded-full bg-app-canvas px-2.5 py-1 text-[0.68rem] font-bold text-sample-muted',
+  planStatusFeatured: 'bg-brand-accent text-brand-primary',
+  planName: 'mt-2 mb-0 text-[1.05rem] font-extrabold tracking-[-0.03em]',
+  planPrice: 'mt-1.5 mb-0 text-[1.35rem] font-extrabold leading-tight tracking-[-0.04em]',
+  planNote: 'mt-1 mb-0 text-[0.72rem] leading-relaxed text-sample-muted',
+  planFeatures: 'm-0 mt-3 flex list-none flex-col gap-1.5 border-t border-sample-border p-0 pt-3',
+  planFeature: 'flex items-start gap-2 text-[0.8rem] leading-[1.6] break-keep text-app-ink',
+  planFeatureMark: 'mt-px flex-none text-[0.75rem] font-bold text-brand-primary',
   menuButton:
     'inline-flex min-h-11 max-w-full cursor-pointer items-center gap-2 rounded-full border border-sample-border bg-white px-4 py-2.5 text-[0.85rem] leading-tight break-keep text-app-ink hover:border-brand-primary hover:text-brand-primary focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-primary',
   menuMark: 'flex-none text-[0.9rem]',
   menuLink:
     'inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-brand-primary bg-brand-primary px-4 py-2.5 text-[0.85rem] leading-tight font-medium break-keep text-white hover:bg-[#066538] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary',
 
-  footer: 'flex-none border-t border-sample-border px-5 py-3',
-  footerNote: 'm-0 text-[0.72rem] leading-relaxed text-[#98a0a6]',
-  restart:
-    'cursor-pointer rounded font-medium text-brand-primary underline underline-offset-2 hover:text-[#066538] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-primary',
 } as const

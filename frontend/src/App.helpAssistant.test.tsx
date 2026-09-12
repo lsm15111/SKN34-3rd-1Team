@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
 import { createAppStore } from './app/store'
-import { helpAssistantMenu } from './presentation/features/help-assistant/viewmodel/helpAssistantMenu'
+import { pricingPlans } from './presentation/features/pricing/viewmodel/pricingPlans'
 import { sessionRestored } from './presentation/shared/auth/state/authSlice'
 
 beforeEach(() => {
@@ -58,7 +58,7 @@ describe('도우미 버튼', () => {
 })
 
 describe('도우미 첫 화면', () => {
-  it('인사와 상담 운영 시간, 메뉴를 함께 보여 준다', () => {
+  it('인사와 상담 운영 시간, 요금제 확인 메뉴만 보여 준다', () => {
     const panel = openAssistant()
 
     expect(within(panel).getByText(/무엇을 도와드릴까요/)).toBeTruthy()
@@ -67,12 +67,21 @@ describe('도우미 첫 화면', () => {
     expect(within(panel).getByText(/GovBiz, /)).toBeTruthy()
 
     const menu = within(panel).getByRole('navigation', { name: '도우미 메뉴' })
-    for (const item of helpAssistantMenu) {
-      expect(within(menu).getByRole('button', { name: new RegExp(item.label) })).toBeTruthy()
+    expect(within(menu).getAllByRole('button')).toHaveLength(1)
+    expect(within(menu).getByRole('button', { name: /요금제 확인/ })).toBeTruthy()
+  })
+
+  it('안내 문구와 다른 메뉴는 두지 않는다', () => {
+    const panel = openAssistant()
+
+    expect(within(panel).queryByText(/자유 질문은 다음 단계/)).toBeNull()
+    expect(within(panel).queryByText(/메뉴를 골라 안내를 받으세요/)).toBeNull()
+    for (const removed of ['지원사업 찾기', '공고 원문에 질문하기', '관심 공고함 보기', '담당자 문의하기']) {
+      expect(within(panel).queryByRole('button', { name: new RegExp(removed) })).toBeNull()
     }
   })
 
-  it('열면 첫 메뉴에 포커스를 둔다', () => {
+  it('열면 메뉴에 포커스를 둔다', () => {
     const panel = openAssistant()
     const menu = within(panel).getByRole('navigation', { name: '도우미 메뉴' })
 
@@ -80,18 +89,40 @@ describe('도우미 첫 화면', () => {
   })
 })
 
-describe('메뉴 선택', () => {
-  it('고른 메뉴와 정해진 안내, 갈 곳을 이어서 보여 준다', () => {
+describe('요금제 확인', () => {
+  it('요금제 화면과 같은 이름·가격·기능을 보여 준다', () => {
     const panel = openAssistant()
-    const searchItem = helpAssistantMenu[0]
-
     const menu = within(panel).getByRole('navigation', { name: '도우미 메뉴' })
-    fireEvent.click(within(menu).getByRole('button', { name: new RegExp(searchItem.label) }))
+
+    fireEvent.click(within(menu).getByRole('button', { name: /요금제 확인/ }))
 
     const log = within(panel).getByRole('log')
-    expect(within(log).getByText(searchItem.label)).toBeTruthy()
-    expect(within(log).getByText(searchItem.reply)).toBeTruthy()
-    expect(within(log).getByRole('link', { name: searchItem.action!.label }).getAttribute('href')).toBe('/')
+    for (const plan of pricingPlans) {
+      const card = within(log).getByRole('article', { name: plan.name })
+      expect(within(card).getByText(plan.label)).toBeTruthy()
+      expect(within(card).getByText(plan.price)).toBeTruthy()
+      expect(within(card).getByText(plan.status)).toBeTruthy()
+      for (const feature of plan.features) expect(within(card).getByText(feature)).toBeTruthy()
+    }
+  })
+
+  it('요금제 화면으로 가는 링크를 함께 준다', () => {
+    const panel = openAssistant()
+    fireEvent.click(within(within(panel).getByRole('navigation', { name: '도우미 메뉴' }))
+      .getByRole('button', { name: /요금제 확인/ }))
+
+    expect(within(panel).getByRole('link', { name: '요금제 자세히 보기' }).getAttribute('href')).toBe('/pricing')
+  })
+
+  it('로그인 뒤에는 사이드바 안 요금제로 간다', () => {
+    renderApp('/app/chat')
+    fireEvent.click(screen.getByRole('button', { name: '도우미 열기' }))
+    const panel = screen.getByRole('dialog', { name: 'GovBiz 도우미' })
+
+    fireEvent.click(within(within(panel).getByRole('navigation', { name: '도우미 메뉴' }))
+      .getByRole('button', { name: /요금제 확인/ }))
+
+    expect(within(panel).getByRole('link', { name: '요금제 자세히 보기' }).getAttribute('href')).toBe('/app/pricing')
   })
 
   it('이 단계는 화면만 있으므로 메뉴를 눌러도 요청이 늘지 않는다', () => {
@@ -99,45 +130,8 @@ describe('메뉴 선택', () => {
     const menu = within(panel).getByRole('navigation', { name: '도우미 메뉴' })
     const before = vi.mocked(fetch).mock.calls.length
 
-    for (const item of helpAssistantMenu) {
-      fireEvent.click(within(menu).getByRole('button', { name: new RegExp(item.label) }))
-    }
+    fireEvent.click(within(menu).getByRole('button', { name: /요금제 확인/ }))
 
     expect(vi.mocked(fetch).mock.calls).toHaveLength(before)
-  })
-
-  it('로그인해야 여는 화면은 비로그인에서 로그인 뒤 돌아오게 한다', () => {
-    const panel = openAssistant()
-    const savedItem = helpAssistantMenu.find((item) => item.action?.requiresSignIn)!
-
-    fireEvent.click(within(within(panel).getByRole('navigation', { name: '도우미 메뉴' }))
-      .getByRole('button', { name: new RegExp(savedItem.label) }))
-
-    const link = within(panel).getByRole('link', { name: /관심 공고함 열기/ })
-    expect(link.getAttribute('href')).toBe(`/login?next=${encodeURIComponent(savedItem.action!.to)}`)
-  })
-
-  it('로그인 뒤에는 같은 메뉴가 작업 화면으로 바로 간다', () => {
-    renderApp('/app/chat')
-    fireEvent.click(screen.getByRole('button', { name: '도우미 열기' }))
-    const panel = screen.getByRole('dialog', { name: 'GovBiz 도우미' })
-    const savedItem = helpAssistantMenu.find((item) => item.action?.requiresSignIn)!
-
-    fireEvent.click(within(within(panel).getByRole('navigation', { name: '도우미 메뉴' }))
-      .getByRole('button', { name: new RegExp(savedItem.label) }))
-
-    expect(within(panel).getByRole('link', { name: savedItem.action!.label }).getAttribute('href'))
-      .toBe(savedItem.action!.to)
-  })
-
-  it('처음으로를 누르면 인사 화면으로 되돌린다', () => {
-    const panel = openAssistant()
-    fireEvent.click(within(within(panel).getByRole('navigation', { name: '도우미 메뉴' }))
-      .getByRole('button', { name: new RegExp(helpAssistantMenu[0].label) }))
-
-    fireEvent.click(within(panel).getByRole('button', { name: '처음으로' }))
-
-    expect(within(panel).queryByText(helpAssistantMenu[0].reply)).toBeNull()
-    expect(within(panel).getByText('상담 운영 시간')).toBeTruthy()
   })
 })

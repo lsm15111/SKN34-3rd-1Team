@@ -1,13 +1,8 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef } from 'react'
-import { Link } from 'react-router'
 
-import { publicPaths } from '../../../shared/routes/appPaths'
-import {
-  helpAssistantGreeting,
-  helpAssistantOfficeHours,
-  type HelpAssistantMenuItem,
-} from '../viewmodel/helpAssistantMenu'
+import { helpAssistantGreeting, helpAssistantOfficeHours } from '../viewmodel/helpAssistantMenu'
 import { useHelpAssistantViewModel } from '../viewmodel/useHelpAssistantViewModel'
+import { HelpAssistantPricing } from './HelpAssistantPricing'
 import { helpAssistantStyles as s } from './HelpAssistant.styles'
 
 const focusableSelector = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -18,13 +13,6 @@ function useOpenedAtLabel(): string {
     () => new Intl.DateTimeFormat('ko-KR', { timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date()),
     [],
   )
-}
-
-/** 로그인해야 열리는 화면은 로그인 뒤 돌아오도록 주소를 만듭니다. */
-function actionHref(action: NonNullable<HelpAssistantMenuItem['action']>, inApp: boolean): string {
-  if (inApp) return action.to
-  if (action.publicTo) return action.publicTo
-  return `${publicPaths.login}?next=${encodeURIComponent(action.to)}`
 }
 
 /**
@@ -40,7 +28,7 @@ export function HelpAssistantPanel({
   lifted: boolean
   onClose: () => void
 }) {
-  const { turns, menu, choose, restart } = useHelpAssistantViewModel()
+  const { turns, menu, choose } = useHelpAssistantViewModel()
   const panelRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const openedAt = useOpenedAtLabel()
@@ -101,12 +89,7 @@ export function HelpAssistantPanel({
                 <div className={s.bubble}>
                   <p className={s.bubbleParagraph}>{turn.item.reply}</p>
                 </div>
-                {turn.item.action && <div className={s.menu}>
-                  <Link className={s.menuLink} to={actionHref(turn.item.action, inApp)}>
-                    {turn.item.action.label}
-                    {!inApp && turn.item.action.requiresSignIn ? ' (로그인 필요)' : ''}
-                  </Link>
-                </div>}
+                {turn.item.id === 'pricing' && <HelpAssistantPricing inApp={inApp} />}
               </div>
             )
           }
@@ -144,13 +127,6 @@ export function HelpAssistantPanel({
             </button>
           ))}
         </nav>
-      </div>
-
-      <div className={s.footer}>
-        <p className={s.footerNote}>
-          메뉴를 골라 안내를 받으세요. 자유 질문은 다음 단계에서 붙입니다.
-          {turns.length > 1 && <> · <button className={s.restart} type="button" onClick={restart}>처음으로</button></>}
-        </p>
       </div>
     </div>
   )
