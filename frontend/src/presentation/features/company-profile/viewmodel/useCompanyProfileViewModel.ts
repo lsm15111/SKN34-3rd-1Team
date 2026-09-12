@@ -45,7 +45,6 @@ export const companyProfileMessages = {
   homepageTooLong: `홈페이지 주소는 ${companyProfileLimits.homepageMaxLength}자 이하로 입력해 주세요.`,
   homepagePreview: (url: string) => `${url} 로 저장됩니다.`,
   saveFailed: '저장하지 못했습니다. 잠시 후 다시 시도해 주세요.',
-  saved: '기업 정보를 저장했습니다.',
   registered: '기업을 등록했습니다. 이제 파트너 모집글을 작성할 수 있습니다.',
 } as const
 
@@ -266,7 +265,6 @@ export function useCompanyProfileViewModel(useCases: Partial<CompanyUseCases> = 
       setCompanyState({ status: 'registered', company })
       setForm(toFormValues(company))
       setIsEditing(false)
-      setNotice(companyProfileMessages.saved)
     } catch {
       if (isMounted.current) setFormErrors({ form: companyProfileMessages.saveFailed })
     } finally {

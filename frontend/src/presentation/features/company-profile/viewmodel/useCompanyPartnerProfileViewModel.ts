@@ -22,7 +22,6 @@ export const partnerProfileMessages = {
   capabilities: `보유 역량은 ${companyPartnerProfileLimits.capabilityMaxLength}자 이내로 ${companyPartnerProfileLimits.capabilityMaxCount}개까지 넣을 수 있습니다.`,
   loadFailed: '협업·파트너 설정을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
   saveFailed: '저장하지 못했습니다. 잠시 후 다시 시도해 주세요.',
-  saved: '협업·파트너 설정을 저장했습니다.',
 } as const
 
 type LoadState =
@@ -62,7 +61,8 @@ export function useCompanyPartnerProfileViewModel(hasCompany: boolean, useCases:
   const [capabilityDraft, setCapabilityDraft] = useState('')
   const [error, setError] = useState<{ field: CompanyPartnerProfileField | 'form'; message: string } | null>(null)
   const [isSaving, setIsSaving] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
+  // 기업 기본정보처럼 평소에는 저장된 값을 보여 주고 "수정"을 눌러야 폼이 열립니다.
+  const [isEditing, setIsEditing] = useState(false)
 
   useEffect(() => {
     isMounted.current = true
@@ -96,7 +96,6 @@ export function useCompanyPartnerProfileViewModel(hasCompany: boolean, useCases:
   function update(next: Partial<FormValues>) {
     setForm((current) => ({ ...current, ...next }))
     setError(null)
-    setNotice(null)
   }
 
   function toggleRole(role: PartnerRole) {
@@ -144,13 +143,12 @@ export function useCompanyPartnerProfileViewModel(hasCompany: boolean, useCases:
       return
     }
     setIsSaving(true)
-    setNotice(null)
     try {
       const result = await resolved.updatePartnerProfile.execute(form)
       if (!isMounted.current) return
       setLoadState({ status: 'ready', saved: result })
       setForm(toForm(result))
-      setNotice(partnerProfileMessages.saved)
+      setIsEditing(false)
     } catch {
       if (isMounted.current) setError({ field: 'form', message: partnerProfileMessages.saveFailed })
     } finally {
@@ -158,9 +156,26 @@ export function useCompanyPartnerProfileViewModel(hasCompany: boolean, useCases:
     }
   }
 
+  function startEditing() {
+    if (saved) setForm(toForm(saved))
+    setCapabilityDraft('')
+    setError(null)
+    setIsEditing(true)
+  }
+
+  function cancelEditing() {
+    if (saved) setForm(toForm(saved))
+    setCapabilityDraft('')
+    setError(null)
+    setIsEditing(false)
+  }
+
   return {
     hasCompany,
     loadStatus: loadState.status,
+    isEditing,
+    startEditing,
+    cancelEditing,
     loadFailedMessage: loadState.status === 'failed' ? partnerProfileMessages.loadFailed : null,
     /** 저장한 적이 있고 역할이 하나 이상이면 완성도 항목이 끝난 것입니다. */
     isSet: saved?.isSet ?? false,
@@ -178,10 +193,9 @@ export function useCompanyPartnerProfileViewModel(hasCompany: boolean, useCases:
     addCapabilityOnEnter,
     removeCapability: (capability: string) => update({ capabilities: form.capabilities.filter((item) => item !== capability) }),
     error,
-    notice,
     isDirty,
     isSaving,
     submit,
-    reset: () => { if (saved) { setForm(toForm(saved)); setCapabilityDraft(''); setError(null); setNotice(null) } },
+    reset: () => { if (saved) { setForm(toForm(saved)); setCapabilityDraft(''); setError(null) } },
   }
 }

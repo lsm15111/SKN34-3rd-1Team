@@ -8,6 +8,8 @@ export const companyProfileStyles = {
   summaryTop: 'flex items-center gap-4',
   // 카드 제목 옆에 ? 도움말을 붙이는 줄입니다.
   titleRow: 'flex items-center gap-2',
+  // 카드 머리 오른쪽에 상태 태그와 수정 버튼을 나란히 둡니다.
+  headerActions: 'flex shrink-0 items-center gap-2',
   summaryIdentity: 'flex items-center gap-4',
   summaryAvatar:
     'grid size-[3.25rem] shrink-0 place-items-center rounded-[0.9rem] bg-brand-accent text-[1.2rem] font-black text-app-ink',

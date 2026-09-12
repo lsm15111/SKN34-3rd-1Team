@@ -624,7 +624,8 @@ describe('기업 프로필 화면', () => {
     fireEvent.change(within(form).getByLabelText(/홈페이지/), { target: { value: ' https://example.co.kr ' } })
     fireEvent.click(within(form).getByRole('button', { name: '저장' }))
 
-    await screen.findByText('기업 정보를 저장했습니다.')
+    // 저장하면 수정 폼이 닫힙니다.
+    await waitFor(() => expect(screen.queryByRole('form', { name: '기업 기본정보 수정' })).toBeNull())
     expect(update).toHaveBeenCalledWith({
       region: '부산광역시', industry: '정보통신업', foundedYear: 2020, homepageUrl: 'https://example.co.kr',
     })
@@ -674,7 +675,8 @@ describe('기업 프로필 화면', () => {
     fireEvent.change(homepage, { target: { value: ' company.co.kr/about ' } })
     expect(within(form).getByText('https://company.co.kr/about 로 저장됩니다.')).toBeTruthy()
     fireEvent.click(within(form).getByRole('button', { name: '저장' }))
-    await screen.findByText('기업 정보를 저장했습니다.')
+    // 저장하면 수정 폼이 닫힙니다.
+    await waitFor(() => expect(screen.queryByRole('form', { name: '기업 기본정보 수정' })).toBeNull())
     expect(update).toHaveBeenCalledWith({
       region: '서울특별시', industry: '정보통신업', foundedYear: 2020, homepageUrl: 'https://company.co.kr/about',
     })
@@ -707,7 +709,11 @@ describe('기업 프로필 화면', () => {
     })
     renderApp('/app/profile')
     const settings = await screen.findByRole('region', { name: '협업·파트너 설정' })
-    const form = await within(settings).findByRole('form', { name: '협업·파트너 설정' })
+    // 기업 기본정보처럼 평소에는 값만 보이고 수정을 눌러야 폼이 열립니다.
+    expect(within(settings).getByText('미설정')).toBeTruthy()
+    expect(within(settings).queryByRole('form')).toBeNull()
+    fireEvent.click(await within(settings).findByRole('button', { name: '수정' }))
+    const form = within(settings).getByRole('form', { name: '협업·파트너 설정' })
 
     // 역할 없이 저장하면 칸 아래에 안내하고 보내지 않습니다.
     fireEvent.submit(form)
@@ -726,8 +732,12 @@ describe('기업 프로필 화면', () => {
     await waitFor(() => expect(update).toHaveBeenCalledWith({
       roles: ['LEAD'], interestAreas: ['기술'], introduction: ' AI 문서 분류 팀 ', capabilities: ['문서 분류 AI'],
     }))
-    expect(await within(form).findByText('협업·파트너 설정을 저장했습니다.')).toBeTruthy()
+    // 저장하면 폼이 닫히고 저장한 값이 보입니다.
+    await waitFor(() => expect(within(settings).queryByRole('form')).toBeNull())
     expect(within(settings).getByText('저장됨')).toBeTruthy()
+    expect(within(settings).getByText('주관기관')).toBeTruthy()
+    expect(within(settings).getByText('AI 문서 분류 팀')).toBeTruthy()
+    expect(within(settings).getByRole('button', { name: '수정' })).toBeTruthy()
     expect(screen.getByRole('progressbar', { name: '프로필 완성도' }).getAttribute('aria-valuenow')).toBe('100')
   })
 
