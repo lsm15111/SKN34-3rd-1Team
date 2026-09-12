@@ -71,8 +71,16 @@ describe('첫 화면', () => {
     const questions = within(suggestions).getAllByRole('button').map((button) => button.textContent)
     expect(questions).toHaveLength(3)
     for (const entry of helpEntriesForRoute(appPaths.chat)) {
-      expect(questions.some((question) => question?.startsWith(entry.question))).toBe(true)
+      expect(questions.some((question) => question?.includes(entry.question))).toBe(true)
     }
+  })
+
+  it('대화가 시작돼도 무엇을 답하는 곳인지는 머리에 남는다', () => {
+    const panel = openPanel(appPaths.chat)
+    fireEvent.click(within(panel).getByRole('button', { name: /점수는 무슨 뜻인가요/ }))
+
+    expect(within(panel).getByText('화면 사용법을 안내합니다.')).toBeTruthy()
+    expect(within(panel).queryByRole('region', { name: '이 화면에서 자주 묻는 질문' })).toBeNull()
   })
 
   it('열면 입력에 포커스를 둔다', () => {
@@ -82,14 +90,14 @@ describe('첫 화면', () => {
 })
 
 describe('항목 답변', () => {
-  it('추천 질문을 누르면 결론·근거·갈 곳을 보여 준다', () => {
+  it('추천 질문을 누르면 결론·출처·갈 곳을 보여 준다', () => {
     const panel = openPanel(appPaths.chat)
     fireEvent.click(within(panel).getByRole('button', { name: /점수는 무슨 뜻인가요/ }))
 
     const log = within(panel).getByRole('log')
     expect(within(log).getByText('점수는 무슨 뜻인가요?')).toBeTruthy()
     expect(within(log).getByText(/점수는 검색어와 공고의 관련도입니다/)).toBeTruthy()
-    expect(within(log).getByRole('button', { name: /점수는 무엇을 뜻하나요/ })).toBeTruthy()
+    expect(within(log).getByText('도움말 항목 · 2026-09-12 갱신')).toBeTruthy()
     expect(within(log).getByRole('link', { name: '검색 화면 열기' })).toBeTruthy()
   })
 
@@ -97,15 +105,6 @@ describe('항목 답변', () => {
     const panel = openPanel(appPaths.chat)
     fireEvent.click(within(panel).getByRole('button', { name: /점수는 무슨 뜻인가요/ }))
     expect(within(panel).queryByText(/AI 생성/)).toBeNull()
-  })
-
-  it('근거 항목을 누르면 요약과 갱신일을 먼저 보여 준다', () => {
-    const panel = openPanel(appPaths.chat)
-    fireEvent.click(within(panel).getByRole('button', { name: /점수는 무슨 뜻인가요/ }))
-    fireEvent.click(within(panel).getByRole('button', { name: /점수는 무엇을 뜻하나요/ }))
-
-    const note = within(panel).getByRole('note')
-    expect(within(note).getByText('2026-09-12')).toBeTruthy()
   })
 
   it('이어서 물어보기로 다음 항목을 묻는다', () => {
@@ -181,8 +180,23 @@ describe('자유 질문 답변', () => {
     askFreeQuestion(panel, '모집글은 누가 쓸 수 있나요?')
 
     expect(await within(panel).findByText(/기업 정보를 등록한 계정만/)).toBeTruthy()
-    expect(within(panel).getByText('◈ AI 생성')).toBeTruthy()
+    expect(within(panel).getByText('AI 생성 · 도움말 1항목 근거')).toBeTruthy()
     expect(within(panel).getByRole('button', { name: /파트너 모집글은 기업 정보를 등록해야 씁니다/ })).toBeTruthy()
+  })
+
+  it('인용을 누르면 대화를 떠나지 않고 요약과 갱신일을 펼친다', async () => {
+    stubAnswer({
+      answer: '모집글은 기업 정보를 등록한 계정만 쓸 수 있습니다.',
+      answerStatus: 'ANSWERED',
+      citationEntryIds: ['recruitment-company-only'],
+    })
+    const panel = openPanel(appPaths.chat)
+
+    askFreeQuestion(panel, '모집글은 누가 쓸 수 있나요?')
+    fireEvent.click(await within(panel).findByRole('button', { name: /파트너 모집글은 기업 정보를 등록해야 씁니다/ }))
+
+    const note = within(panel).getByRole('note')
+    expect(within(note).getByText('2026-09-12 갱신')).toBeTruthy()
   })
 
   it('공고 내용을 물으면 원문 질문으로 안내한다', async () => {
@@ -213,7 +227,7 @@ describe('자유 질문 답변', () => {
     fireEvent.click(await within(panel).findByRole('button', { name: '이 공고에 질문하기' }))
 
     expect(await within(panel).findByText('중소기업이 신청할 수 있습니다.')).toBeTruthy()
-    expect(within(panel).getByText('◈ AI 생성 · 공고 원문 근거')).toBeTruthy()
+    expect(within(panel).getByText('AI 생성 · 공고 원문 1곳 근거')).toBeTruthy()
     expect(within(panel).getByRole('link', { name: /근거 1 원문 보기/ })).toBeTruthy()
   })
 

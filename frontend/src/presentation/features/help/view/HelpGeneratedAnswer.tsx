@@ -16,7 +16,10 @@ const abstentionNotices: Record<HelpAbstention, string> = {
   NOT_IN_HELP: '그 내용은 아직 안내에 없습니다.',
 }
 
-/** 답변이 AI가 만든 문장일 때만 생성 표시를 붙입니다. 항목을 그대로 보여 준 답변에는 붙이지 않습니다. */
+/**
+ * 모델이 만든 답변입니다. 생성 표시와 근거 수를 본문 아래 한 줄로 붙이고 인용에 같은 번호를 답니다.
+ * 표시를 본문 위 배지로 올리면 답변보다 먼저 읽혀 정작 내용을 가립니다.
+ */
 export function HelpGeneratedAnswer({
   text,
   citations,
@@ -26,10 +29,13 @@ export function HelpGeneratedAnswer({
 }) {
   return (
     <div className={s.answer}>
-      <span className={s.answerFlag}>◈ AI 생성</span>
       <p className={s.answerParagraph}>{text}</p>
+      <p className={s.meta}>
+        <span className={s.metaMark}>◈</span>
+        {citations.length > 0 ? `AI 생성 · 도움말 ${citations.length}항목 근거` : 'AI 생성'}
+      </p>
       {citations.length > 0 && <div className={s.citations}>
-        {citations.map((entry) => <HelpCitationChip entry={entry} key={entry.id} />)}
+        {citations.map((entry, index) => <HelpCitationChip entry={entry} key={entry.id} order={index + 1} />)}
       </div>}
     </div>
   )
@@ -62,7 +68,7 @@ export function HelpAbstentionCard({
       {status === 'OUT_OF_SCOPE_GENERAL' && identity && <div className={s.actions}>
         <Link className={s.actionSoft} to={supportProgramDetailPath(identity, inApp)}>공고 원문 열기</Link>
       </div>}
-      {children}
+      {children && <div className={s.relatedBlock}>{children}</div>}
     </div>
   )
 }
@@ -81,16 +87,19 @@ export function HelpFailureCard({ onRetry }: { onRetry: () => void }) {
 }
 
 /**
- * 같은 패널에서 이어서 답한 공고 원문 근거 답변입니다. 근거의 출처가 도움말이 아니라 공고 원문임을
- * 배지로 밝히고, 인용은 원문 링크로 직접 확인할 수 있게 둡니다.
+ * 같은 패널에서 이어서 답한 공고 원문 근거 답변입니다. 근거가 도움말이 아니라 공고 원문임을 메타 줄에
+ * 밝히고, 인용은 원문 링크로 직접 확인할 수 있게 둡니다.
  */
 export function HelpProgramAnswer({ answer }: { answer: SupportProgramEvidenceAnswer }) {
   return (
     <div className={s.answer}>
-      <span className={s.answerFlag}>◈ AI 생성 · 공고 원문 근거</span>
       <p className={s.answerParagraph}>{answer.answer}</p>
+      <p className={s.meta}>
+        <span className={s.metaMark}>◈</span>
+        {`AI 생성 · 공고 원문 ${answer.citations.length}곳 근거`}
+      </p>
       {answer.citations.length > 0 && <div className={s.citations}>
-        {answer.citations.map((citation) => (
+        {answer.citations.map((citation, index) => (
           <a
             className={s.citation}
             href={citation.sourceUrl}
@@ -98,8 +107,8 @@ export function HelpProgramAnswer({ answer }: { answer: SupportProgramEvidenceAn
             rel="noreferrer"
             target="_blank"
           >
-            <i aria-hidden="true" className={s.citationMark}>◈</i>
-            근거 {citation.chunkOrder + 1} 원문 보기 ↗
+            <span aria-hidden="true" className={s.citationNumber}>{index + 1}</span>
+            근거 {index + 1} 원문 보기 ↗
           </a>
         ))}
       </div>}

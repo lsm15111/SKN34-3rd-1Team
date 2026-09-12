@@ -118,21 +118,21 @@ export function HelpPanel({
       role="dialog"
       onKeyDown={handlePanelKeyDown}
     >
+      {/* 무엇을 답하는 곳인지는 대화가 길어져도 사라지면 안 되므로 머리에 둡니다. */}
       <header className={s.header}>
-        <h2 className={s.headerTitle}><span aria-hidden="true" className={s.headerDot} />GovBiz 도움말</h2>
+        <span className={s.headerText}>
+          <h2 className={s.headerTitle}><span aria-hidden="true" className={s.headerDot} />GovBiz 도움말</h2>
+          <span className={s.headerScope}>화면 사용법을 안내합니다.</span>
+        </span>
         <button aria-label="도움말 닫기" className={s.headerClose} type="button" onClick={onClose}>✕</button>
       </header>
 
       <div className={s.body} ref={bodyRef} onScroll={handleScroll}>
         {hasUnseenAnswer && <button className={s.latestToast} type="button" onClick={scrollToLatest}>↓ 최신 답변 보기</button>}
-        {messages.length === 0 && <>
-          <p className={s.scope}>
-            <b className={s.scopeStrong}>화면 사용법을 안내합니다.</b><br />
-            공고 내용은 답하지 않고 원문 질문으로 안내합니다.
-          </p>
-          <HelpSuggestionList entries={suggestions} label="이 화면에서 자주 묻는 질문" onSelect={ask} />
-        </>}
-        <div aria-live="polite" className="flex flex-col gap-2.5 empty:hidden" role="log">
+        {messages.length === 0 && <p className={s.emptyNote}>
+          공고 내용은 답하지 않고 원문 질문으로 안내합니다.
+        </p>}
+        <div aria-live="polite" className={s.log} role="log">
           {messages.map((message, index) => {
             switch (message.role) {
               case 'question':
@@ -177,6 +177,15 @@ export function HelpPanel({
           })}
         </div>
       </div>
+
+      {/* 추천 질문은 눈과 손이 머무는 입력창 바로 위에 둡니다. */}
+      {messages.length === 0 && <div className={s.suggestionDock}>
+        <HelpSuggestionList entries={suggestions} label="이 화면에서 자주 묻는 질문" onSelect={ask} />
+        <p className={s.shortcutHint}>
+          <kbd className={s.shortcutKey}>Esc</kbd> 닫기 · <kbd className={s.shortcutKey}>Ctrl</kbd>
+          <kbd className={s.shortcutKey}>/</kbd> 열고 닫기
+        </p>
+      </div>}
 
       <div className={s.footer}>
         <div className={s.composer}>
