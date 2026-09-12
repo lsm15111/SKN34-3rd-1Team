@@ -1,17 +1,17 @@
 import { Link } from 'react-router'
 
-import { pricingPlans } from '../../pricing/viewmodel/pricingPlans'
+import type { PricingPlan } from '../../../shared/pricing/pricingPlans'
 import { appPaths, publicPaths } from '../../../shared/routes/appPaths'
 import { helpAssistantStyles as s } from './HelpAssistant.styles'
 
 /**
- * 도우미 안에서 보여 주는 요금제 소개입니다. 요금제 화면과 같은 `pricingPlans`를 읽으므로
- * 두 곳의 이름·가격·기능이 어긋나지 않습니다. 좁은 패널이라 카드를 세로로 쌓습니다.
+ * 도우미 안에서 보여 주는 요금제 소개입니다. 요금제 목록은 ViewModel이 넘겨주므로 이 화면은 그리기만 합니다.
+ * 좁은 패널이라 카드를 세로로 쌓습니다.
  */
-export function HelpAssistantPricing({ inApp }: { inApp: boolean }) {
+export function HelpAssistantPricing({ plans, inApp }: { plans: readonly PricingPlan[]; inApp: boolean }) {
   return (
     <div className={s.planList}>
-      {pricingPlans.map((plan) => (
+      {plans.map((plan) => (
         <article
           className={plan.isFeatured ? `${s.planCard} ${s.planCardFeatured}` : s.planCard}
           aria-labelledby={`assistant-plan-${plan.id}`}

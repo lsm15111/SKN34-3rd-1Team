@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
 import { createAppStore } from './app/store'
-import { pricingPlans } from './presentation/features/pricing/viewmodel/pricingPlans'
+import { pricingPlans } from './presentation/shared/pricing/pricingPlans'
 import { sessionRestored } from './presentation/shared/auth/state/authSlice'
 
 beforeEach(() => {
@@ -58,12 +58,10 @@ describe('도우미 버튼', () => {
 })
 
 describe('도우미 첫 화면', () => {
-  it('인사와 상담 운영 시간, 요금제 확인 메뉴만 보여 준다', () => {
+  it('인사와 요금제 확인 메뉴만 보여 준다', () => {
     const panel = openAssistant()
 
     expect(within(panel).getByText(/무엇을 도와드릴까요/)).toBeTruthy()
-    expect(within(panel).getByText('상담 운영 시간')).toBeTruthy()
-    expect(within(panel).getByText('월-금 09:30~18:30')).toBeTruthy()
     expect(within(panel).getByText(/GovBiz, /)).toBeTruthy()
 
     const menu = within(panel).getByRole('navigation', { name: '도우미 메뉴' })
@@ -76,6 +74,7 @@ describe('도우미 첫 화면', () => {
 
     expect(within(panel).queryByText(/자유 질문은 다음 단계/)).toBeNull()
     expect(within(panel).queryByText(/메뉴를 골라 안내를 받으세요/)).toBeNull()
+    expect(within(panel).queryByText(/상담 운영 시간/)).toBeNull()
     for (const removed of ['지원사업 찾기', '공고 원문에 질문하기', '관심 공고함 보기', '담당자 문의하기']) {
       expect(within(panel).queryByRole('button', { name: new RegExp(removed) })).toBeNull()
     }

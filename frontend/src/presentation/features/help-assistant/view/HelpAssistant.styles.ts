@@ -29,9 +29,6 @@ export const helpAssistantStyles = {
   bubble:
     'max-w-[86%] rounded-[0.3rem_1.1rem_1.1rem_1.1rem] bg-app-canvas px-4 py-3.5 text-[0.875rem] leading-[1.72] break-keep [overflow-wrap:anywhere]',
   bubbleParagraph: 'm-0 mb-2 last:mb-0',
-  bubbleDivider: 'my-3 h-px bg-sample-border',
-  bubbleSectionTitle: 'm-0 mb-1 flex items-center gap-1.5 text-[0.85rem] font-bold',
-  bubbleList: 'm-0 flex list-disc flex-col gap-0.5 pl-5 text-[0.85rem] leading-[1.7] text-sample-muted',
   sender: 'flex items-center gap-1.5 pl-1 text-[0.72rem] text-sample-muted',
   senderMark:
     'grid size-4 place-items-center rounded-full bg-brand-accent text-[0.5rem] font-bold text-brand-primary',

@@ -16,8 +16,6 @@ export const helpAssistantGreeting = [
   '무엇을 도와드릴까요?',
 ] as const
 
-export const helpAssistantOfficeHours = ['월-금 09:30~18:30', '점심 12:00~13:00 · 주말·공휴일 휴무'] as const
-
 export const helpAssistantMenu: readonly HelpAssistantMenuItem[] = [
   {
     id: 'pricing',

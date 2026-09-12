@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 
 import { appPaths, publicPaths } from '../../../shared/routes/appPaths'
 
-import { pricingPlans as plans } from '../viewmodel/pricingPlans'
+import { pricingPlans as plans } from '../../../shared/pricing/pricingPlans'
 import { pricingPageStyles } from './PricingPage.styles'
 
 const searchSteps = [

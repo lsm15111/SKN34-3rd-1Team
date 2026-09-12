@@ -1,6 +1,6 @@
 import { type KeyboardEvent, useEffect, useMemo, useRef } from 'react'
 
-import { helpAssistantGreeting, helpAssistantOfficeHours } from '../viewmodel/helpAssistantMenu'
+import { helpAssistantGreeting } from '../viewmodel/helpAssistantMenu'
 import { useHelpAssistantViewModel } from '../viewmodel/useHelpAssistantViewModel'
 import { HelpAssistantPricing } from './HelpAssistantPricing'
 import { helpAssistantStyles as s } from './HelpAssistant.styles'
@@ -28,7 +28,7 @@ export function HelpAssistantPanel({
   lifted: boolean
   onClose: () => void
 }) {
-  const { turns, menu, choose } = useHelpAssistantViewModel()
+  const { turns, menu, plans, choose } = useHelpAssistantViewModel()
   const panelRef = useRef<HTMLDivElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const openedAt = useOpenedAtLabel()
@@ -89,7 +89,7 @@ export function HelpAssistantPanel({
                 <div className={s.bubble}>
                   <p className={s.bubbleParagraph}>{turn.item.reply}</p>
                 </div>
-                {turn.item.id === 'pricing' && <HelpAssistantPricing inApp={inApp} />}
+                {turn.item.id === 'pricing' && <HelpAssistantPricing inApp={inApp} plans={plans} />}
               </div>
             )
           }
@@ -98,11 +98,6 @@ export function HelpAssistantPanel({
             <div className={s.botTurn} key={turn.id}>
               <div className={s.bubble}>
                 {helpAssistantGreeting.map((line) => <p className={s.bubbleParagraph} key={line}>{line}</p>)}
-                <div aria-hidden="true" className={s.bubbleDivider} />
-                <p className={s.bubbleSectionTitle}><span aria-hidden="true">⏰</span>상담 운영 시간</p>
-                <ul className={s.bubbleList}>
-                  {helpAssistantOfficeHours.map((line) => <li key={line}>{line}</li>)}
-                </ul>
               </div>
               <p className={s.sender}>
                 <span aria-hidden="true" className={s.senderMark}>G</span>

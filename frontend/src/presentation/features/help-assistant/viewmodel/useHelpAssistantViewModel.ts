@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 
+import { pricingPlans } from '../../../shared/pricing/pricingPlans'
 import { helpAssistantMenu, type HelpAssistantMenuItem } from './helpAssistantMenu'
 
 export type HelpAssistantTurn =
@@ -28,5 +29,5 @@ export function useHelpAssistantViewModel() {
     setTurns([{ id: 0, role: 'greeting' }])
   }, [])
 
-  return { turns, menu: helpAssistantMenu, choose, restart }
+  return { turns, menu: helpAssistantMenu, plans: pricingPlans, choose, restart }
 }
