@@ -106,7 +106,7 @@ class HelpAnswerControllerTest {
     private companion object {
         const val ENTRY = """{"id":"relevance-score-meaning","title":"점수는 무엇을 뜻하나요",""" +
             """"summary":"점수는 검색어와 공고의 관련도입니다.","body":["검색 문장과 공고 내용이 얼마나 가까운지를 나타냅니다."],""" +
-            """"limitation":"다른 검색의 점수와 비교할 수 없습니다.","status":"available"}"""
+            """"limitation":"다른 검색의 점수와 비교할 수 없습니다."}"""
     }
 }
 

@@ -299,7 +299,7 @@ function ApplicationPreparationEditor({ id, initialSourceCode, initialSourceProg
                       <p className={s.muted}>{program.applicationPeriod}</p>
                     </div>
                     <button className={s.button} disabled={!supported || selected || vm.discovering || vm.submitting} type="button" onClick={() => vm.selectProgram(program)}>
-                      {!supported ? '문서 지원 준비 중' : selected ? '선택됨' : '선택'}
+                      {!supported ? '문서 지원 없음' : selected ? '선택됨' : '선택'}
                     </button>
                   </div>
                 </li>

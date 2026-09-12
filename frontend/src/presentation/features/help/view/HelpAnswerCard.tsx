@@ -22,7 +22,6 @@ export function HelpAnswerCard({
 
   return (
     <div className={s.answer}>
-      {entry.status === 'preparing' && <span className={s.answerPreparing}>준비 중</span>}
       <p className={s.answerLead}>{entry.summary}</p>
       {entry.body.map((paragraph) => <p className={s.answerParagraph} key={paragraph}>{paragraph}</p>)}
       <p className={s.answerLimitation}>{entry.limitation}</p>

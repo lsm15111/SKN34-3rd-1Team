@@ -120,11 +120,7 @@ export function PartnerRecruitmentDetailPage() {
                 <Link className={workspacePageStyles.secondaryButton} to={editPath}>수정</Link>
                 <button className={workspacePageStyles.dangerButton} type="button" onClick={openCloseConfirm}>마감</button>
               </>
-            ) : recruitment.isMine ? null : (
-              <button className={workspacePageStyles.secondaryButton} type="button" disabled>
-                모집글 저장 · 준비 중
-              </button>
-            )}
+            ) : null}
             <button
             className={workspacePageStyles.secondaryButton}
             type="button"
@@ -174,10 +170,6 @@ export function PartnerRecruitmentDetailPage() {
                       {companySummaryLine(recruitment.company)}
                     </span>
                   </span>
-                </span>
-                {/* 다른 기업의 프로필 화면은 아직 없으므로 링크로 만들지 않습니다. */}
-                <span className={workspacePageStyles.pendingLink} aria-disabled="true">
-                  기업 프로필 보기 · 준비 중
                 </span>
               </div>
 
@@ -261,9 +253,6 @@ export function PartnerRecruitmentDetailPage() {
                 >
                   공식 원문 보기
                 </a>
-                <button className={partnerRecruitmentStyles.pillLink} type="button" disabled>
-                  관심 공고에 추가 · 준비 중
-                </button>
               </div>
             </section>
 
@@ -274,15 +263,6 @@ export function PartnerRecruitmentDetailPage() {
                   {paragraph}
                 </p>
               ))}
-
-              <div className={partnerRecruitmentStyles.linkRow}>
-                <button className={workspacePageStyles.mutedLink} type="button" disabled>
-                  이 모집글 숨기기 · 준비 중
-                </button>
-                <button className={workspacePageStyles.dangerLink} type="button" disabled>
-                  신고 · 준비 중
-                </button>
-              </div>
             </section>
           </div>
 

@@ -1,6 +1,6 @@
 import re
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -19,7 +19,6 @@ class HelpEntryInput(BaseModel):
     summary: str = Field(min_length=1, max_length=400)
     body: list[Annotated[str, Field(min_length=1, max_length=1_000)]] = Field(min_length=1, max_length=8)
     limitation: str = Field(min_length=1, max_length=400)
-    status: Literal["available", "preparing"]
 
     @field_validator("id")
     @classmethod

@@ -276,7 +276,7 @@ describe('application preparation creation and detail', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '공고 검색' }))
     const results = await screen.findByRole('list', { name: '신청 문서 공고 검색 결과' })
-    expect((within(results).getByRole('button', { name: '문서 지원 준비 중' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((within(results).getByRole('button', { name: '문서 지원 없음' }) as HTMLButtonElement).disabled).toBe(true)
     fireEvent.click(within(results).getAllByRole('button', { name: '선택' })[0]!)
     fireEvent.click(screen.getByRole('button', { name: '신청 문서 찾기' }))
 

@@ -28,7 +28,6 @@ class HelpAnswerService(
                         summary = entry.summary,
                         body = entry.body,
                         limitation = entry.limitation,
-                        status = entry.status,
                     )
                 },
             ),

@@ -18,5 +18,4 @@ export type HelpAnswerSource = {
   summary: string
   body: string[]
   limitation: string
-  status: 'available' | 'preparing'
 }

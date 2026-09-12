@@ -6,7 +6,6 @@ data class AiHelpEntryRequest(
     val summary: String,
     val body: List<String>,
     val limitation: String,
-    val status: String,
 )
 
 data class AiHelpAnswerRequest(

@@ -1317,7 +1317,7 @@ describe('파트너 모집 화면', () => {
 
   it('남의 글이나 마감된 내 글은 수정 화면 대신 안내를 보여 준다', async () => {
     renderApp('/app/partners/detail?recruitmentId=101')
-    expect(await screen.findByRole('button', { name: '모집글 저장 · 준비 중' })).toBeTruthy()
+    expect(await screen.findByRole('heading', { name: partnerRecruitmentDetail.title })).toBeTruthy()
     expect(screen.queryByRole('link', { name: '수정' })).toBeNull()
     expect(screen.queryByRole('button', { name: '마감' })).toBeNull()
 
@@ -1345,11 +1345,11 @@ describe('파트너 모집 화면', () => {
     expect(screen.getAllByText('모집 마감').length).toBeGreaterThan(0)
   })
 
-  it('아직 화면이 없는 기업 프로필 보기는 링크로 만들지 않는다', async () => {
+  it('아직 화면이 없는 기업 프로필은 링크도 자리도 두지 않는다', async () => {
     renderApp('/app/partners/detail?recruitmentId=101')
 
-    expect(await screen.findByText('기업 프로필 보기 · 준비 중')).toBeTruthy()
-    expect(screen.queryByRole('link', { name: /기업 프로필 보기/ })).toBeNull()
+    expect(await screen.findByRole('heading', { name: partnerRecruitmentDetail.title })).toBeTruthy()
+    expect(screen.queryByText(/기업 프로필 보기/)).toBeNull()
   })
 })
 

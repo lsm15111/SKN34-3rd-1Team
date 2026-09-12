@@ -38,6 +38,4 @@ data class HelpEntryRequest(
     @field:NotBlank
     @field:Size(max = 400)
     val limitation: String,
-    @field:Pattern(regexp = "available|preparing")
-    val status: String,
 )

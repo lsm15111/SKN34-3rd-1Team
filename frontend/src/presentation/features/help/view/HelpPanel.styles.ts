@@ -46,8 +46,6 @@ export const helpPanelStyles = {
   answerLead: 'm-0 mb-2 font-semibold last:mb-0',
   answerParagraph: 'm-0 mb-2 last:mb-0',
   answerLimitation: 'm-0 mb-2 text-sample-muted last:mb-0',
-  answerPreparing:
-    'mb-2 inline-flex w-fit items-center rounded bg-[#fffaf3] px-1.5 py-px text-[0.625rem] font-medium text-[#9a5b1d]',
 
   // 답변이 무엇으로 만들어졌는지 밑줄처럼 붙는 한 줄. 배지를 본문 위에 올리지 않습니다.
   meta: 'mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[0.655rem] text-[#98a0a6]',

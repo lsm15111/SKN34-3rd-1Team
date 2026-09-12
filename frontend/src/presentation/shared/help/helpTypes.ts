@@ -3,11 +3,8 @@
  * 표면마다 따로 문구를 두면 서로 어긋나고, 어긋난 도움말은 없는 것보다 나쁩니다.
  */
 
-/** `blocker`는 사용자가 실제로 막히는 지점, `concept`은 화면 표시의 뜻, `feature-status`는 아직 없는 기능입니다. */
-export type HelpCategory = 'blocker' | 'concept' | 'feature-status'
-
-/** 지금 동작하는 기능인지 준비 중인지 구분합니다. 준비 중을 정식처럼 안내하는 것이 가장 큰 사고입니다. */
-export type HelpStatus = 'available' | 'preparing'
+/** `blocker`는 사용자가 실제로 막히는 지점, `concept`은 화면 표시나 기능의 뜻입니다. */
+export type HelpCategory = 'blocker' | 'concept'
 
 /** 답변이 끝나고 갈 곳입니다. `to`는 항상 `/app` 경로이며 공개 화면 변환은 `helpActionHref()`가 맡습니다. */
 export type HelpAction = {
@@ -28,7 +25,6 @@ export type HelpEntry = {
   body: string[]
   /** 지금 안 되는 것입니다. 빼먹을 수 없도록 필수 필드로 둡니다. */
   limitation: string
-  status: HelpStatus
   category: HelpCategory
   /** 이 항목을 추천할 화면입니다. `:id` 같은 경로 변수는 한 칸을 통째로 대신합니다. 비면 전역 항목입니다. */
   routes: string[]

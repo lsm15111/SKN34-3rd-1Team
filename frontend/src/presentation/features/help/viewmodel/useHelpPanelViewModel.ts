@@ -19,7 +19,6 @@ const helpAnswerSources: HelpAnswerSource[] = helpEntries.map((entry) => ({
   summary: entry.summary,
   body: [...entry.body],
   limitation: entry.limitation,
-  status: entry.status,
 }))
 
 /** 모델 실행(30초)에 여유를 두고 질문 요청 시간을 제한합니다. */

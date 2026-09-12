@@ -120,7 +120,7 @@ export function PartnerRecruitmentCreatePage() {
                     value={programKeyword}
                     onChange={(event) => updateProgramKeyword(event.target.value)}
                   />
-                  <span className={partnerRecruitmentStyles.fieldHint}>접수 중인 공고만 검색합니다. 관심 공고함 연동은 준비 중입니다.</span>
+                  <span className={partnerRecruitmentStyles.fieldHint}>접수 중인 공고만 검색합니다.</span>
                   {programSearch.status === 'searching' ? (
                     <p className={workspacePageStyles.emptyNote}>공고를 찾는 중입니다.</p>
                   ) : programSearch.status === 'failed' ? (
