@@ -9,6 +9,7 @@ import { useReceivedProposals } from '../partner-proposal/useReceivedProposals'
 import {
   type AssistantMessage,
   type AssistantQuickReply,
+  findAssistantHelpTopic,
   freeTextFallback,
   greetingMessages,
   helpAnswer,
@@ -20,6 +21,7 @@ import {
   quickRepliesFor,
   receivedProposalsAnswer,
   savedProgramsAnswer,
+  topicAnswer,
   userMessage,
 } from './assistantConversation'
 import { assistantMessages } from './assistantMessages'
@@ -99,7 +101,7 @@ export function useAssistantViewModel(
     writeStored(messages.length === 0 ? null : { messages, quickReplies })
   }, [messages, quickReplies])
 
-  const routeReplies = useCallback(() => quickRepliesFor(pathname, session), [pathname, session])
+  const routeReplies = useCallback(() => quickRepliesFor(session), [session])
 
   const append = useCallback((next: AssistantMessage[], followUps: AssistantQuickReply[]) => {
     setMessages((current) => [...current, ...next])
@@ -145,6 +147,12 @@ export function useAssistantViewModel(
     setMessages((current) => [...current, asked])
     setQuickReplies([])
 
+    if (reply.kind === 'topic') {
+      const topic = reply.topicId === undefined ? undefined : findAssistantHelpTopic(reply.topicId)
+      const answer = topic === undefined ? freeTextFallback() : topicAnswer(topic)
+      append([answer], answer.role === 'assistant' && answer.followUps.length > 0 ? answer.followUps : routeReplies())
+      return
+    }
     if (reply.kind === 'help') {
       const entry = reply.helpId === undefined ? undefined : findHelpEntry(reply.helpId)
       const answer = entry === undefined ? freeTextFallback() : helpAnswer(entry, pathname)

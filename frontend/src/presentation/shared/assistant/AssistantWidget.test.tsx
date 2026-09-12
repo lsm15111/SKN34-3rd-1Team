@@ -13,7 +13,8 @@ import { supportPrograms } from '../../../data/fixtures/supportPrograms'
 import type { Account } from '../../../domain/entities/Account'
 import type { SavedSupportProgram } from '../../../domain/entities/SavedSupportProgram'
 import { sessionRestored } from '../auth/state/authSlice'
-import { helpEntriesForRoute } from '../help/helpContent'
+import { findHelpEntry } from '../help/helpContent'
+import { assistantHelpTopics } from './assistantConversation'
 import { assistantMessages } from './assistantMessages'
 import { assistantConversationStorageKey } from './useAssistantViewModel'
 
@@ -43,7 +44,7 @@ afterEach(() => {
 })
 
 describe('GovBiz 도우미 위젯', () => {
-  it('비로그인 검색 화면에서 런처가 뜨고, 열면 인사와 화면별 빠른 답변을 보여 준 뒤 도움말 항목으로 답한다', () => {
+  it('비로그인 검색 화면에서 런처가 뜨고, 열면 인사와 주제 목록을 보여 준 뒤 주제 → 질문 → 도움말 답으로 타고 들어간다', () => {
     renderApp('/', null)
 
     const launcher = screen.getByRole('button', { name: assistantMessages.openLauncher })
@@ -58,25 +59,34 @@ describe('GovBiz 도우미 위젯', () => {
     expect(within(panel).getByText(assistantMessages.greetingAsk)).toBeTruthy()
     expect(screen.getByRole('button', { name: assistantMessages.closeLauncher }).getAttribute('aria-expanded')).toBe('true')
 
-    const [first, second] = helpEntriesForRoute('/', 2)
+    // 어느 화면에서 열어도 같은 주제 목록이 먼저 나옵니다.
     const replies = within(panel).getByRole('group', { name: '빠른 답변' })
     expect(within(replies).getAllByRole('button').map((button) => button.textContent)).toEqual([
-      first!.question, second!.question, assistantMessages.quickLoginBenefits,
+      ...assistantHelpTopics.map((topic) => topic.label), assistantMessages.quickLoginBenefits,
     ])
 
-    fireEvent.click(within(replies).getByRole('button', { name: first!.question }))
+    const topic = assistantHelpTopics[0]!
+    const first = findHelpEntry(topic.entryIds[0]!)!
+    fireEvent.click(within(replies).getByRole('button', { name: topic.label }))
     const log = within(panel).getByRole('log', { name: '대화' })
+    expect(within(log).getByText(assistantMessages.topicAsk(topic.label))).toBeTruthy()
+    const questions = within(panel).getByRole('group', { name: '빠른 답변' })
+    expect(within(questions).getAllByRole('button').map((button) => button.textContent)).toEqual([
+      ...topic.entryIds.map((id) => findHelpEntry(id)!.question), assistantMessages.otherQuestion,
+    ])
+
+    fireEvent.click(within(questions).getByRole('button', { name: first.question }))
     // 누른 질문이 사용자 말풍선이 되고 답은 도움말 요약으로 시작하며 행동 버튼은 공개 경로를 가리킵니다.
-    expect(within(log).getByText(first!.question)).toBeTruthy()
-    expect(within(log).getByText(first!.summary)).toBeTruthy()
-    expect(within(log).getByText(assistantMessages.helpSource(first!.title))).toBeTruthy()
-    expect(within(log).getByRole('link', { name: first!.action!.label }).getAttribute('href')).toBe('/')
+    expect(within(log).getByText(first.question)).toBeTruthy()
+    expect(within(log).getByText(first.summary)).toBeTruthy()
+    expect(within(log).getByText(assistantMessages.helpSource(first.title))).toBeTruthy()
+    expect(within(log).getByRole('link', { name: first.action!.label }).getAttribute('href')).toBe('/')
     expect(within(panel).getByRole('button', { name: assistantMessages.otherQuestion })).toBeTruthy()
 
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByRole('dialog', { name: assistantMessages.name })).toBeNull()
     // 대화는 세션에 남아 다시 열면 그대로입니다.
-    expect(window.sessionStorage.getItem(assistantConversationStorageKey)).toContain(first!.question)
+    expect(window.sessionStorage.getItem(assistantConversationStorageKey)).toContain(first.question)
   })
 
   it('회원은 관심 공고 마감을 카드로 받고 로그인 화면에서는 도우미가 숨는다', async () => {

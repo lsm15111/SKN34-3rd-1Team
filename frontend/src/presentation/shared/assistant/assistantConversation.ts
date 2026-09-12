@@ -1,7 +1,7 @@
 import type { PartnerProposal } from '../../../domain/entities/PartnerProposal'
 import type { SavedSupportProgram } from '../../../domain/entities/SavedSupportProgram'
 import { loginPathFor, signupPathFor } from '../auth/returnPath'
-import { findHelpEntry, helpActionHref, helpEntriesForRoute } from '../help/helpContent'
+import { findHelpEntry, helpActionHref } from '../help/helpContent'
 import type { HelpEntry } from '../help/helpTypes'
 import { appPaths, isAppPath, publicPaths } from '../routes/appPaths'
 import type { AssistantCardTagTone } from './Assistant.styles'
@@ -11,9 +11,25 @@ import { assistantMessages } from './assistantMessages'
 export type AssistantQuickReply = {
   id: string
   label: string
-  kind: 'help' | 'saved-programs' | 'received-proposals' | 'login-benefits' | 'other'
+  kind: 'topic' | 'help' | 'saved-programs' | 'received-proposals' | 'login-benefits' | 'other'
   /** `help`일 때 도움말 항목 id입니다. */
   helpId?: string
+  /** `topic`일 때 주제 id입니다. */
+  topicId?: string
+}
+
+/** 도움말 항목을 묶는 주제입니다. 어느 화면에서 열어도 같은 주제 목록이 먼저 나오고, 주제 → 질문 → 답 순서로 타고 들어갑니다. */
+export type AssistantHelpTopic = { id: string; label: string; entryIds: readonly string[] }
+
+export const assistantHelpTopics: readonly AssistantHelpTopic[] = [
+  { id: 'search', label: '지원사업 검색', entryIds: ['search-confirm-card', 'search-score-meaning', 'eligibility-unknown', 'status-unknown-source', 'evidence-insufficient', 'search-slow-or-failed'] },
+  { id: 'review', label: '중복 검토·신청 문서', entryIds: ['review-save-vs-run', 'review-input-revision'] },
+  { id: 'partner', label: '파트너·기업 등록', entryIds: ['partner-write-requires-company'] },
+  { id: 'general', label: '기타 안내', entryIds: ['feature-status-preparing'] },
+]
+
+export function findAssistantHelpTopic(id: string): AssistantHelpTopic | undefined {
+  return assistantHelpTopics.find((topic) => topic.id === id)
 }
 
 export type AssistantCardRow = {
@@ -90,21 +106,30 @@ function helpQuickReply(entry: HelpEntry): AssistantQuickReply {
 }
 
 /**
- * 지금 화면과 로그인 상태에 맞는 빠른 답변 최대 4개입니다. 앞 둘은 화면의 도움말 항목, 뒤는 회원의 상태 질문입니다.
+ * 처음 열었을 때와 "다른 주제"를 눌렀을 때의 빠른 답변입니다. 화면과 무관하게 도움말 주제 전부와 회원의 상태 질문을 둡니다.
  * 비로그인이면 상태 질문 대신 로그인 안내 하나를 둡니다.
  */
-export function quickRepliesFor(pathname: string, session: AssistantSession): AssistantQuickReply[] {
-  const help = helpEntriesForRoute(pathname, 2).map(helpQuickReply)
+export function quickRepliesFor(session: AssistantSession): AssistantQuickReply[] {
+  const topics = assistantHelpTopics.map<AssistantQuickReply>((topic) => ({ id: `topic:${topic.id}`, label: topic.label, kind: 'topic', topicId: topic.id }))
   const status: AssistantQuickReply[] = session.isAuthenticated
     ? [
         { id: 'status:saved-programs', label: assistantMessages.quickSavedPrograms, kind: 'saved-programs' },
         ...(session.hasCompany ? [{ id: 'status:received-proposals', label: assistantMessages.quickReceivedProposals, kind: 'received-proposals' as const }] : []),
       ]
     : [{ id: 'status:login-benefits', label: assistantMessages.quickLoginBenefits, kind: 'login-benefits' }]
-  return [...help, ...status].slice(0, 4)
+  return [...topics, ...status]
 }
 
 export const otherQuestionReply: AssistantQuickReply = { id: 'other', label: assistantMessages.otherQuestion, kind: 'other' }
+
+/** 주제를 고르면 그 주제의 질문들을 알약으로 보여 줍니다. 답은 짧게 한 줄입니다. */
+export function topicAnswer(topic: AssistantHelpTopic): AssistantMessage {
+  const questions = topic.entryIds
+    .map((id) => findHelpEntry(id))
+    .filter((entry): entry is HelpEntry => entry !== undefined)
+    .map(helpQuickReply)
+  return botMessage([assistantMessages.topicAsk(topic.label)], { followUps: [...questions, otherQuestionReply] })
+}
 
 /** 도움말 항목으로 답합니다. 결론 → 본문 첫 문단 → 지금 안 되는 것 → 행동 버튼. 준비 중·예시 항목은 그 사실을 함께 말합니다. */
 export function helpAnswer(entry: HelpEntry, pathname: string): AssistantMessage {
