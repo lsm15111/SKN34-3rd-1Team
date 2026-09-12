@@ -5,48 +5,61 @@ import { appPaths, publicPaths } from '../../../shared/routes/appPaths'
 
 import { pricingPageStyles } from './PricingPage.styles'
 
-// 현재 제공 기능과 출시 준비 방향을 구분합니다. 유료 가격·결제 정책은 아직 확정하지 않습니다.
+// 지금은 모든 기능이 베타로 열려 있습니다. 유료 전환 시점의 예정 가격을 함께 적어 미리 알립니다.
 const plans = [
   {
     id: 'free',
     label: 'FREE',
     name: '무료',
-    status: '지금 이용 가능',
+    status: '계속 무료',
     description: '우리 기업에 맞는 지원사업을 찾고, 공고의 조건부터 확인하고 싶다면.',
     price: '0원',
-    priceNote: '현재 공개 검색 이용 요금',
-    featureHeading: '지금 제공하는 기능',
-    features: ['지원사업 검색', '입력한 기업 조건으로 자격 조건 확인', '기업마당 공고 원문 질문과 답변'],
-    footerNote: '현재 공개 검색은 로그인 없이 이용할 수 있습니다.',
-    isAvailable: true,
+    priceNote: '로그인 없이 바로 검색',
+    featureHeading: '포함된 기능',
+    features: [
+      '자연어 지원사업 검색과 추천 이유·점수',
+      '입력한 기업 조건으로 자격 조건 확인',
+      '공고 원문을 근거로 한 질문과 답변',
+      '관심 공고함에 공고 담기',
+    ],
+    footerNote: '로그인하면 관심 공고함과 검색 기록이 계정에 남습니다.',
+    isFree: true,
     isFeatured: false,
   },
   {
     id: 'pro',
     label: 'PRO',
     name: '프로',
-    status: '출시 예정',
-    description: '관심 공고와 기업 정보를 모아, 지원사업 검토를 이어가고 싶다면.',
-    price: '가격 공개 예정',
-    priceNote: '유료 요금제 · 출시 준비 중',
-    featureHeading: '출시 준비 방향',
-    features: ['관심 공고 관리', '기업 프로필을 활용한 탐색', '검토한 공고의 이력 관리'],
-    footerNote: '가격과 제공 범위는 출시 시 안내합니다.',
-    isAvailable: false,
+    status: '베타 기간 무료',
+    description: '찾은 공고를 실제 신청까지 끌고 가고 싶다면.',
+    price: '베타 기간 0원',
+    priceNote: '정식 전환 시 월 39,000원 예정 · 연 결제 월 33,000원',
+    featureHeading: '무료에 더해',
+    features: [
+      '기업 정보 기반 맞춤 공고 리포트',
+      '중복 지원·수혜 여부 검토',
+      '공식 첨부에서 찾은 신청 문서 작성',
+    ],
+    footerNote: '베타 기간에는 결제 없이 그대로 쓰실 수 있습니다.',
+    isFree: false,
     isFeatured: true,
   },
   {
     id: 'team',
     label: 'TEAM',
     name: '팀',
-    status: '출시 예정',
-    description: '함께할 기업을 살펴보고, 지원사업을 중심으로 협업을 준비하고 싶다면.',
-    price: '가격 공개 예정',
-    priceNote: '유료 요금제 · 출시 준비 중',
-    featureHeading: '출시 준비 방향',
-    features: ['기업 프로필 기반 파트너 탐색', '공고별 파트너 모집', '협업을 위한 기업 간 제안'],
-    footerNote: '가격과 제공 범위는 출시 시 안내합니다.',
-    isAvailable: false,
+    status: '베타 기간 무료',
+    description: '컨소시엄으로 함께 지원할 기업을 찾고 싶다면.',
+    price: '베타 기간 0원',
+    priceNote: '정식 전환 시 월 99,000원 예정 · 연 결제 월 83,000원',
+    featureHeading: '프로에 더해',
+    features: [
+      '기업 프로필로 파트너 찾기',
+      '공고별 파트너 모집글 등록',
+      '참여 제안 주고받기와 담당자 연락처 교환',
+    ],
+    footerNote: '기업 정보를 등록한 계정끼리 연결합니다.',
+    isFree: false,
     isFeatured: false,
   },
 ] as const
@@ -75,12 +88,12 @@ const frequentlyAskedQuestions = [
     answer: '지원사업 검색, 입력한 기업 조건을 바탕으로 한 조건 확인, 기업마당 공고 상세에서의 원문 근거 질문을 이용할 수 있습니다. 현재 공개 검색은 로그인 없이 시작할 수 있습니다.',
   },
   {
-    question: '프로와 팀은 지금 신청할 수 있나요?',
-    answer: '아직 출시 준비 중입니다. 가격, 제공 기능과 이용 정책은 출시 시 안내하며, 현재는 결제나 구독 신청을 받지 않습니다. 카드에 표시한 예정 기능은 개발 방향으로, 최종 제공 범위와 달라질 수 있습니다.',
+    question: '프로와 팀 기능도 지금 쓸 수 있나요?',
+    answer: '네. 베타 기간에는 세 요금제의 기능을 결제 없이 모두 쓰실 수 있습니다. 카드에 적은 가격은 정식 전환 시 예정 가격이며, 전환 시점과 최종 가격은 미리 안내합니다.',
   },
   {
-    question: '로그인·기업 프로필·파트너 모집은 실제로 이용할 수 있나요?',
-    answer: '로그인은 실제 계정 세션으로 동작합니다. 기업 프로필 저장, 파트너 모집글 등록과 제안 전송은 아직 연결되지 않은 데모 화면이며, 데모 화면은 정식 요금제의 제공 기능이 아닙니다.',
+    question: '기업 프로필과 파트너 모집은 실제로 동작하나요?',
+    answer: '네. 사업자등록번호로 기업을 등록하면 프로필이 계정에 저장되고, 접수 중인 공고에 모집글을 올려 참여 제안을 주고받을 수 있습니다. 수락된 제안에서만 상대 담당자 연락처를 공개합니다.',
   },
   {
     question: 'AI가 지원 자격이나 선정을 보장하나요?',
@@ -118,14 +131,15 @@ function PricingTitle() {
  */
 export function PricingPage({ layout = 'public' }: { layout?: PricingPageLayout }) {
   const searchPath = layout === 'workspace' ? appPaths.chat : publicPaths.landing
+  const faqPath = layout === 'workspace' ? appPaths.faq : publicPaths.faq
   return (
     <main className={pricingPageStyles.page}>
       <section className={pricingPageStyles.hero} aria-labelledby="pricing-title">
         <PricingTitle />
         <p className={pricingPageStyles.description}>
-          지원사업 탐색은 지금 무료로 시작하세요.
+          지원사업 탐색은 계속 무료입니다.
           <br />
-          공고 관리와 파트너 협업은 다음 단계로 준비하고 있습니다.
+          신청 준비와 파트너 협업은 베타 기간 동안 결제 없이 열어 두었습니다.
         </p>
       </section>
 
@@ -167,7 +181,7 @@ export function PricingPage({ layout = 'public' }: { layout?: PricingPageLayout 
                   {plan.description}
                 </p>
                 <div className={pricingPageStyles.priceBlock}>
-                  <p className={plan.isAvailable ? pricingPageStyles.freePrice : pricingPageStyles.pendingPrice}>
+                  <p className={plan.isFree ? pricingPageStyles.freePrice : pricingPageStyles.pendingPrice}>
                     {plan.price}
                   </p>
                   <p className={`${pricingPageStyles.priceNote} ${mutedTone}`}>{plan.priceNote}</p>
@@ -192,28 +206,16 @@ export function PricingPage({ layout = 'public' }: { layout?: PricingPageLayout 
                         aria-hidden="true"
                         focusable="false"
                       >
-                        <path d={plan.isAvailable ? 'm5 12 4 4L19 6' : 'M12 5v14M5 12h14'} />
+                        <path d="m5 12 4 4L19 6" />
                       </svg>
                       <span>{feature}</span>
                     </li>
                   ))}
                 </ul>
                 <div className={pricingPageStyles.planFooter}>
-                  {plan.isAvailable ? (
-                    <Link className={`${pricingPageStyles.planButton} ${pricingPageStyles.availableButton}`} to={searchPath}>
-                      무료로 지원사업 찾기
-                    </Link>
-                  ) : (
-                    <button
-                      className={`${pricingPageStyles.planButton} ${plan.isFeatured
-                        ? pricingPageStyles.featuredPendingButton
-                        : pricingPageStyles.regularPendingButton}`}
-                      type="button"
-                      disabled
-                    >
-                      출시 준비 중
-                    </button>
-                  )}
+                  <Link className={`${pricingPageStyles.planButton} ${pricingPageStyles.availableButton}`} to={searchPath}>
+                    무료로 시작하기
+                  </Link>
                   <p className={`${pricingPageStyles.footerNote} ${mutedTone}`}>{plan.footerNote}</p>
                 </div>
               </article>
@@ -221,7 +223,7 @@ export function PricingPage({ layout = 'public' }: { layout?: PricingPageLayout 
           })}
         </div>
         <p className={pricingPageStyles.releaseNote}>
-          프로·팀은 출시 예정이며, 표시된 기능은 개발 방향입니다. 현재 결제·구독은 제공하지 않습니다.
+          지금은 세 요금제의 기능을 모두 결제 없이 쓰실 수 있습니다. 표시한 가격은 정식 전환 시 예정 가격입니다.
         </p>
       </section>
 
@@ -246,7 +248,9 @@ export function PricingPage({ layout = 'public' }: { layout?: PricingPageLayout 
       <section className={pricingPageStyles.faqSection} aria-labelledby="pricing-faq-title">
         <div className={pricingPageStyles.faqHeader}>
           <h2 className={pricingPageStyles.sectionHeading} id="pricing-faq-title">자주 묻는 질문</h2>
-          <p className={pricingPageStyles.faqDescription}>이용 전에 궁금한 점을 확인하세요.</p>
+          <p className={pricingPageStyles.faqDescription}>
+            이용 전에 궁금한 점을 확인하세요. 화면 사용법은 <Link className={pricingPageStyles.faqLink} to={faqPath}>자주 묻는 질문</Link>에 모아 두었습니다.
+          </p>
         </div>
         <div className={pricingPageStyles.faqList}>
           {frequentlyAskedQuestions.map((faq) => (

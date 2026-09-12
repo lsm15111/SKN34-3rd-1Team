@@ -15,6 +15,7 @@ export const appPaths = {
   combinationReviewDetail: `${APP_PREFIX}/combination-reviews/:reviewId`,
   chat: `${APP_PREFIX}/chat`,
   pricing: `${APP_PREFIX}/pricing`,
+  faq: `${APP_PREFIX}/faq`,
   partners: `${APP_PREFIX}/partners`,
   partnerDetail: `${APP_PREFIX}/partners/detail`,
   partnerNew: `${APP_PREFIX}/partners/new`,
@@ -37,6 +38,7 @@ export const publicPaths = {
   /** 소셜 로그인 뒤 서버가 보내는 완료 화면입니다. 세션을 확인하고 복귀 경로로 옮깁니다. */
   oauthComplete: '/oauth/complete',
   pricing: '/pricing',
+  faq: '/faq',
   partners: '/partners',
   partnerDetail: '/partners/detail',
   supportProgramDetail: '/support-programs/detail',
@@ -56,6 +58,7 @@ export function toAppPath(pathname: string, search = ''): string {
   if (trimmed === publicPaths.landing) return `${appPaths.chat}${search}`
   const mirrored = [
     publicPaths.pricing,
+    publicPaths.faq,
     publicPaths.partners,
     publicPaths.partnerDetail,
     publicPaths.supportProgramDetail,

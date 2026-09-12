@@ -12,6 +12,7 @@ import { useReviewSessionIsolation } from './presentation/features/combination-r
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router'
 
 import { AdminAccountDetailPage } from './presentation/features/admin/view/AdminAccountDetailPage'
+import { FaqPage } from './presentation/features/faq/view/FaqPage'
 import { HelpLauncher } from './presentation/features/help/view/HelpLauncher'
 import { AdminAccountsPage } from './presentation/features/admin/view/AdminAccountsPage'
 import { ForgotPasswordPage } from './presentation/features/auth/view/ForgotPasswordPage'
@@ -88,6 +89,7 @@ function App() {
           <Route element={<PublicOnly />}>
             <Route path={publicPaths.landing} element={<SupportProgramSearchPage />} />
             <Route path={publicPaths.pricing} element={<PricingPage />} />
+            <Route path={publicPaths.faq} element={<FaqPage />} />
             <Route path={publicPaths.partners} element={<PublicPartnerRecruitmentListPage />} />
             <Route path={publicPaths.partnerDetail} element={<PublicPartnerRecruitmentDetailPage />} />
             {/* 상세·원문 질문은 검색 화면의 헤더·검색 탭을 그대로 둔 채 그 아래에 띄웁니다. */}
@@ -123,6 +125,7 @@ function App() {
             <Route path={appPaths.combinationReviewDetail} element={<CombinationReviewEditorPage />} />
             <Route path={appPaths.chat} element={<SupportProgramSearchPage layout="workspace" />} />
             <Route path={appPaths.pricing} element={<PricingPage layout="workspace" />} />
+            <Route path={appPaths.faq} element={<FaqPage layout="workspace" />} />
             <Route path={appPaths.partners} element={<PartnerRecruitmentListPage />} />
             <Route path={appPaths.partnerNew} element={<PartnerRecruitmentCreatePage />} />
             <Route path={appPaths.partnerEdit} element={<PartnerRecruitmentEditPage />} />

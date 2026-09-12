@@ -3,6 +3,7 @@ function classes(...groups: string[]) {
 }
 
 export const pricingPageStyles = {
+  faqLink: 'font-bold text-brand-primary underline underline-offset-2 hover:text-[#066538]',
   page: 'mx-auto flex w-[min(1180px,calc(100%_-_3rem))] min-w-0 flex-col gap-16 pt-[clamp(2.75rem,6vw,5rem)] pb-16 text-app-ink max-chat:w-[calc(100%_-_2rem)] max-chat:gap-12 max-chat:pb-10',
   hero: 'mx-auto flex max-w-[780px] flex-col items-center text-center',
   title: 'm-0 break-keep text-[clamp(2rem,4.5vw,3.6rem)] font-extrabold leading-[1.3] tracking-[-0.065em] [text-wrap:balance]',

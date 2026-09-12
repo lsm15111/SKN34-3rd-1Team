@@ -11,11 +11,13 @@ const isLandingPath = (pathname: string) =>
   pathname === publicPaths.landing || pathname === publicPaths.supportProgramDetail || pathname === publicPaths.supportProgramQuestion
 const isPricingPath = (pathname: string) => pathname === publicPaths.pricing || pathname === `${publicPaths.pricing}/`
 const isPartnersPath = (pathname: string) => pathname === publicPaths.partners || pathname.startsWith(`${publicPaths.partners}/`)
+const isFaqPath = (pathname: string) => pathname === publicPaths.faq || pathname === `${publicPaths.faq}/`
 
 const pageTitles: Array<{ matches: (pathname: string) => boolean; title: string }> = [
   { matches: isLandingPath, title: 'AI 채팅' },
   { matches: isPricingPath, title: '요금제' },
   { matches: isPartnersPath, title: '파트너 모집' },
+  { matches: isFaqPath, title: '자주 묻는 질문' },
   { matches: (pathname) => pathname.startsWith('/examples/sample-item'), title: '상태관리 비교 예제' },
 ]
 
@@ -28,8 +30,9 @@ export function AppHeader() {
   const isLanding = isLandingPath(pathname)
   const isPricing = isPricingPath(pathname)
   const isPartners = isPartnersPath(pathname)
+  const isFaq = isFaqPath(pathname)
   // 검색·파트너 모집·요금제는 로그인 전 공개 화면이라 같은 마케팅 헤더를 공유합니다.
-  const isMarketingPage = isLanding || isPricing || isPartners
+  const isMarketingPage = isLanding || isPricing || isPartners || isFaq
   const currentTitle = pageTitles.find((page) => page.matches(pathname))?.title ?? null
 
   return (
@@ -61,6 +64,13 @@ export function AppHeader() {
             aria-current={isPricing ? 'page' : undefined}
           >
             요금제
+          </Link>
+          <Link
+            className={isMarketingPage ? appHeaderStyles.landingNavLink : appHeaderStyles.navLink}
+            to={publicPaths.faq}
+            aria-current={isFaq ? 'page' : undefined}
+          >
+            자주 묻는 질문
           </Link>
         </div>
         <AccountMenu isMarketingPage={isMarketingPage} />

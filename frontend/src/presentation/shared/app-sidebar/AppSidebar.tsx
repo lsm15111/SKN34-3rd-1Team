@@ -39,6 +39,7 @@ const menuGroups: MenuGroup[] = [
         matches: (pathname) => pathname.startsWith(appPaths.partners) || pathname.startsWith(appPaths.proposals),
       },
       { label: '요금제', icon: 'pricing', to: appPaths.pricing, matches: (pathname) => pathname === appPaths.pricing },
+      { label: '자주 묻는 질문', icon: 'pricing', to: appPaths.faq, matches: (pathname) => pathname === appPaths.faq },
     ],
   },
 ]

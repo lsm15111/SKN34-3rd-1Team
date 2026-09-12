@@ -46,7 +46,7 @@ describe('공개 요금제', () => {
     expect(screen.queryByText('GovBiz 요금제', { exact: true })).toBeNull()
   })
 
-  it.each(['/pricing', '/pricing/'])('%s에서 무료와 출시 예정 플랜을 보여주고 결제 요청은 보내지 않는다', (path) => {
+  it.each(['/pricing', '/pricing/'])('%s에서 세 요금제를 보여주고 결제 요청은 보내지 않는다', (path) => {
     renderApp(path)
 
     expect(screen.queryByText('GovBiz 요금제', { exact: true })).toBeNull()
@@ -54,18 +54,15 @@ describe('공개 요금제', () => {
     for (const name of ['무료', '프로', '팀']) {
       expect(screen.getByRole('heading', { name })).toBeTruthy()
     }
-    const pendingButtons = screen.getAllByRole('button', { name: '출시 준비 중' })
-    expect(pendingButtons).toHaveLength(2)
-    for (const button of pendingButtons) {
-      expect((button as HTMLButtonElement).disabled).toBe(true)
-      fireEvent.click(button)
-    }
+    // 준비 중 표시 없이 지금 쓸 수 있는 것으로 안내하고, 요금제 화면 자체는 요청을 보내지 않습니다.
+    expect(screen.queryByText(/준비 중/)).toBeNull()
+    expect(screen.getAllByRole('link', { name: '무료로 시작하기' })).toHaveLength(3)
     expect(fetch).not.toHaveBeenCalled()
 
     const navigation = screen.getByRole('navigation', { name: '화면 이동' })
     expect(within(navigation).getByRole('link', { name: '요금제' }).getAttribute('aria-current')).toBe('page')
     expect(within(navigation).getByRole('link', { name: '지원사업 찾기' }).getAttribute('aria-current')).toBeNull()
-    expect(screen.getByRole('link', { name: '무료로 지원사업 찾기' }).getAttribute('href')).toBe('/')
+    expect(screen.getAllByRole('link', { name: '무료로 시작하기' })[0].getAttribute('href')).toBe('/')
     expect(screen.getByRole('link', { name: '지원사업 찾기 시작하기' }).getAttribute('href')).toBe('/')
   })
 
@@ -88,8 +85,8 @@ describe('공개 요금제', () => {
     expect(screen.getByRole('complementary', { name: '작업 사이드바' })).toBeTruthy()
     expect(within(sidebar).getByRole('link', { name: '요금제' }).getAttribute('aria-current')).toBe('page')
     expect(fetch).not.toHaveBeenCalled()
-    expect(screen.getByRole('link', { name: '무료로 지원사업 찾기' }).getAttribute('href')).toBe('/app/chat')
-    fireEvent.click(screen.getByRole('link', { name: '무료로 지원사업 찾기' }))
+    expect(screen.getAllByRole('link', { name: '무료로 시작하기' })[0].getAttribute('href')).toBe('/app/chat')
+    fireEvent.click(screen.getAllByRole('link', { name: '무료로 시작하기' })[0])
     expect(screen.getByRole('textbox', { name: '지원사업 검색어' })).toBeTruthy()
     expect(screen.getByRole('complementary', { name: '작업 사이드바' })).toBeTruthy()
   })
