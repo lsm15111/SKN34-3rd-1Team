@@ -130,7 +130,7 @@ export function HelpAssistantPanel({
         })}
         </div>
 
-        <nav className={s.menu} aria-label="도우미 메뉴">
+        <nav className={s.menuDock} aria-label="도우미 메뉴">
           {menu.map((item, index) => (
             <button
               className={s.menuButton}
