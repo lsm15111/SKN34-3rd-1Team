@@ -7,7 +7,9 @@ import {
 } from '../../../shared/workspace/WorkspacePage.styles'
 import { WorkspaceModal } from '../../../shared/workspace/WorkspaceModal'
 import { workspaceModalStyles } from '../../../shared/workspace/WorkspaceModal.styles'
+import { ResultsRegion } from '../../../shared/data/ResultsRegion'
 import { PartnerManagementHeader } from '../../../shared/partner-recruitment/PartnerManagementHeader'
+import { RecruitmentCardSkeleton } from '../../../shared/partner-recruitment/RecruitmentCardSkeleton'
 import {
   programDeadlineLabel,
   recruitmentConditionTags,
@@ -24,6 +26,7 @@ export function MyPartnerRecruitmentsPage() {
   const {
     hasCompany,
     phase,
+    hasPage,
     recruitments,
     totalPages,
     page,
@@ -46,16 +49,14 @@ export function MyPartnerRecruitmentsPage() {
 
       <div className={workspacePageStyles.content}>
         <div className={workspacePageStyles.column}>
-          {phase === 'failed' ? (
-            <section className={workspacePageStyles.card} aria-label="모집글 불러오기 실패">
+          <ResultsRegion phase={phase} hasData={hasPage} loadingLabel="내 모집글을 불러오는 중입니다." onRetry={retry}
+            failedLabel="내 모집글을 다시 불러오지 못했습니다. 이전 결과를 보여 드리고 있어요."
+            skeleton={<RecruitmentCardSkeleton gridClassName={partnerRecruitmentStyles.cardGrid} />}
+            error={<section className={workspacePageStyles.card} aria-label="모집글 불러오기 실패">
               <p className={workspacePageStyles.emptyNote}>내 모집글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
               <button className={workspacePageStyles.quietLink} type="button" onClick={retry}>다시 시도</button>
-            </section>
-          ) : phase === 'loading' && recruitments.length === 0 ? (
-            <section className={workspacePageStyles.card} aria-label="모집글 불러오는 중">
-              <p className={workspacePageStyles.emptyNote}>내 모집글을 불러오는 중입니다.</p>
-            </section>
-          ) : recruitments.length === 0 ? (
+            </section>}>
+          {recruitments.length === 0 ? (
             <section className={workspacePageStyles.card} aria-label="내 모집글 없음">
               <p className={workspacePageStyles.emptyNote}>
                 {hasCompany ? '아직 올린 모집글이 없습니다. 첫 모집글을 올려 보세요.' : '프로필에서 기업을 등록하면 모집글을 올릴 수 있습니다.'}
@@ -90,6 +91,7 @@ export function MyPartnerRecruitmentsPage() {
               ) : null}
             </>
           )}
+          </ResultsRegion>
         </div>
       </div>
 

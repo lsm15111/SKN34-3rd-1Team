@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 
 import { appContainer } from '../../../../app/appContainer'
@@ -17,6 +17,7 @@ import {
   type AdminAccountStatus,
 } from '../../../../domain/entities/AdminAccount'
 import type { BrowseAdminAccountsUseCase, GetAdminAccountStatsUseCase } from '../../../../domain/usecases/AdminAccountUseCases'
+import { useKeyedQuery } from '../../../shared/data/useKeyedQuery'
 import { appPaths } from '../../../shared/routes/appPaths'
 import type { AdminStatTone } from '../view/AdminAccountsPage.styles'
 import { formatAdminDate, formatAdminDateTime } from './adminAccountFormat'
@@ -60,29 +61,15 @@ function toSearchParams(query: AdminAccountQuery): URLSearchParams {
   return params
 }
 
-type PageState = { key: string; phase: 'loading' | 'ready' | 'failed'; page: AdminAccountPage | null }
+/** 계정 목록 캐시 이름공간입니다. 상세에서 조치(정지·해제·강제 로그아웃)에 성공하면 이 이름으로 비웁니다. */
+export const adminAccountListCacheNamespace = 'admin-accounts'
 
-/** 조건이 바뀌면 이전 요청을 취소하고 다시 읽습니다. 실패하면 마지막 결과를 둔 채 실패로 표시합니다. */
+/** 조건이 바뀌면 이전 요청을 취소하고 다시 읽되 마지막 결과를 유지합니다(`isRefreshing`). 뒤로 가기·재방문은 캐시를 먼저 보여 줍니다. */
 function useAdminAccountPage(query: AdminAccountQuery, useCase: ListUseCases['browse']) {
   const key = JSON.stringify(query)
-  const [version, setVersion] = useState(0)
-  const [state, setState] = useState<PageState>({ key, phase: 'loading', page: null })
-
-  useEffect(() => {
-    const controller = new AbortController()
-    setState((previous) => ({ key, phase: 'loading', page: previous.page }))
-    void Promise.resolve()
-      .then(() => useCase.execute(JSON.parse(key) as AdminAccountQuery, controller.signal))
-      .then((page) => { if (!controller.signal.aborted) setState({ key, phase: 'ready', page }) })
-      .catch(() => { if (!controller.signal.aborted) setState((previous) => ({ ...previous, key, phase: 'failed' })) })
-    return () => controller.abort()
-  }, [key, version, useCase])
-
-  return {
-    phase: state.key === key ? state.phase : 'loading',
-    page: state.page,
-    retry: () => setVersion((value) => value + 1),
-  }
+  const fetch = useCallback((signal: AbortSignal) => useCase.execute(JSON.parse(key) as AdminAccountQuery, signal), [key, useCase])
+  const result = useKeyedQuery<AdminAccountPage>({ key, fetch, timeoutMs: 10_000, cache: adminAccountListCacheNamespace })
+  return { phase: result.phase, page: result.data, isRefreshing: result.isRefreshing, retry: result.retry }
 }
 
 /** 요약 수치는 화면을 열 때 한 번 읽습니다. 실패하면 요약 줄만 숨기고 목록은 그대로 씁니다. */
@@ -112,7 +99,7 @@ export function useAdminAccountListViewModel(useCases: Partial<ListUseCases> = {
   }))
   const [searchParams, setSearchParams] = useSearchParams()
   const query = readAdminAccountQuery(searchParams)
-  const { phase, page, retry } = useAdminAccountPage(query, resolved.browse)
+  const { phase, page, isRefreshing, retry } = useAdminAccountPage(query, resolved.browse)
   const stats = useAdminAccountStats(resolved.getStats)
   // 입력 중인 검색어입니다. 주소의 검색어가 바뀌면(초기화·뒤로 가기) 그 값으로 다시 시작합니다.
   const [draft, setDraft] = useState({ base: query.keyword, value: query.keyword })
@@ -123,6 +110,8 @@ export function useAdminAccountListViewModel(useCases: Partial<ListUseCases> = {
 
   return {
     phase,
+    isRefreshing,
+    hasPage: page !== null,
     rows: (page?.accounts ?? []).map((account) => ({
       id: account.id,
       email: account.email,

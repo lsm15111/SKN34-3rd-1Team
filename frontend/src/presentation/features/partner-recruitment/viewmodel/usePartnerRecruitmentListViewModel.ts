@@ -36,7 +36,7 @@ export function usePartnerRecruitmentListViewModel() {
   const { hasCompany } = useAuthSession()
   const [query, setQuery] = useState<PartnerRecruitmentQuery>(defaultPartnerRecruitmentQuery)
   const [draft, setDraft] = useState<PartnerRecruitmentDraft>(emptyDraft)
-  const { phase, page, retry } = usePartnerRecruitmentBrowse(query)
+  const { phase, page, isRefreshing, retry } = usePartnerRecruitmentBrowse(query)
 
   /** 조건이 바뀌면 첫 페이지부터 다시 봅니다. */
   function update(patch: Partial<PartnerRecruitmentQuery>) {
@@ -46,6 +46,8 @@ export function usePartnerRecruitmentListViewModel() {
   return {
     hasCompany,
     phase,
+    isRefreshing,
+    hasPage: page !== null,
     recruitments: page?.recruitments ?? [],
     total: page?.total ?? 0,
     totalPages: page?.totalPages ?? 0,

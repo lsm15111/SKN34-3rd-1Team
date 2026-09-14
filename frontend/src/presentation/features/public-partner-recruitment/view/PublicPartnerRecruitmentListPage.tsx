@@ -1,4 +1,6 @@
 import type { PartnerRecruitmentSummary } from '../../../../domain/entities/PartnerRecruitment'
+import { ResultsRegion } from '../../../shared/data/ResultsRegion'
+import { RecruitmentCardSkeleton } from '../../../shared/partner-recruitment/RecruitmentCardSkeleton'
 import { workspacePageStyles, workspaceTagClassName } from '../../../shared/workspace/WorkspacePage.styles'
 import {
   programDeadlineLabel,
@@ -60,6 +62,7 @@ function RecruitmentCard({
 export function PublicPartnerRecruitmentListPage() {
   const {
     phase,
+    hasPage,
     recruitments,
     totalPages,
     currentPage,
@@ -158,16 +161,14 @@ export function PublicPartnerRecruitmentListPage() {
             </label>
           </div>
         </div>
-        {phase === 'failed' ? (
-          <section className={styles.card} aria-label="모집글 불러오기 실패">
+        <ResultsRegion phase={phase} hasData={hasPage} loadingLabel="모집글을 불러오는 중입니다." onRetry={retry}
+          failedLabel="새 조건의 모집글을 불러오지 못했습니다. 이전 결과를 보여 드리고 있어요."
+          skeleton={<RecruitmentCardSkeleton gridClassName={styles.cardGrid} />}
+          error={<section className={styles.card} aria-label="모집글 불러오기 실패">
             <p className={styles.description}>모집글을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>
             <button className={workspacePageStyles.quietLink} type="button" onClick={retry}>다시 시도</button>
-          </section>
-        ) : phase === 'loading' && recruitments.length === 0 ? (
-          <section className={styles.card} aria-label="모집글 불러오는 중">
-            <p className={styles.description}>모집글을 불러오는 중입니다.</p>
-          </section>
-        ) : recruitments.length === 0 ? (
+          </section>}>
+        {recruitments.length === 0 ? (
           <section className={styles.card} aria-label="모집글 없음">
             <p className={styles.description}>아직 모집 중인 글이 없습니다. 로그인해 첫 모집글을 올려 보세요.</p>
           </section>
@@ -191,6 +192,7 @@ export function PublicPartnerRecruitmentListPage() {
             ) : null}
           </>
         )}
+        </ResultsRegion>
       </div>
 
       <PublicLoginPromptDialog

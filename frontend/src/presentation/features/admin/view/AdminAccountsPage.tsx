@@ -1,5 +1,6 @@
 import { Link } from 'react-router'
 
+import { ResultsRegion } from '../../../shared/data/ResultsRegion'
 import { workspacePageStyles, workspaceTagClassName } from '../../../shared/workspace/WorkspacePage.styles'
 import { WorkspacePageHeader } from '../../../shared/workspace/WorkspacePageHeader'
 import { useAdminAccountListViewModel } from '../viewmodel/useAdminAccountListViewModel'
@@ -95,14 +96,14 @@ export function AdminAccountsPage() {
             </div>
           </div>
 
-          {vm.phase === 'failed' ? (
-            <p className={workspacePageStyles.emptyNote}>
+          <ResultsRegion phase={vm.phase} hasData={vm.hasPage} loadingLabel="계정 목록을 불러오는 중입니다." onRetry={vm.retry}
+            failedLabel="새 조건의 계정 목록을 불러오지 못했습니다. 이전 결과를 보여 드리고 있어요."
+            skeleton={<AdminAccountTableSkeleton />}
+            error={<p className={workspacePageStyles.emptyNote}>
               계정 목록을 불러오지 못했습니다.{' '}
               <button className={workspacePageStyles.quietLink} type="button" onClick={vm.retry}>다시 시도</button>
-            </p>
-          ) : vm.phase === 'loading' && vm.rows.length === 0 ? (
-            <p className={workspacePageStyles.emptyNote}>계정 목록을 불러오는 중입니다.</p>
-          ) : vm.rows.length === 0 ? (
+            </p>}>
+          {vm.rows.length === 0 ? (
             <p className={workspacePageStyles.emptyNote}>조건에 맞는 계정이 없습니다.</p>
           ) : (
             <div className={styles.tableScroll} role="region" aria-label="계정 표 가로 스크롤" tabIndex={0}>
@@ -152,6 +153,7 @@ export function AdminAccountsPage() {
               </table>
             </div>
           )}
+          </ResultsRegion>
 
           {vm.totalPages > 1 ? (
             <nav className={styles.pagination} aria-label="계정 페이지">
@@ -168,4 +170,14 @@ export function AdminAccountsPage() {
       </div>
     </>
   )
+}
+
+/** 계정 표의 자리 표시입니다. 첫 진입에 표가 생길 자리를 미리 차지해 화면이 튀지 않게 합니다. */
+function AdminAccountTableSkeleton({ rows = 6 }: { rows?: number }) {
+  const bar = 'block h-3 rounded-full bg-[#eceff1] motion-safe:animate-pulse'
+  return <div className="grid gap-3 rounded-[1rem] border border-sample-border bg-white p-4">
+    {Array.from({ length: rows }, (_, index) => <div key={index} className="grid grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))] gap-4">
+      <span className={`${bar} w-4/5`} /><span className={`${bar} w-2/3`} /><span className={`${bar} w-1/2`} /><span className={`${bar} w-1/2`} />
+    </div>)}
+  </div>
 }

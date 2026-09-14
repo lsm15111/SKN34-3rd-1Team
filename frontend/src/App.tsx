@@ -43,6 +43,7 @@ import { WorkspaceLayout } from './presentation/shared/app-sidebar/WorkspaceLayo
 import { useRestoreAuthSession } from './presentation/shared/auth/hooks/useAuthSession'
 import { AssistantWidget } from './presentation/shared/assistant/AssistantWidget'
 import { GuestOnly, PublicOnly, RequireAuth } from './presentation/shared/auth/RouteGuards'
+import { QueryCacheProvider } from './presentation/shared/data/QueryCacheProvider'
 import { APP_PREFIX, appPaths, publicPaths } from './presentation/shared/routes/appPaths'
 
 /**
@@ -91,7 +92,7 @@ function App() {
   }, [authStatus, dispatchToStore, isChatActive, pathname])
 
   return (
-    <>
+    <QueryCacheProvider>
     <ChatActivityToast />
     <Routes>
       <Route element={<PublicLayout />}>
@@ -162,7 +163,7 @@ function App() {
     </Routes>
     {/* 도우미는 화면 오른쪽 아래에 떠 있고 로그인·회원가입 같은 단독 화면에서는 스스로 숨습니다. */}
     <AssistantWidget />
-    </>
+    </QueryCacheProvider>
   )
 }
 

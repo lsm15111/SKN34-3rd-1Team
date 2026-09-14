@@ -6,7 +6,9 @@ import type { SupportProgram } from '../../../../domain/entities/SupportProgram'
 import type { BrowseSupportProgramsUseCase } from '../../../../domain/usecases/BrowseSupportProgramsUseCase'
 import { validatePartnerRecruitmentInput, type CreatePartnerRecruitmentUseCase } from '../../../../domain/usecases/PartnerRecruitmentUseCases'
 import { useAuthSession } from '../../../shared/auth/hooks/useAuthSession'
+import { useQueryCache } from '../../../shared/data/queryCacheContext'
 import { companyInitial } from '../../../shared/partner-recruitment/partnerRecruitmentLabels'
+import { partnerRecruitmentListCacheNamespace } from '../../../shared/partner-recruitment/usePartnerRecruitmentBrowse'
 import { appPaths } from '../../../shared/routes/appPaths'
 import {
   recruitmentFieldMessage,
@@ -63,6 +65,7 @@ export function usePartnerRecruitmentCreateViewModel(useCases?: Partial<ViewMode
     createRecruitment: useCases?.createRecruitment ?? appContainer.resolve('createPartnerRecruitmentUseCase'),
   }
   const navigate = useNavigate()
+  const queryCache = useQueryCache()
   const { account, hasCompany } = useAuthSession()
   const [programKeyword, setProgramKeyword] = useState('')
   const [programSearch, setProgramSearch] = useState<ProgramSearchState>({ status: 'idle' })
@@ -143,6 +146,7 @@ export function usePartnerRecruitmentCreateViewModel(useCases?: Partial<ViewMode
       const result = await resolved.createRecruitment.execute(input)
       switch (result.outcome) {
         case 'created':
+          queryCache.invalidate(partnerRecruitmentListCacheNamespace)
           navigate(`${appPaths.partnerDetail}?${new URLSearchParams({ recruitmentId: String(result.recruitment.id) })}`)
           return
         case 'company-required':

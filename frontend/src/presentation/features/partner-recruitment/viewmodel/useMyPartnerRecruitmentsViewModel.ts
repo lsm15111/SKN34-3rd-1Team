@@ -5,7 +5,8 @@ import type { PartnerRecruitmentSummary } from '../../../../domain/entities/Part
 import { defaultPartnerRecruitmentQuery, type PartnerRecruitmentQuery } from '../../../../domain/entities/PartnerRecruitmentQuery'
 import type { ClosePartnerRecruitmentUseCase } from '../../../../domain/usecases/PartnerRecruitmentUseCases'
 import { useAuthSession } from '../../../shared/auth/hooks/useAuthSession'
-import { usePartnerRecruitmentBrowse } from '../../../shared/partner-recruitment/usePartnerRecruitmentBrowse'
+import { useQueryCache } from '../../../shared/data/queryCacheContext'
+import { partnerRecruitmentListCacheNamespace, usePartnerRecruitmentBrowse } from '../../../shared/partner-recruitment/usePartnerRecruitmentBrowse'
 import { appPaths } from '../../../shared/routes/appPaths'
 import { recruitmentCloseMessages } from './usePartnerRecruitmentDetailViewModel'
 
@@ -23,9 +24,10 @@ export function useMyPartnerRecruitmentsViewModel(
   closeUseCase: Pick<ClosePartnerRecruitmentUseCase, 'execute'> = appContainer.resolve('closePartnerRecruitmentUseCase'),
 ) {
   const { hasCompany } = useAuthSession()
+  const queryCache = useQueryCache()
   const [page, setPage] = useState(1)
   const query: PartnerRecruitmentQuery = { ...defaultPartnerRecruitmentQuery, mineOnly: true, sort: 'RECENT', page }
-  const { phase, page: result, retry } = usePartnerRecruitmentBrowse(query)
+  const { phase, page: result, isRefreshing, retry } = usePartnerRecruitmentBrowse(query)
   const [closedIds, setClosedIds] = useState<ReadonlySet<number>>(new Set())
   const [closeState, setCloseState] = useState<CloseState>({ status: 'idle' })
 
@@ -42,6 +44,7 @@ export function useMyPartnerRecruitmentsViewModel(
       const outcome = await closeUseCase.execute(target.id)
       switch (outcome.outcome) {
         case 'closed':
+          queryCache.invalidate(partnerRecruitmentListCacheNamespace)
           setClosedIds((current) => new Set([...current, target.id]))
           setCloseState({ status: 'idle' })
           return
@@ -64,6 +67,8 @@ export function useMyPartnerRecruitmentsViewModel(
   return {
     hasCompany,
     phase,
+    isRefreshing,
+    hasPage: result !== null,
     recruitments,
     total: result?.total ?? 0,
     totalPages: result?.totalPages ?? 0,

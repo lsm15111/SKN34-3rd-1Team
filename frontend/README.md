@@ -532,6 +532,25 @@ ViewModel은 서버의 `detail` 대신 고정된 한국어 문구를 표시합�
 계층·DI의 상세 규칙은 [아키텍처 문서](../docs/architecture.md#frontend와-내부-계약), 예제 API는
 [SampleItem 계약](../docs/sample-item-contract.md)을 참고하세요.
 
+### 목록 화면의 데이터 미로드 규칙
+
+조건(필터·페이지)별로 서버 목록을 읽는 화면은 `presentation/shared/data`의 한 가지 규칙을 씁니다.
+필터 검색 카탈로그, 파트너 모집 목록(내부·공개·내 모집글), 관리자 계정 목록이 이 규칙을 따릅니다.
+
+- `useKeyedQuery({ key, fetch, timeoutMs, cache })`: 키가 바뀌면 이전 요청을 취소하고 늦게 온 응답은 무시하며,
+  조회 중에도 직전 결과를 `data`로 돌려줍니다(`isRefreshing`). `cache` 이름을 주면 응답을 `QueryCache`에 두어
+  뒤로 가기·재방문 때 캐시를 먼저 보여 준 뒤 다시 조회합니다(`isStale`). 캐시는 앱 한 번의 수명(`QueryCacheProvider`,
+  최대 30개·5분)이고 로그인 계정이 바뀌면 전부 비웁니다. 모집글 등록·수정·마감, 관리자 조치처럼 목록이 바뀌는
+  쓰기에 성공하면 호출부가 `useQueryCache().invalidate(이름)`으로 그 목록 캐시만 비웁니다.
+- `ResultsRegion`: 데이터가 없으면 스켈레톤 + 읽어 주는 `role="status"` 안내, 데이터가 있으면 목록을 지우지 않고
+  `aria-busy` + 흐림 + 얇은 진행바(200ms 뒤에 켜고 최소 400ms 유지, `useDelayedPending`)로 갱신 중임을 알립니다.
+  실패는 데이터가 있으면 인라인 배너(다시 불러오기), 없으면 호출부의 오류 화면입니다.
+- 필터는 조회 중에도 잠그지 않습니다. 검색 버튼은 이름을 바꾸지 않고 `aria-busy`와 표시만 바꿉니다.
+- 필터 검색은 적용된 조건을 폼(초안)과 구분해 칩으로 보여 주고, 사용자가 조건을 바꿔 새 결과가 왔을 때만 결과 상단으로
+  스크롤합니다. 뒤로 가기 복원은 브라우저에 맡깁니다.
+
+설계 근거와 리서치는 [목록 진입·필터 변경 설계](../docs/list-loading-transition-design-20260915.md)를 참고하세요.
+
 ## 검증
 
 ```bash

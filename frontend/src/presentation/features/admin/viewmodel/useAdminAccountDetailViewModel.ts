@@ -14,7 +14,9 @@ import {
   type AdminAccountDetail,
 } from '../../../../domain/entities/AdminAccount'
 import type { GetAdminAccountDetailUseCase, TakeAdminAccountActionUseCase } from '../../../../domain/usecases/AdminAccountUseCases'
+import { useQueryCache } from '../../../shared/data/queryCacheContext'
 import { appPaths } from '../../../shared/routes/appPaths'
+import { adminAccountListCacheNamespace } from './useAdminAccountListViewModel'
 import { formatAdminDate, formatAdminDateTime, formatBusinessNumber } from './adminAccountFormat'
 
 type DetailUseCases = {
@@ -83,6 +85,7 @@ export function useAdminAccountDetailViewModel(useCases: Partial<DetailUseCases>
     takeAction: useCases.takeAction ?? appContainer.resolve('takeAdminAccountActionUseCase'),
   }))
   const [searchParams] = useSearchParams()
+  const queryCache = useQueryCache()
   const accountId = readAdminAccountId(searchParams.getAll('accountId'))
   const [version, setVersion] = useState(0)
   const [state, setState] = useState<DetailState>({ id: accountId, phase: accountId === null ? 'missing' : 'loading', detail: null })
@@ -127,6 +130,7 @@ export function useAdminAccountDetailViewModel(useCases: Partial<DetailUseCases>
       const result = await resolved.takeAction.execute(detail.account.id, kind, reason)
       if (!isMounted.current) return
       if (result.outcome === 'done') {
+        queryCache.invalidate(adminAccountListCacheNamespace)
         setState({ id: result.detail.account.id, phase: 'ready', detail: result.detail })
         setModal(null)
         setNotice(adminAccountDetailMessages.done[kind])

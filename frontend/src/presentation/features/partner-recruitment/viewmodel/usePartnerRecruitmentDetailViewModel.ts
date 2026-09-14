@@ -12,7 +12,8 @@ import type { SendPartnerProposalUseCase } from '../../../../domain/usecases/Par
 import type { ClosePartnerRecruitmentUseCase } from '../../../../domain/usecases/PartnerRecruitmentUseCases'
 import { useAuthSession } from '../../../shared/auth/hooks/useAuthSession'
 import { useReceivedProposals } from '../../../shared/partner-proposal/useReceivedProposals'
-import { readRecruitmentId, usePartnerRecruitmentDetail } from '../../../shared/partner-recruitment/usePartnerRecruitmentBrowse'
+import { useQueryCache } from '../../../shared/data/queryCacheContext'
+import { partnerRecruitmentListCacheNamespace, readRecruitmentId, usePartnerRecruitmentDetail } from '../../../shared/partner-recruitment/usePartnerRecruitmentBrowse'
 import { appPaths } from '../../../shared/routes/appPaths'
 
 export type LinkCopyState = 'idle' | 'copied' | 'failed'
@@ -54,6 +55,7 @@ export function usePartnerRecruitmentDetailViewModel(
   closeUseCase: Pick<ClosePartnerRecruitmentUseCase, 'execute'> = appContainer.resolve('closePartnerRecruitmentUseCase'),
 ) {
   const { hasCompany } = useAuthSession()
+  const queryCache = useQueryCache()
   const [searchParams] = useSearchParams()
   const recruitmentId = readRecruitmentId(searchParams.getAll('recruitmentId'))
   const { phase, recruitment: loadedRecruitment } = usePartnerRecruitmentDetail(recruitmentId)
@@ -123,6 +125,7 @@ export function usePartnerRecruitmentDetailViewModel(
       const result = await closeUseCase.execute(recruitment.id)
       switch (result.outcome) {
         case 'closed':
+          queryCache.invalidate(partnerRecruitmentListCacheNamespace)
           setClosedRecruitment(result.recruitment)
           setCloseState({ status: 'idle' })
           return

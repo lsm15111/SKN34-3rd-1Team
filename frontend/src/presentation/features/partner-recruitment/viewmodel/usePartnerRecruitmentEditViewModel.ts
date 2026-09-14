@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router'
 
 import { appContainer } from '../../../../app/appContainer'
 import { validatePartnerRecruitmentContent, type UpdatePartnerRecruitmentUseCase } from '../../../../domain/usecases/PartnerRecruitmentUseCases'
-import { readRecruitmentId, usePartnerRecruitmentDetail } from '../../../shared/partner-recruitment/usePartnerRecruitmentBrowse'
+import { useQueryCache } from '../../../shared/data/queryCacheContext'
+import { partnerRecruitmentListCacheNamespace, readRecruitmentId, usePartnerRecruitmentDetail } from '../../../shared/partner-recruitment/usePartnerRecruitmentBrowse'
 import { appPaths } from '../../../shared/routes/appPaths'
 import { latestRecruitmentDeadlineFor } from './usePartnerRecruitmentCreateViewModel'
 import { recruitmentFieldMessage, recruitmentFormMessages, useRecruitmentFormFields } from './useRecruitmentFormFields'
@@ -24,6 +25,7 @@ export function usePartnerRecruitmentEditViewModel(
   updateUseCase: Pick<UpdatePartnerRecruitmentUseCase, 'execute'> = appContainer.resolve('updatePartnerRecruitmentUseCase'),
 ) {
   const navigate = useNavigate()
+  const queryCache = useQueryCache()
   const [searchParams] = useSearchParams()
   const recruitmentId = readRecruitmentId(searchParams.getAll('recruitmentId'))
   const { phase, recruitment } = usePartnerRecruitmentDetail(recruitmentId)
@@ -75,6 +77,7 @@ export function usePartnerRecruitmentEditViewModel(
       const result = await updateUseCase.execute(recruitment.id, content)
       switch (result.outcome) {
         case 'updated':
+          queryCache.invalidate(partnerRecruitmentListCacheNamespace)
           navigate(detailPath)
           return
         case 'not-found':

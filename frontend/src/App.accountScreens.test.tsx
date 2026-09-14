@@ -1069,14 +1069,18 @@ describe('파트너 모집 화면', () => {
     renderApp('/app/partners')
     expect(await screen.findByText(/아직 모집 중인 글이 없습니다/)).toBeTruthy()
 
+    // 이미 결과(0건)를 보여 준 뒤의 실패는 목록을 오류 화면으로 바꾸지 않고 인라인 배너로 알린다.
     browse.mockRejectedValueOnce(new Error('down'))
     fireEvent.change(screen.getByRole('searchbox', { name: '모집글 검색' }), { target: { value: '없는 글' } })
     fireEvent.click(screen.getByRole('button', { name: '조회' }))
-    expect(await screen.findByRole('region', { name: '모집글 불러오기 실패' })).toBeTruthy()
+    const failure = await screen.findByRole('alert')
+    expect(failure.textContent).toContain('이전 결과를 보여 드리고 있어요')
+    expect(screen.getByRole('region', { name: '검색 결과 없음' })).toBeTruthy()
 
     browse.mockResolvedValueOnce({ ...partnerRecruitmentPage, recruitments: [], total: 0, totalPages: 0 })
-    fireEvent.click(screen.getByRole('button', { name: '다시 시도' }))
-    expect(await screen.findByRole('region', { name: '검색 결과 없음' })).toBeTruthy()
+    fireEvent.click(within(failure).getByRole('button', { name: '다시 불러오기' }))
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
+    expect(screen.getByRole('region', { name: '검색 결과 없음' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '검색·필터 초기화' }))
     expect(await screen.findAllByRole('article')).toHaveLength(4)
   })

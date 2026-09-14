@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 import { appContainer } from '../../../app/appContainer'
 import type { PartnerRecruitment, PartnerRecruitmentSummary } from '../../../domain/entities/PartnerRecruitment'
 import type { PartnerRecruitmentPage, PartnerRecruitmentQuery } from '../../../domain/entities/PartnerRecruitmentQuery'
 import type { BrowsePartnerRecruitmentsUseCase, GetPartnerRecruitmentDetailUseCase } from '../../../domain/usecases/PartnerRecruitmentUseCases'
+import { useKeyedQuery } from '../data/useKeyedQuery'
 
 export type RecruitmentLoadState<Value> =
   | { phase: 'loading'; value: Value | null }
@@ -12,41 +13,27 @@ export type RecruitmentLoadState<Value> =
 
 const REQUEST_TIMEOUT_MS = 10_000
 
+/** 모집글 목록 캐시 이름공간입니다. 모집글을 올리거나 고치거나 마감하면 이 이름으로 비웁니다. */
+export const partnerRecruitmentListCacheNamespace = 'partner-recruitments'
+
 /**
- * 공개·내부 파트너 모집 목록이 함께 쓰는 조회 훅입니다. 조건이 바뀌면 이전 요청을 취소하고 다시 읽으며,
- * 실패하면 마지막 결과를 유지한 채 실패로 표시합니다. 특정 페이지의 ViewModel이 아니므로 shared에 둡니다.
+ * 공개·내부 파트너 모집 목록이 함께 쓰는 조회 훅입니다. 조건이 바뀌면 이전 요청을 취소하고 다시 읽되 직전 결과를 유지하고(`isRefreshing`),
+ * 뒤로 가기·재방문은 캐시를 먼저 보여 줍니다. 실패해도 마지막 결과를 유지한 채 실패로 표시합니다. 특정 페이지의 ViewModel이 아니므로 shared에 둡니다.
  */
 export function usePartnerRecruitmentBrowse(
   query: PartnerRecruitmentQuery,
   useCase: Pick<BrowsePartnerRecruitmentsUseCase, 'execute'> = appContainer.resolve('browsePartnerRecruitmentsUseCase'),
 ) {
   const key = JSON.stringify(query)
-  const [version, setVersion] = useState(0)
-  const [state, setState] = useState<RecruitmentLoadState<PartnerRecruitmentPage<PartnerRecruitmentSummary>> & { key: string }>({
-    key, phase: 'loading', value: null,
+  const fetch = useCallback((signal: AbortSignal) => useCase.execute(JSON.parse(key) as PartnerRecruitmentQuery, signal), [key, useCase])
+  const result = useKeyedQuery<PartnerRecruitmentPage<PartnerRecruitmentSummary>>({
+    key, fetch, timeoutMs: REQUEST_TIMEOUT_MS, cache: partnerRecruitmentListCacheNamespace,
   })
-
-  useEffect(() => {
-    const controller = new AbortController()
-    let current = true
-    setState((previous) => ({ key, phase: 'loading', value: previous.value }))
-    const timer = setTimeout(() => {
-      if (!current) return
-      controller.abort()
-      setState((previous) => ({ ...previous, key, phase: 'failed' }))
-    }, REQUEST_TIMEOUT_MS)
-    void Promise.resolve().then(() => useCase.execute(JSON.parse(key) as PartnerRecruitmentQuery, controller.signal))
-      .then((page) => { if (current && !controller.signal.aborted) setState({ key, phase: 'ready', value: page }) })
-      .catch(() => { if (current && !controller.signal.aborted) setState((previous) => ({ ...previous, key, phase: 'failed' })) })
-      .finally(() => clearTimeout(timer))
-    return () => { current = false; clearTimeout(timer); controller.abort() }
-  }, [key, version, useCase])
-
-  const phase = state.key === key ? state.phase : 'loading'
   return {
-    phase,
-    page: state.value,
-    retry: () => setVersion((value) => value + 1),
+    phase: result.phase,
+    page: result.data,
+    isRefreshing: result.isRefreshing,
+    retry: result.retry,
   }
 }
 

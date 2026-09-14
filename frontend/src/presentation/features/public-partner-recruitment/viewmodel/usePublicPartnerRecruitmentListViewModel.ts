@@ -20,7 +20,7 @@ export function usePublicPartnerRecruitmentListViewModel() {
   const [query, setQuery] = useState<PartnerRecruitmentQuery>(defaultPartnerRecruitmentQuery)
   // 검색어는 입력 중인 초안으로 두었다가 조회 버튼(Enter)에서 적용합니다.
   const [keywordDraft, setKeywordDraft] = useState('')
-  const { phase, page, retry } = usePartnerRecruitmentBrowse(query)
+  const { phase, page, isRefreshing, retry } = usePartnerRecruitmentBrowse(query)
   // 자세히 보기를 누른 모집글입니다. 로그인·회원가입 뒤 그 모집글의 내부 상세로 돌아오도록 복귀 경로를 담습니다.
   const [promptRecruitmentId, setPromptRecruitmentId] = useState<number | null>(null)
   const promptReturnPath = promptRecruitmentId === null
@@ -29,6 +29,8 @@ export function usePublicPartnerRecruitmentListViewModel() {
 
   return {
     phase,
+    isRefreshing,
+    hasPage: page !== null,
     // 내가 쓴 모집글 구분은 로그인한 뒤에만 의미가 있으므로 공개 목록에서는 모두 남의 글로 보여 줍니다.
     recruitments: (page?.recruitments ?? []).map((recruitment) => ({ ...recruitment, isMine: false })),
     total: page?.total ?? 0,
