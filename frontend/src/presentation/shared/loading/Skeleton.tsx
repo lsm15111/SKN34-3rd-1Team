@@ -10,17 +10,19 @@ export function SkeletonLine({ width = 'w-full', height = 'h-3', className = '' 
 }
 
 /** 문단 자리입니다. 마지막 줄만 짧게 두어 글처럼 보이게 합니다. */
-export function SkeletonText({ lines = 3, className = '' }: { lines?: number; className?: string }) {
-  return <div className={`grid gap-2.5 ${className}`}>
+export function SkeletonText({ lines = 3, className }: { lines?: number; className?: string }) {
+  const text = <div className="grid gap-2.5">
     {Array.from({ length: Math.max(1, lines) }, (_, index) => (
       <SkeletonLine key={index} width={index === lines - 1 ? 'w-2/3' : 'w-full'} />
     ))}
   </div>
+  return className ? <div className={className}>{text}</div> : text
 }
 
 /** 상세 화면 자리입니다: 제목, 짧은 부제, 문단 두 덩어리. 공고·모집글·계정·기업 상세가 같은 모양을 씁니다. */
-export function SkeletonDetail({ className = '' }: { className?: string }) {
-  return <div className={`grid gap-5 ${className}`}>
+export function SkeletonDetail({ className }: { className?: string }) {
+  // 바깥 className은 카드 같은 껍데기용이라 안쪽 격자와 섞지 않습니다(카드가 flex여도 배치가 깨지지 않게).
+  const detail = <div className="grid gap-5">
     <div className="grid gap-3">
       <SkeletonLine width="w-1/4" />
       <SkeletonLine width="w-3/4" height="h-6" />
@@ -29,11 +31,12 @@ export function SkeletonDetail({ className = '' }: { className?: string }) {
     <SkeletonText lines={4} />
     <SkeletonText lines={3} />
   </div>
+  return className ? <div className={className}>{detail}</div> : detail
 }
 
 /** 목록 행 자리입니다: 제목 한 줄과 보조 정보 한 줄이 행마다 반복됩니다. */
-export function SkeletonRows({ rows = 3, className = '' }: { rows?: number; className?: string }) {
-  return <div className={`grid gap-4 ${className}`}>
+export function SkeletonRows({ rows = 3, className }: { rows?: number; className?: string }) {
+  const list = <div className="grid gap-4">
     {Array.from({ length: Math.max(1, rows) }, (_, index) => (
       <div key={index} className="grid gap-2">
         <SkeletonLine width="w-3/4" height="h-4" />
@@ -41,6 +44,7 @@ export function SkeletonRows({ rows = 3, className = '' }: { rows?: number; clas
       </div>
     ))}
   </div>
+  return className ? <div className={className}>{list}</div> : list
 }
 
 /** 카드 격자 자리입니다. 격자 클래스는 실제 화면의 것을 그대로 넘겨 열 수·간격을 맞춥니다. */
