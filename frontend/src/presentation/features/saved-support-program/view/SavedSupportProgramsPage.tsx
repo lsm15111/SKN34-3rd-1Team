@@ -1,6 +1,8 @@
 import { Link } from 'react-router'
 
 import { workspacePageStyles, workspaceTagClassName } from '../../../shared/workspace/WorkspacePage.styles'
+import { LoadingRegion } from '../../../shared/loading/LoadingRegion'
+import { SkeletonRows } from '../../../shared/loading/Skeleton'
 import { WorkspacePageHeader } from '../../../shared/workspace/WorkspacePageHeader'
 import { savedSupportProgramMessages, useSavedSupportProgramsViewModel } from '../viewmodel/useSavedSupportProgramsViewModel'
 import { savedSupportProgramStyles as styles } from './SavedSupportProgramsPage.styles'
@@ -21,9 +23,7 @@ export function SavedSupportProgramsPage() {
               <button className={workspacePageStyles.quietLink} type="button" onClick={retry}>다시 시도</button>
             </section>
           ) : phase === 'loading' && items.length === 0 ? (
-            <section className={workspacePageStyles.card} aria-label="관심 공고 불러오는 중">
-              <p className={workspacePageStyles.emptyNote}>{savedSupportProgramMessages.loading}</p>
-            </section>
+            <LoadingRegion className={workspacePageStyles.card} label={savedSupportProgramMessages.loading} skeleton={<SkeletonRows rows={4} />} />
           ) : items.length === 0 ? (
             <section className={workspacePageStyles.card} aria-label="관심 공고 없음">
               <p className={workspacePageStyles.emptyNote}>{savedSupportProgramMessages.empty}</p>

@@ -508,6 +508,8 @@ describe('작업 화면 사이드바', () => {
     expect(within(sidebar).queryByRole('button', { name: '새 채팅' })).toBeNull()
     expect(within(sidebar).getAllByRole('button', { name: '지원사업 새검색' })).toHaveLength(1)
     fireEvent.click(within(sidebar).getByRole('button', { name: '지원사업 새검색' }))
+    // 검색 요청이 진행 중이면 바로 지우지 않고 먼저 물어봅니다. 계속을 누르면 새 대화가 됩니다.
+    fireEvent.click(within(screen.getByRole('dialog', { name: '검색이 진행 중입니다' })).getByRole('button', { name: '계속' }))
     expect(input.value).toBe('')
     expect(document.activeElement).toBe(input)
     expect(within(screen.getByRole('region', { name: '대화 내역' })).queryByText('수출 지원사업')).toBeNull()

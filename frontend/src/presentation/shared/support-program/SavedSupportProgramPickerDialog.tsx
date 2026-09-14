@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef } from 'react'
 
 import type { SupportProgram } from '../../../domain/entities/SupportProgram'
+import { LoadingState } from '../loading/LoadingState'
 
 type Props = {
   open: boolean
@@ -39,7 +40,7 @@ export function SavedSupportProgramPickerDialog({
         <button ref={closeRef} type="button" className="grid size-10 shrink-0 place-items-center rounded-full text-xl hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-emerald-700" aria-label="관심 공고함 닫기" onClick={onClose}>×</button>
       </header>
       <div className="min-h-36 flex-1 overflow-y-auto p-5">
-        {(phase === 'idle' || phase === 'loading') && <p role="status">관심 공고를 불러오는 중입니다.</p>}
+        {(phase === 'idle' || phase === 'loading') && <LoadingState label="관심 공고를 불러오는 중입니다." />}
         {phase === 'failed' && <div className={warning} role="alert"><p>관심 공고를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p><button type="button" className={`${button} mt-3`} onClick={onRetry}>다시 불러오기</button></div>}
         {phase === 'ready' && programs.length === 0 && <p className={muted}>관심 공고함에 담은 공고가 없습니다.</p>}
         {programs.length > 0 && <ul className="space-y-3" aria-label={listLabel}>{programs.map((program) => {

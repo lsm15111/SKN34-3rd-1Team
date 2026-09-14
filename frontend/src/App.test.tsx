@@ -1303,7 +1303,7 @@ describe('App navigation', () => {
       `/support-programs/detail?sourceCode=${encodeURIComponent(detail.sourceCode)}&sourceProgramId=${encodeURIComponent(detail.id)}`,
     )
 
-    expect(screen.getByRole('heading', { name: '공고 정보를 불러오는 중입니다' })).toBeTruthy()
+    expect(screen.getByText('공고 정보를 불러오는 중입니다')).toBeTruthy()
     await screen.findByRole('heading', { name: detail.title })
     expect(fetchMock).toHaveBeenCalledOnce()
   })

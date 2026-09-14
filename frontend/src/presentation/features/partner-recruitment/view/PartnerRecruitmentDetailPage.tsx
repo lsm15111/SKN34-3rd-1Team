@@ -18,6 +18,8 @@ import {
   recruitmentDeadlineLabel,
 } from '../../../shared/partner-recruitment/partnerRecruitmentLabels'
 import { appPaths } from '../../../shared/routes/appPaths'
+import { LoadingRegion } from '../../../shared/loading/LoadingRegion'
+import { SkeletonDetail } from '../../../shared/loading/Skeleton'
 import { usePartnerRecruitmentDetailViewModel } from '../viewmodel/usePartnerRecruitmentDetailViewModel'
 import { partnerRecruitmentStyles } from './PartnerRecruitment.styles'
 
@@ -62,8 +64,8 @@ export function PartnerRecruitmentDetailPage() {
   } = usePartnerRecruitmentDetailViewModel()
 
   if (phase === 'loading') {
-    return <div className={workspacePageStyles.content} aria-label="모집글 불러오는 중">
-      <p className={workspacePageStyles.emptyNote}>모집글을 불러오는 중입니다.</p>
+    return <div className={workspacePageStyles.content}>
+      <LoadingRegion label="모집글을 불러오는 중입니다." skeleton={<SkeletonDetail className={workspacePageStyles.card} />} />
     </div>
   }
 

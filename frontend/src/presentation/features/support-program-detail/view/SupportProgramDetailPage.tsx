@@ -3,6 +3,8 @@ import { Link, useLocation, useSearchParams } from 'react-router'
 
 import { loginPathFor } from '../../../shared/auth/returnPath'
 import { appPaths, isAppPath, supportProgramQuestionPath } from '../../../shared/routes/appPaths'
+import { LoadingRegion } from '../../../shared/loading/LoadingRegion'
+import { SkeletonDetail } from '../../../shared/loading/Skeleton'
 import { workspacePageStyles } from '../../../shared/workspace/WorkspacePage.styles'
 
 import type { SupportProgram, SupportProgramStatus } from '../../../../domain/entities/SupportProgram'
@@ -76,10 +78,7 @@ function LoadingSupportProgramDetail({ searchReturnTo }: { searchReturnTo: Suppo
   return (
     <DetailShell searchReturnTo={searchReturnTo} live>
       <section className={supportProgramDetailStyles.unavailableCard}>
-        <h1 className={supportProgramDetailStyles.title}>공고 정보를 불러오는 중입니다</h1>
-        <p className={supportProgramDetailStyles.unavailableDescription}>
-          최신 공고 조건을 확인하고 있습니다.
-        </p>
+        <LoadingRegion label="공고 정보를 불러오는 중입니다" skeleton={<SkeletonDetail />} />
       </section>
     </DetailShell>
   )

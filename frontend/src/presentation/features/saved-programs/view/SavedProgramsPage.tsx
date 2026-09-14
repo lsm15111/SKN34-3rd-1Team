@@ -6,6 +6,8 @@ import type { SupportProgramStatus } from '../../../../domain/entities/SupportPr
 import { regionNames } from '../../../../domain/entities/Region'
 import { supportProgramCategories } from '../../../../domain/entities/SupportProgramCategory'
 import { appPaths, supportProgramDetailPath } from '../../../shared/routes/appPaths'
+import { LoadingRegion } from '../../../shared/loading/LoadingRegion'
+import { SkeletonRows } from '../../../shared/loading/Skeleton'
 import { workspaceChipClassName, workspacePageStyles, workspaceTagClassName, type WorkspaceTagTone } from '../../../shared/workspace/WorkspacePage.styles'
 import { WorkspacePageHeader } from '../../../shared/workspace/WorkspacePageHeader'
 import { savedSupportProgramMessages } from '../../saved-support-program/viewmodel/useSavedSupportProgramsViewModel'
@@ -96,9 +98,7 @@ export function SavedProgramsPage({ initial, browseUseCase, preparationUseCase }
         </form>
 
         {vm.viewMode !== 'pipeline' ? (vm.phase === 'loading' && vm.totalProgramCount === 0 ? (
-          <section className={workspacePageStyles.card} aria-label="관심 공고 불러오는 중">
-            <p className={workspacePageStyles.emptyNote} role="status">{savedSupportProgramMessages.loading}</p>
-          </section>
+          <LoadingRegion className={workspacePageStyles.card} label={savedSupportProgramMessages.loading} skeleton={<SkeletonRows rows={4} />} />
         ) : vm.phase === 'failed' ? (
           <section className={workspacePageStyles.card} aria-label="관심 공고 불러오기 실패">
             <p className={workspacePageStyles.emptyNote}>{savedSupportProgramMessages.failed}</p>

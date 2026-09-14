@@ -6,6 +6,8 @@ import {
 } from '../../../shared/workspace/WorkspacePage.styles'
 import { WorkspacePageHeader } from '../../../shared/workspace/WorkspacePageHeader'
 import { appPaths } from '../../../shared/routes/appPaths'
+import { LoadingRegion } from '../../../shared/loading/LoadingRegion'
+import { SkeletonDetail } from '../../../shared/loading/Skeleton'
 import { programDeadlineLabel } from '../../../shared/partner-recruitment/partnerRecruitmentLabels'
 import { usePartnerRecruitmentEditViewModel } from '../viewmodel/usePartnerRecruitmentEditViewModel'
 import { partnerRecruitmentStyles } from './PartnerRecruitment.styles'
@@ -24,8 +26,8 @@ export function PartnerRecruitmentEditPage() {
     return (
       <>
         {header}
-        <div className={workspacePageStyles.content} aria-label="모집글 불러오는 중">
-          <p className={workspacePageStyles.emptyNote}>모집글을 불러오는 중입니다.</p>
+        <div className={workspacePageStyles.content}>
+          <LoadingRegion label="모집글을 불러오는 중입니다." skeleton={<SkeletonDetail className={workspacePageStyles.card} />} />
         </div>
       </>
     )

@@ -236,6 +236,11 @@ describe('대화 조건 해석·확인 검색 HTTP E2E', () => {
     expect(requestSignal.aborted).toBe(false)
     readiness.canSearch = false
     fireEvent.click(screen.getByRole('button', { name: path === '/' ? '새 AI 대화 검색' : '지원사업 새검색' }))
+    if (path !== '/') {
+      // 작업 화면은 진행 중인 요청을 바로 끊지 않고 먼저 물어봅니다. 계속을 눌러야 새 대화가 됩니다.
+      expect(requestSignal.aborted).toBe(false)
+      await act(async () => fireEvent.click(within(screen.getByRole('dialog', { name: '검색이 진행 중입니다' })).getByRole('button', { name: '계속' })))
+    }
     expect(requestSignal.aborted).toBe(true)
     expect(document.activeElement).toBe(input)
     expect((input as HTMLTextAreaElement).disabled).toBe(false)

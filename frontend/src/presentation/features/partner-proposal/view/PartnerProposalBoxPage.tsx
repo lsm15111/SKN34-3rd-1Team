@@ -16,6 +16,8 @@ import {
   usePartnerProposalBoxViewModel,
 } from '../viewmodel/usePartnerProposalBoxViewModel'
 import { partnerProposalStyles } from './PartnerProposal.styles'
+import { LoadingRegion } from '../../../shared/loading/LoadingRegion'
+import { SkeletonRows } from '../../../shared/loading/Skeleton'
 
 function formatDateTime(value: string): string {
   return value.replace('T', ' ').slice(0, 16)
@@ -91,9 +93,7 @@ export function PartnerProposalBoxPage() {
             <button className={workspacePageStyles.quietLink} type="button" onClick={reload}>다시 시도</button>
           </section>
         ) : phase === 'loading' && proposals.length === 0 ? (
-          <section className={workspacePageStyles.card} aria-label="제안 불러오는 중">
-            <p className={workspacePageStyles.emptyNote}>제안을 불러오는 중입니다.</p>
-          </section>
+          <LoadingRegion className={workspacePageStyles.card} label="제안을 불러오는 중입니다." skeleton={<SkeletonRows rows={3} />} />
         ) : proposals.length === 0 ? (
           <section className={workspacePageStyles.card} aria-label="제안 없음">
             <p className={workspacePageStyles.emptyNote}>

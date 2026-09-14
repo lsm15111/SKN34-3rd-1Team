@@ -16,6 +16,8 @@ import { SavedSupportProgramPickerDialog } from '../../../shared/support-program
 import { useApplicationPreparationEditorViewModel } from '../viewmodel/useApplicationPreparationEditorViewModel'
 import { useApplicationPreparationListViewModel } from '../viewmodel/useApplicationPreparationListViewModel'
 import { applicationPreparationStyles as s } from './ApplicationPreparation.styles'
+import { LoadingRegion } from '../../../shared/loading/LoadingRegion'
+import { SkeletonDetail, SkeletonRows } from '../../../shared/loading/Skeleton'
 
 
 const listTitle = '신청 문서 작성 도우미'
@@ -234,7 +236,7 @@ function ApplicationPreparationList() {
     <main className={workspacePageStyles.content}>
       <p className={s.muted}>검수된 공식 양식과 지원 분야를 선택해 신청 준비를 시작하고, 저장한 작업을 다시 열 수 있습니다.</p>
       {vm.error && <ErrorNotice message={vm.error.message} retryLabel="목록 다시 불러오기" onRetry={vm.retry} />}
-      {vm.isInitialLoading && <p className={s.status} role="status" aria-live="polite">신청 준비 목록을 불러오는 중입니다.</p>}
+      {vm.isInitialLoading && <LoadingRegion label="신청 준비 목록을 불러오는 중입니다." skeleton={<SkeletonRows rows={3} className={s.card} />} />}
       {vm.page?.items.length === 0 && !vm.isInitialLoading && <section className={s.card} aria-labelledby="empty-preparations-title">
         <h2 className={s.cardTitle} id="empty-preparations-title">아직 시작한 신청 문서가 없습니다.</h2>
         <p className={s.muted}>새 작성에서 공식 양식과 지원 분야를 확인한 뒤 시작해 주세요.</p>
@@ -320,9 +322,7 @@ function ApplicationPreparationEditor({ id, initialSourceCode, initialSourceProg
       title={id === null ? '새 신청 문서' : '신청 문서 / 답변 입력'}
     />
     <main className={workspacePageStyles.content}>
-      {vm.loading && <p className={s.status} role="status" aria-live="polite">
-        {id === null ? '지원 가능한 공식 양식을 불러오는 중입니다.' : '신청 문서 정보를 불러오는 중입니다.'}
-      </p>}
+      {vm.loading && <LoadingRegion label={id === null ? '지원 가능한 공식 양식을 불러오는 중입니다.' : '신청 문서 정보를 불러오는 중입니다.'} skeleton={<SkeletonDetail className={s.card} />} />}
       {id === null && vm.discoveryJobsLoading && <p className={s.status} role="status" aria-live="polite">최근 공식 문서 분석 작업을 확인하는 중입니다.</p>}
       {vm.error && <ErrorNotice
         message={vm.error.message}

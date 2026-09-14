@@ -2,6 +2,8 @@ import { Link } from 'react-router'
 
 import { partnerRoleLabels } from '../../../../domain/entities/PartnerRecruitment'
 import { workspacePageStyles, workspaceTagClassName } from '../../../shared/workspace/WorkspacePage.styles'
+import { LoadingRegion } from '../../../shared/loading/LoadingRegion'
+import { SkeletonDetail } from '../../../shared/loading/Skeleton'
 import {
   companyAgeLabel,
   programDeadlineLabel,
@@ -31,9 +33,9 @@ export function PublicPartnerRecruitmentDetailPage() {
 
   if (phase === 'loading') {
     return (
-      <main className={styles.page} aria-label="모집글 불러오는 중">
+      <main className={styles.page}>
         <Link className={styles.backLink} to={publicPaths.partners}>← 파트너 모집 목록</Link>
-        <p className={styles.description}>모집글을 불러오는 중입니다.</p>
+        <LoadingRegion className="mt-6" label="모집글을 불러오는 중입니다." skeleton={<SkeletonDetail />} />
       </main>
     )
   }

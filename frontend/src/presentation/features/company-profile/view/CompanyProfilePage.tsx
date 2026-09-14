@@ -19,6 +19,8 @@ import {
 import { ChangePasswordModal, DeleteAccountModal } from './AccountSecurityModals'
 import { CompanyPartnerProfileSection } from './CompanyPartnerProfileSection'
 import { companyProfileStyles } from './CompanyProfilePage.styles'
+import { LoadingRegion } from '../../../shared/loading/LoadingRegion'
+import { SkeletonDetail } from '../../../shared/loading/Skeleton'
 
 const usageIcons: Record<'target' | 'users' | 'shield', ReactNode> = {
   target: (
@@ -217,9 +219,7 @@ export function CompanyProfilePage() {
             </section>
 
             {companyState.status === 'loading' ? (
-              <section className={workspacePageStyles.card} aria-label="기업 정보 불러오기">
-                <p className={workspacePageStyles.emptyNote} aria-live="polite">기업 정보를 불러오는 중입니다.</p>
-              </section>
+              <LoadingRegion className={workspacePageStyles.card} label="기업 정보를 불러오는 중입니다." skeleton={<SkeletonDetail />} />
             ) : null}
             {companyState.status === 'error' ? (
               <section className={workspacePageStyles.card} aria-label="기업 정보 불러오기">

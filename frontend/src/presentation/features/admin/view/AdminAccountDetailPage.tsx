@@ -2,6 +2,8 @@
 import { WorkspaceModal } from '../../../shared/workspace/WorkspaceModal'
 import { workspaceModalStyles } from '../../../shared/workspace/WorkspaceModal.styles'
 import { workspacePageStyles, workspaceTagClassName } from '../../../shared/workspace/WorkspacePage.styles'
+import { LoadingRegion } from '../../../shared/loading/LoadingRegion'
+import { SkeletonDetail } from '../../../shared/loading/Skeleton'
 import { WorkspacePageHeader } from '../../../shared/workspace/WorkspacePageHeader'
 import { useAdminAccountDetailViewModel } from '../viewmodel/useAdminAccountDetailViewModel'
 import { adminAccountsPageStyles as styles } from './AdminAccountsPage.styles'
@@ -36,7 +38,7 @@ export function AdminAccountDetailPage() {
             <button className={workspacePageStyles.quietLink} type="button" onClick={vm.retry}>다시 시도</button>
           </p>
         ) : vm.account === null ? (
-          <p className={workspacePageStyles.emptyNote}>계정을 불러오는 중입니다.</p>
+          <LoadingRegion label="계정을 불러오는 중입니다." skeleton={<SkeletonDetail className={workspacePageStyles.card} />} />
         ) : (
           <div className={styles.detailGrid}>
             <section className={workspacePageStyles.card} aria-label="계정 정보">

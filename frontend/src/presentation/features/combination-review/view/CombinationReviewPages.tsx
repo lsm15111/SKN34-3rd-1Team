@@ -3,6 +3,9 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { useAppDispatch, useAppSelector } from '../../../../app/hooks'
 import { selectCurrentAccount, signedOut } from '../../../shared/auth/state/authSlice'
 import { appPaths, combinationReviewRunResultPath, supportProgramDetailPath } from '../../../shared/routes/appPaths'
+import { LoadingRegion } from '../../../shared/loading/LoadingRegion'
+import { LoadingState } from '../../../shared/loading/LoadingState'
+import { SkeletonDetail, SkeletonRows } from '../../../shared/loading/Skeleton'
 import { reviewProgramKey, supportsAutomaticReview, validateReviewDraft } from '../../../../domain/entities/CombinationReview'
 import { useReviewListViewModel } from '../viewmodel/useReviewListViewModel'
 import { useReviewEditorViewModel } from '../viewmodel/useReviewEditorViewModel'
@@ -46,7 +49,7 @@ function ReviewList({ account }: { account: string }) {
   return <>{header}<main className={workspacePageStyles.content}>
     <p className={s.muted}>두 사업의 참여 사실과 공식 원문을 비교합니다. 저장한 검토와 실행 이력은 본인만 조회할 수 있습니다.</p>
     <ReviewError error={vm.error} />
-    {vm.busy.length > 0 && <p role="status">검토 목록을 불러오는 중입니다.</p>}
+    {vm.busy.length > 0 && (vm.page ? <LoadingState label="검토 목록을 불러오는 중입니다." /> : <LoadingRegion label="검토 목록을 불러오는 중입니다." skeleton={<SkeletonRows rows={3} className={s.card} />} />)}
     {vm.page?.items.length === 0 && <div className={s.card}><h2 className="font-semibold">아직 저장한 검토가 없습니다.</h2><p className={s.muted}>새 검토에서 공고 2개와 참여 상태를 입력하면 분석을 시작할 수 있습니다.</p></div>}
     <ul className="space-y-3">{vm.page?.items.map((item) => <li className={`${s.card} flex flex-wrap items-center justify-between gap-3`} key={item.id}>
       <Link className="min-w-0 flex-1 hover:text-brand-primary" to={`${appPaths.combinationReviews}/${item.id}`}><strong>{item.title}</strong><p className={s.muted}>입력 버전 {item.inputRevision} · 수정 {formatReviewDateTime(item.updatedAt)}</p></Link>
@@ -105,7 +108,7 @@ function RunResultPage({ reviewId, runId, account }: { reviewId: number; runId: 
       {vm.runs?.nextBeforeId && <button className={s.button} type="button" disabled={vm.busy.includes('history')} onClick={() => vm.history(vm.runs!.nextBeforeId!)}>이전 실행 더 보기</button>}
     </section>
     <ReviewError error={vm.error} />
-    {!selectedRun && vm.busy.some((value) => value === 'load' || value === 'run') && <p role="status">실행 결과를 불러오는 중입니다.</p>}
+    {!selectedRun && vm.busy.some((value) => value === 'load' || value === 'run') && <LoadingRegion label="실행 결과를 불러오는 중입니다." skeleton={<SkeletonDetail className={s.card} />} />}
     {!selectedRun && vm.review && vm.error && !vm.busy.includes('run') && <button className={s.button} type="button" onClick={() => vm.selectRun(runId)}>실행 결과 다시 불러오기</button>}
     {selectedRun && <>
       <div className="flex justify-end"><button className={s.button} type="button" disabled={vm.busy.includes('run')} onClick={() => vm.selectRun(runId)}>결과 새로고침</button></div>
@@ -151,7 +154,7 @@ function ReviewEditor({ id, account }: { id: number | null; account: string }) {
     {id && vm.error?.runId && <Link className={s.button} to={combinationReviewRunResultPath(id, vm.error.runId)}>실패 실행 #{vm.error.runId} 확인</Link>}
     {vm.rejectedRevision && vm.pending && <button className={s.button} onClick={vm.clearRejectedRequest}>버전 충돌로 거절된 실행 요청 정리</button>}
     {vm.notice && <p role="status" className={s.muted}>{vm.notice}</p>}
-    {id && !vm.review ? <div className={s.card}>{vm.busy.includes('load') ? <p role="status">저장 입력과 실행 이력을 불러오는 중입니다.</p> : <button className={s.button} onClick={vm.load}>검토 다시 불러오기</button>}</div> : <>
+    {id && !vm.review ? <div className={s.card}>{vm.busy.includes('load') ? <LoadingRegion label="저장 입력과 실행 이력을 불러오는 중입니다." skeleton={<SkeletonDetail />} /> : <button className={s.button} onClick={vm.load}>검토 다시 불러오기</button>}</div> : <>
       {step === 'selection' && <fieldset disabled={inputBusy} className="space-y-4">
           <div className={s.card}><label className="font-semibold">검토 제목<input className={s.input} value={vm.draft.title} onChange={(e) => vm.setDraft({ ...vm.draft, title: e.target.value })} required placeholder="예: 창업 지원사업 참여 검토" /></label><p className={s.muted}>제목은 200자 이내입니다. 참여 상태는 제목과 별도로 입력합니다.</p></div>
           <section className={s.card} aria-label="공고 선택">
@@ -168,7 +171,7 @@ function ReviewEditor({ id, account }: { id: number | null; account: string }) {
             <SavedSupportProgramPickerDialog open={savedProgramsOpen} phase={vm.savedProgramChoices.phase} programs={vm.savedProgramChoices.programs} selectedProgramKeys={vm.draft.programs.map((program) => `${program.sourceCode}:${program.sourceProgramId}`)} selectionLimit={2} description="비교할 공고를 최대 2개까지 선택할 수 있습니다." listLabel="중복 지원 검토 관심 공고 목록" onToggle={vm.toggle} onRetry={vm.savedProgramChoices.retry} onClose={closeSavedPrograms} />
             <h3 className="mt-5 font-semibold">전체 공고 검색</h3>
             <div className="mt-3 flex flex-wrap items-end gap-2"><label className="min-w-0 flex-1 text-sm">공고명·기관명<input className={s.input} maxLength={100} value={vm.keyword} onChange={(e) => vm.setKeyword(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void vm.search() } }} /></label><button type="button" className={s.button} disabled={vm.busy.includes('catalog')} onClick={() => void vm.search()}>공고 검색</button></div>
-            {vm.busy.includes('catalog') && <p className="mt-3" role="status">공고를 불러오는 중입니다.</p>}
+            {vm.busy.includes('catalog') && <LoadingState className="mt-3" label="공고를 불러오는 중입니다." />}
             {vm.catalog?.programs.length === 0 && <p className="mt-3">검색 결과가 없습니다.</p>}
             <ul className="mt-4 divide-y divide-slate-200">{vm.catalog?.programs.map((program) => {
               const identity = { sourceCode: program.sourceCode, sourceProgramId: program.id, subProgramId: null }
