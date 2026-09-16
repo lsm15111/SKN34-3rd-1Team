@@ -93,6 +93,22 @@ describe('useSupportProgramEvidenceQuestionViewModel', () => {
     expect(result.current.state.status).toBe('not-supported')
   })
 
+  it('allows MSIT notices, whose official attachment is the evidence source, to submit questions', async () => {
+    const execute = vi.fn().mockResolvedValue(answerResult())
+    const identity = { ...getIdentity(), sourceCode: 'MSIT', sourceProgramId: '3186880' }
+    const { result } = renderHook(() => useSupportProgramEvidenceQuestionViewModel(
+      identity,
+      createEvidenceQuestionUseCase(execute),
+    ))
+
+    act(() => result.current.updateQuestion('신청 자격이 어떻게 되나요?'))
+    expect(result.current.isSupported).toBe(true)
+    await act(async () => result.current.submitQuestion())
+
+    expect(execute).toHaveBeenCalledWith({ ...identity, question: '신청 자격이 어떻게 되나요?' }, expect.any(AbortSignal))
+    expect(result.current.state.status).toBe('answered')
+  })
+
   it('does not fetch automatically and sends a trimmed question only after explicit submission', async () => {
     const execute = vi.fn().mockResolvedValue(answerResult())
     const identity = getIdentity()

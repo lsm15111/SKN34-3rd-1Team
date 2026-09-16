@@ -80,8 +80,11 @@ describe('지원사업 직접 필터 검색', () => {
     expect(within(screen.getByRole('region', { name: '필터 검색 결과' })).getByText('상태 미확인')).toBeTruthy()
     fireEvent.click(screen.getByRole('link', { name: undated.title }))
     await screen.findByRole('heading', { name: undated.title })
-    expect(screen.queryByRole('link', { name: '이 공고에 질문하기' })).toBeNull()
-    expect(screen.getByText(/이 제공처 공고는 아직 원문 근거 답변을 지원하지 않습니다/)).toBeTruthy()
+    // 과학기술정보통신부는 공식 첨부 공고문을 근거로 원문 질문을 지원하고, 충남 공지는 아직 지원하지 않습니다.
+    const supportsQuestion = undated.sourceCode === 'MSIT'
+    expect(Boolean(screen.queryByText(/이 제공처 공고는 아직 원문 근거 답변을 지원하지 않습니다/))).toBe(!supportsQuestion)
+    expect(Boolean(screen.queryByText(/공식 첨부 공고문에서 답변 근거를 확인하세요/))).toBe(supportsQuestion)
+    expect(Boolean(screen.queryByRole('link', { name: /이 공고에 질문하기/ }))).toBe(supportsQuestion)
     const sourceLink = screen.getByRole('link', { name: undated.sourceCode === 'CNTRADE_NOTICE'
       ? '공식 공지 목록 ↗' : undated.sourceName + ' 원문 보기 ↗' })
     expect(sourceLink.getAttribute('href')).toBe(undated.sourceUrl)
@@ -123,7 +126,7 @@ describe('지원사업 직접 필터 검색', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it.each(undatedPrograms)('$sourceName의 질문 URL을 직접 열어도 입력과 API 요청을 차단한다', (undated) => {
+  it.each(undatedPrograms.filter((undated) => undated.sourceCode !== 'MSIT'))('$sourceName의 질문 URL을 직접 열어도 입력과 API 요청을 차단한다', (undated) => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     start('/support-programs/detail/question?' + new URLSearchParams({ sourceCode: undated.sourceCode, sourceProgramId: undated.id }))

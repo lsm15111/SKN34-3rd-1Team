@@ -4,6 +4,7 @@ import ai.govbiz.core.supportprogram.domain.SupportProgram
 import ai.govbiz.core.supportprogram.domain.SupportProgramSourceDocument
 import ai.govbiz.core.supportprogram.facade.AiSupportProgramEvidenceFacade
 import ai.govbiz.core.supportprogram.facade.BizInfoSupportProgramSourceDocumentFacade
+import ai.govbiz.core.supportprogram.facade.MsitSupportProgramSourceDocumentFacade
 import ai.govbiz.core.supportprogram.facade.exception.SupportProgramSourceDocumentFacadeException
 import ai.govbiz.core.supportprogram.repository.SupportProgramRepository
 import ai.govbiz.core.supportprogram.service.detail.SupportProgramDetailService
@@ -17,12 +18,13 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 import org.slf4j.LoggerFactory
 
-/** 특정 기업마당 공고의 공식 상세 원문을 근거로 질문에 답합니다. */
+/** 특정 공고의 공식 원문(기업마당 상세 HTML, 과기정통부 첨부 공고문)을 근거로 질문에 답합니다. */
 @Service
 class SupportProgramEvidenceService(
     private val detailService: SupportProgramDetailService,
     private val repository: SupportProgramRepository,
     private val sourceDocumentFacade: BizInfoSupportProgramSourceDocumentFacade,
+    private val msitSourceDocumentFacade: MsitSupportProgramSourceDocumentFacade,
     private val aiEvidenceFacade: AiSupportProgramEvidenceFacade,
     @param:Qualifier("seoulClock") private val clock: Clock,
 ) {
@@ -35,7 +37,7 @@ class SupportProgramEvidenceService(
         question: String,
     ): SupportProgramEvidenceAnswerResult {
         val program = detailService.get(sourceCode, sourceProgramId)
-        if (program.sourceCode != BIZINFO_SOURCE_CODE) throw SupportProgramEvidenceNotSupportedException()
+        if (program.sourceCode !in SUPPORTED_SOURCE_CODES) throw SupportProgramEvidenceNotSupportedException()
         val document = currentSourceDocument(program)
         return aiEvidenceFacade.answer(
             question = question.trim(),
@@ -46,10 +48,10 @@ class SupportProgramEvidenceService(
 
     /**
      * 공고의 현재 원문을 확보해 청킹만 합니다(색인·답변 없음). 도우미 관심 공고 질문과 원문 선수집이 씁니다.
-     * 기업마당 공고가 아니면 [SupportProgramEvidenceNotSupportedException], 수집 실패는 [SupportProgramEvidenceUnavailableException]입니다.
+     * 기업마당·과기정통부 공고가 아니면 [SupportProgramEvidenceNotSupportedException], 수집 실패는 [SupportProgramEvidenceUnavailableException]입니다.
      */
     fun prepareChunks(program: SupportProgram): List<SupportProgramEvidenceChunk> {
-        if (program.sourceCode != BIZINFO_SOURCE_CODE) throw SupportProgramEvidenceNotSupportedException()
+        if (program.sourceCode !in SUPPORTED_SOURCE_CODES) throw SupportProgramEvidenceNotSupportedException()
         return chunksFor(currentSourceDocument(program))
     }
 
@@ -63,11 +65,11 @@ class SupportProgramEvidenceService(
         if (cached != null && cached.sourceUrl == program.sourceUrl && isFresh(cached)) return cached
 
         val loaded = try {
-            sourceDocumentFacade.load(program)
+            if (program.sourceCode == MSIT_SOURCE_CODE) msitSourceDocumentFacade.load(program) else sourceDocumentFacade.load(program)
         } catch (exception: SupportProgramSourceDocumentFacadeException) {
             throw SupportProgramEvidenceUnavailableException(exception)
         }
-        // 외부 HTML을 모두 검증한 뒤에만 짧은 DB transaction으로 저장합니다.
+        // 외부 원문을 모두 검증한 뒤에만 짧은 DB transaction으로 저장합니다.
         repository.upsertSourceDocument(loaded)
         return loaded
     }
@@ -118,7 +120,8 @@ class SupportProgramEvidenceService(
     private companion object {
         val logger = LoggerFactory.getLogger(SupportProgramEvidenceService::class.java)
         const val MAX_CACHED_DOCUMENTS = 32
-        const val BIZINFO_SOURCE_CODE = "BIZINFO"
+        const val MSIT_SOURCE_CODE = "MSIT"
+        val SUPPORTED_SOURCE_CODES = setOf("BIZINFO", MSIT_SOURCE_CODE)
         val REFRESH_AFTER: Duration = Duration.ofHours(6)
     }
 }

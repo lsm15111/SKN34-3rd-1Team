@@ -43,7 +43,7 @@ object SupportProgramNoticeSectionExtractorHelper {
     private val TABLE_HEADER = Regex("^구\\s*분")
 
     fun extract(text: String): SupportProgramNoticeSections {
-        val normalized = Normalizer.normalize(text, Normalizer.Form.NFKC).replace(WHITESPACE, " ")
+        val normalized = MsitNoticeContentHelper.sanitize(Normalizer.normalize(text, Normalizer.Form.NFKC)).replace(WHITESPACE, " ")
         return SupportProgramNoticeSections(
             purpose = firstSection(normalized, PURPOSE, MAX_PURPOSE_LENGTH) { !CONTACT_OR_OUTLINE.containsMatchIn(it) },
             target = firstSection(normalized, TARGET, MAX_TARGET_LENGTH) {

@@ -6,6 +6,7 @@ import { appPaths, isAppPath, supportProgramQuestionPath } from '../../../shared
 import { workspacePageStyles } from '../../../shared/workspace/WorkspacePage.styles'
 
 import type { SupportProgram, SupportProgramStatus } from '../../../../domain/entities/SupportProgram'
+import { supportsEvidenceQuestion } from '../../../../domain/entities/SupportProgramEvidenceAnswer'
 import type { SupportProgramIdentity } from '../../../../domain/repositories/SupportProgramRepository'
 import { useSupportProgramDetailViewModel } from '../viewmodel/useSupportProgramDetailViewModel'
 import { useSupportProgramSaveViewModel } from '../../../shared/support-program/useSupportProgramSaveViewModel'
@@ -227,9 +228,11 @@ function SupportProgramDetail({ program, searchReturnTo }: {
         <h2 id="evidence-question-title" className={supportProgramDetailStyles.sectionTitle}>
           공고 원문 기반 질문
         </h2>
-        {program.sourceCode === 'BIZINFO' ? (
+        {supportsEvidenceQuestion(program.sourceCode) ? (
           <p className={supportProgramDetailStyles.questionDescription}>
-            궁금한 신청 조건을 질문하고 공고 원문에서 답변 근거를 확인하세요.
+            {program.sourceCode === 'MSIT'
+              ? '궁금한 신청 조건을 질문하고 공식 첨부 공고문에서 답변 근거를 확인하세요.'
+              : '궁금한 신청 조건을 질문하고 공고 원문에서 답변 근거를 확인하세요.'}
           </p>
         ) : (
           <p className={supportProgramDetailStyles.questionDescription}>
@@ -237,7 +240,7 @@ function SupportProgramDetail({ program, searchReturnTo }: {
           </p>
         )}
         <div className={supportProgramDetailStyles.questionActions}>
-          {program.sourceCode === 'BIZINFO' ? (
+          {supportsEvidenceQuestion(program.sourceCode) ? (
             save.isAuthenticated ? (
               <Link className={supportProgramDetailStyles.questionLink} state={{ searchReturnTo }} to={questionPath}>
                 이 공고에 질문하기

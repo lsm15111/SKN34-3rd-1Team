@@ -26,6 +26,15 @@ class MsitNoticeContentHelperTest {
     }
 
     @Test
+    fun replacesHwpPrivateUseGlyphsAndFormatCharactersThatTheAiServiceRejects() {
+        val dirty = "󰊱 신청자격​ 국내  대학 및\t기업\n다음 줄"
+        assertEquals("  신청자격  국내 대학 및\t기업\n다음 줄".replace("  ", " "), MsitNoticeContentHelper.sanitize(dirty))
+        val applied = MsitNoticeContentHelper.apply(base.program, MsitNoticeExtraction(null, SupportProgramNoticeSections(null, "󰊱 국내 기업 󰊲")))
+        assertEquals("국내 기업", applied.targetDescription)
+        assertFalse(Regex("[\\p{C}&&[^\\n\\t]]").containsMatchIn(applied.summary + applied.targetDescription))
+    }
+
+    @Test
     fun periodOnlyExtractionChangesDatesButKeepsTheSearchIndexTextIdentical() {
         val applied = base.copy(program = MsitNoticeContentHelper.apply(base.program, MsitNoticeExtraction(period, SupportProgramNoticeSections(null, null))))
 

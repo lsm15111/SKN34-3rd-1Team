@@ -22,12 +22,22 @@ object MsitNoticeContentHelper {
     const val MISSING_PERIOD = "정보 없음"
     private const val EXCERPT_NOTICE = "※ 공식 첨부 공고문에서 자동으로 발췌한 원문입니다. 신청 자격과 접수 기간은 원문을 확인해 주세요."
 
+    private val UNSUPPORTED_CHARACTER = Regex("[\\p{C}&&[^\\n\\t]]")
+    private val REPEATED_SPACE = Regex("[ \\t]{2,}")
+
+    /**
+     * HWP 글꼴 기호(사용자 정의 영역)·서식 문자처럼 AI 서비스와 인용 검증이 거부하는 문자를 공백으로 바꿉니다.
+     * 문장·줄바꿈은 그대로 둡니다.
+     */
+    fun sanitize(text: String): String = text.replace(UNSUPPORTED_CHARACTER, " ").replace(REPEATED_SPACE, " ")
+
     /** 안내 문구가 아니라 원문 발췌가 담긴 요약인지 판단합니다. 색인 텍스트 포함 여부에 사용합니다. */
     fun isExcerptSummary(summary: String): Boolean = summary != MISSING_CONTENT_SUMMARY && summary != PERIOD_ONLY_SUMMARY
 
     fun apply(program: SupportProgram, extraction: MsitNoticeExtraction): SupportProgram {
         val period = extraction.period
-        val purpose = extraction.sections.purpose
+        val purpose = extraction.sections.purpose?.let(::sanitize)?.trim()?.takeIf(String::isNotEmpty)
+        val target = extraction.sections.target?.let(::sanitize)?.trim()?.takeIf(String::isNotEmpty)
         return program.copy(
             applicationPeriod = period?.displayText() ?: program.applicationPeriod,
             applicationStartDate = period?.startDate ?: program.applicationStartDate,
@@ -37,7 +47,7 @@ object MsitNoticeContentHelper {
                 period != null -> PERIOD_ONLY_SUMMARY
                 else -> program.summary
             },
-            targetDescription = extraction.sections.target ?: program.targetDescription,
+            targetDescription = target ?: program.targetDescription,
         )
     }
 }

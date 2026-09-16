@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 
 import { appContainer } from '../../../../app/appContainer'
-import type { SupportProgramEvidenceAnswer } from '../../../../domain/entities/SupportProgramEvidenceAnswer'
+import { supportsEvidenceQuestion, type SupportProgramEvidenceAnswer } from '../../../../domain/entities/SupportProgramEvidenceAnswer'
 import type { SupportProgramIdentity } from '../../../../domain/repositories/SupportProgramRepository'
 import type { AskSupportProgramEvidenceQuestionUseCase } from '../../../../domain/usecases/AskSupportProgramEvidenceQuestionUseCase'
 import { SupportProgramRequestError } from '../../../../domain/errors/SupportProgramRequestError'
@@ -47,7 +47,7 @@ export function useSupportProgramEvidenceQuestionViewModel(
   } | null>(null)
   const latestRequestId = useRef(0)
   const questionLength = question.length
-  const isSupported = sourceCode === 'BIZINFO'
+  const isSupported = supportsEvidenceQuestion(sourceCode)
   const isAnswering = state.status === 'loading'
   const canSubmit = isSupported && !isAnswering
     && question.trim().length > 0

@@ -4,6 +4,7 @@ import ai.govbiz.core.supportprogram.domain.SupportProgram
 import ai.govbiz.core.supportprogram.domain.SupportProgramSourceDocument
 import ai.govbiz.core.supportprogram.facade.AiSupportProgramEvidenceFacade
 import ai.govbiz.core.supportprogram.facade.BizInfoSupportProgramSourceDocumentFacade
+import ai.govbiz.core.supportprogram.facade.MsitSupportProgramSourceDocumentFacade
 import ai.govbiz.core.supportprogram.facade.exception.SupportProgramSourceDocumentFacadeException
 import ai.govbiz.core.supportprogram.helper.SupportProgramContentHashHelper
 import ai.govbiz.core.supportprogram.helper.SupportProgramTestHelper
@@ -53,6 +54,9 @@ class SupportProgramEvidenceServiceTest {
     private lateinit var sourceDocumentFacade: BizInfoSupportProgramSourceDocumentFacade
 
     @Mock
+    private lateinit var msitSourceDocumentFacade: MsitSupportProgramSourceDocumentFacade
+
+    @Mock
     private lateinit var aiEvidenceFacade: AiSupportProgramEvidenceFacade
 
     private lateinit var service: SupportProgramEvidenceService
@@ -63,6 +67,7 @@ class SupportProgramEvidenceServiceTest {
             detailService,
             repository,
             sourceDocumentFacade,
+            msitSourceDocumentFacade,
             aiEvidenceFacade,
             Clock.fixed(Instant.parse("2026-09-05T03:00:00Z"), ZoneId.of("Asia/Seoul")),
         )
@@ -119,7 +124,27 @@ class SupportProgramEvidenceServiceTest {
         assertThrows(SupportProgramEvidenceNotSupportedException::class.java) {
             service.answer("OTHER", "PBLN_TEST", QUESTION)
         }
-        verifyNoInteractions(repository, sourceDocumentFacade, aiEvidenceFacade)
+        verifyNoInteractions(repository, sourceDocumentFacade, msitSourceDocumentFacade, aiEvidenceFacade)
+    }
+
+    @Test
+    fun answersMsitNoticesFromTheirOfficialAttachmentInsteadOfTheBizInfoPage() {
+        val program = SupportProgramTestHelper.catalogProgram("3186880").program.copy(
+            sourceCode = "MSIT",
+            sourceName = "과학기술정보통신부",
+            sourceUrl = "https://www.msit.go.kr/bbs/view.do?bbsSeqNo=100&nttSeqNo=3186880",
+        )
+        val loaded = document(program, LocalDateTime.of(2026, 9, 5, 11, 0), content = "□ 신청자격 만 55세 이하 산·학·연 연구자\n□ 신청기간 2026. 9. 11. ~ 10. 13.")
+        doReturn(program).`when`(detailService).get("MSIT", "3186880")
+        doReturn(null).`when`(repository).findPresentSourceDocument("MSIT", "3186880")
+        doReturn(loaded).`when`(msitSourceDocumentFacade).load(program)
+        doReturn(answer()).`when`(aiEvidenceFacade).answer(QUESTION, SupportProgramEvidenceChunker.chunk(loaded), program.sourceUrl)
+
+        assertEquals(answer(), service.answer("MSIT", "3186880", QUESTION))
+
+        verify(repository).upsertSourceDocument(loaded)
+        verifyNoInteractions(sourceDocumentFacade)
+        assertEquals(SupportProgramEvidenceChunker.chunk(loaded), service.prepareChunks(program))
     }
 
     @Test

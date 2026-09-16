@@ -44,7 +44,7 @@ object SupportProgramApplicationPeriodExtractorHelper {
     private data class Candidate(val kind: String, val start: LocalDate?, val end: LocalDate, val evidence: String)
 
     fun extract(text: String, publishedOn: LocalDate?): SupportProgramApplicationPeriod? {
-        val normalized = Normalizer.normalize(text, Normalizer.Form.NFKC).replace(WHITESPACE, " ")
+        val normalized = MsitNoticeContentHelper.sanitize(Normalizer.normalize(text, Normalizer.Form.NFKC)).replace(WHITESPACE, " ")
         val candidates = KEYWORD.findAll(normalized).mapNotNull { keyword ->
             candidateAfter(keyword.groupValues[1], keyword.value, normalized, keyword.range.last + 1)
         }.filter { candidate ->
