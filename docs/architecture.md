@@ -666,6 +666,13 @@ Repository가 해당 `source_code`만 UPSERT·누락 비활성화·스냅샷 공
   MSIT는 본문 없이 제목·담당 부서만 색인하며(모든 공고에 같은 미제공 안내 문구는 색인하지 않음) 충남은 원문 본문 기반입니다.
   MSIT 제목이 선정결과·입찰/용역·채용·취소 게시물이면 원본 검증 후 공개 대상에서 제외합니다. 재공고·연장·정정은 유지합니다.
   충남은 선정 결과·일반 공지도 원본대로 포함됩니다.
+- MSIT 신청 기간(`MSIT_PERIOD_EXTRACTION_ENABLED`, 기본 비활성): `MsitApplicationPeriodExtractionWorker`가 공개 공고를
+  최신 게시물부터 5건씩 골라 `MsitAttachmentClient`로 공식 PDF/HWP/HWPX를 받고 `SupportProgramDocumentParser` 텍스트에서
+  `신청·접수·공모·제출·모집 기간/기한/마감` 표제 바로 뒤(45자 이내)의 날짜만 인정합니다(`SupportProgramApplicationPeriodExtractorHelper`).
+  연구·협약·사업기간, 목차, 연도 없는 날짜, 게시일 기준 -31일~+400일 밖 마감은 버리고, 트랙·연장으로 여러 기간이면 가장 이른 시작~가장 늦은 마감을 씁니다.
+  결과는 `support_program_period_extraction`(V39)에 저장하고 공개 행의 기간·안내 문구를 즉시 갱신하며, MSIT 동기화는 저장된 기간을 다시 병합해 null로 덮어쓰지 않습니다.
+  상태는 기존처럼 읽을 때 날짜로 계산되므로 추출된 공고만 접수 중/마감으로 바뀝니다. 찾지 못함·첨부 없음은 30일, 일시 장애는 1시간 간격(3회)으로 다시 확인합니다.
+  2026-09-17 공개 444건 표본에서 첨부를 읽은 414건 중 338건(82%) 추출, 무작위 30건 수동 대조 30건 일치. AI 호출과 임베딩은 없습니다.
 - 두 수집기 기본 비활성, 전용 키 생략 시 승인된 `DATA_GO_KR_SERVICE_KEY`를 재사용합니다.
   평가 fixture/capture 프로필은 개발 환경변수와 관계없이 두 수집기도 끕니다.
 - 수집기 구현과 실제 서비스 정상화는 별개입니다. 2026-09-09 CNTRADE_NOTICE 실 API의 `04 HTTP_ERROR`는

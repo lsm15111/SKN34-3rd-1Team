@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="ai.govbiz.core.supportprogram.repository.mapper.SupportProgramPeriodExtractionMapper">
+ <resultMap id="row" type="ai.govbiz.core.supportprogram.repository.mapper.SupportProgramPeriodExtractionDbRow">
+  <result column="source_code" property="sourceCode" />
+  <result column="source_program_id" property="sourceProgramId" />
+  <result column="status" property="status" />
+  <result column="application_start_date" property="applicationStartDate" />
+  <result column="application_end_date" property="applicationEndDate" />
+  <result column="evidence_text" property="evidenceText" />
+  <result column="reason_code" property="reasonCode" />
+  <result column="extractor_version" property="extractorVersion" />
+  <result column="attempt_count" property="attemptCount" />
+  <result column="checked_at" property="checkedAt" />
+  <result column="next_check_at" property="nextCheckAt" />
+ </resultMap>
+ <resultMap id="target" type="ai.govbiz.core.supportprogram.repository.mapper.SupportProgramPeriodExtractionTargetDbRow">
+  <result column="source_program_id" property="sourceProgramId" />
+  <result column="source_url" property="sourceUrl" />
+  <result column="source_sort_timestamp" property="sourceSortTimestamp" />
+  <result column="attempt_count" property="attemptCount" />
+ </resultMap>
+ <!-- 처음 보는 공고, 추출 규칙이 바뀐 공고, 재확인 시점이 된 공고를 최신 게시물부터 고릅니다. -->
+ <select id="findDueTargets" resultMap="target">
+ SELECT program.source_program_id, program.source_url, program.source_sort_timestamp, COALESCE(extraction.attempt_count, 0) AS attempt_count
+ FROM support_program program
+ LEFT JOIN support_program_period_extraction extraction
+  ON extraction.source_code = program.source_code AND extraction.source_program_id = program.source_program_id
+ WHERE program.source_code = #{sourceCode} AND program.is_source_present = TRUE
+  AND (extraction.source_program_id IS NULL OR extraction.extractor_version &lt;&gt; #{extractorVersion} OR extraction.next_check_at &lt;= #{now})
+ ORDER BY program.source_sort_timestamp DESC, program.source_program_id
+ LIMIT #{limit}
+ </select>
+ <select id="findExtracted" resultMap="row">
+ SELECT source_code, source_program_id, status, application_start_date, application_end_date, evidence_text, reason_code,
+  extractor_version, attempt_count, checked_at, next_check_at
+ FROM support_program_period_extraction
+ WHERE source_code = #{sourceCode} AND status = 'EXTRACTED' AND extractor_version = #{extractorVersion}
+ </select>
+ <!-- 카탈로그 동기화가 추출 도중 기간을 null로 공개했으면 저장된 추출 결과와 공개 행이 어긋납니다. -->
+ <select id="findUnapplied" resultMap="row">
+ SELECT extraction.source_code, extraction.source_program_id, extraction.status, extraction.application_start_date,
+  extraction.application_end_date, extraction.evidence_text, extraction.reason_code, extraction.extractor_version,
+  extraction.attempt_count, extraction.checked_at, extraction.next_check_at
+ FROM support_program_period_extraction extraction
+ JOIN support_program program
+  ON program.source_code = extraction.source_code AND program.source_program_id = extraction.source_program_id
+ WHERE extraction.source_code = #{sourceCode} AND extraction.status = 'EXTRACTED' AND extraction.extractor_version = #{extractorVersion}
+  AND program.is_source_present = TRUE
+  AND (NOT (program.application_end_date &lt;=&gt; extraction.application_end_date)
+   OR NOT (program.application_start_date &lt;=&gt; extraction.application_start_date))
+ ORDER BY extraction.source_program_id
+ LIMIT 500
+ </select>
+ <insert id="upsert">
+ INSERT INTO support_program_period_extraction (source_code, source_program_id, status, application_start_date, application_end_date,
+  evidence_text, reason_code, extractor_version, attempt_count, checked_at, next_check_at)
+ VALUES (#{sourceCode}, #{sourceProgramId}, #{status}, #{applicationStartDate}, #{applicationEndDate}, #{evidenceText}, #{reasonCode},
+  #{extractorVersion}, #{attemptCount}, #{checkedAt}, #{nextCheckAt})
+ ON DUPLICATE KEY UPDATE status = VALUES(status), application_start_date = VALUES(application_start_date),
+  application_end_date = VALUES(application_end_date), evidence_text = VALUES(evidence_text), reason_code = VALUES(reason_code),
+  extractor_version = VALUES(extractor_version), attempt_count = VALUES(attempt_count), checked_at = VALUES(checked_at),
+  next_check_at = VALUES(next_check_at)
+ </insert>
+ <!-- 다음 카탈로그 동기화 전에도 검색 상태가 바로 바뀌도록 공개 행의 기간만 갱신합니다. -->
+ <update id="updateProgramPeriod">
+ UPDATE support_program
+ SET application_start_date = #{applicationStartDate}, application_end_date = #{applicationEndDate},
+  application_period_raw = #{applicationPeriodRaw}, summary = #{summary}
+ WHERE source_code = #{sourceCode} AND source_program_id = #{sourceProgramId}
+ </update>
+</mapper>

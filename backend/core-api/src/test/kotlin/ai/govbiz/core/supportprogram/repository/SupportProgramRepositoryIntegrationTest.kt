@@ -95,6 +95,9 @@ class SupportProgramRepositoryIntegrationTest {
     private lateinit var repository: SupportProgramRepository
 
     @Autowired
+    private lateinit var periodRepository: SupportProgramPeriodExtractionRepository
+
+    @Autowired
     private lateinit var jdbcTemplate: JdbcTemplate
 
     @Autowired
@@ -1153,7 +1156,7 @@ class SupportProgramRepositoryIntegrationTest {
 
     private fun syncNotice(source: String, facade: SupportProgramCatalogFacade, index: SupportProgramIndexSyncService): Int? =
         when (source) {
-            "MSIT" -> MsitSupportProgramCatalogSyncService(facade, repository, index, publicationService).sync()
+            "MSIT" -> MsitSupportProgramCatalogSyncService(facade, repository, index, publicationService, periodRepository).sync()
             "CNTRADE_NOTICE" -> CnTradeNoticeSupportProgramCatalogSyncService(facade, repository, index, publicationService).sync()
             else -> error("Unexpected test source")
         }

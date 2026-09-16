@@ -4,6 +4,10 @@ import ai.govbiz.core.supportprogram.domain.CatalogSupportProgram
 import ai.govbiz.core.supportprogram.domain.SupportProgram
 import ai.govbiz.core.supportprogram.domain.SupportProgramStatus
 import ai.govbiz.core.supportprogram.facade.SupportProgramCatalogFacade
+import ai.govbiz.core.supportprogram.helper.SupportProgramApplicationPeriod
+import ai.govbiz.core.supportprogram.helper.SupportProgramApplicationPeriodExtractorHelper
+import ai.govbiz.core.supportprogram.repository.SupportProgramPeriodExtractionRepository
+import java.time.LocalDate
 import ai.govbiz.core.supportprogram.repository.SupportProgramRepository
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
@@ -26,6 +30,26 @@ class MsitSupportProgramCatalogSyncServiceTest {
     @Mock private lateinit var facade: SupportProgramCatalogFacade
     @Mock private lateinit var repository: SupportProgramRepository
     @Mock private lateinit var index: SupportProgramIndexSyncService
+    @Mock private lateinit var periods: SupportProgramPeriodExtractionRepository
+
+    @Test
+    fun keepsPeriodsAlreadyFoundInOfficialAttachmentsInsteadOfResettingThemToUnknown() {
+        val loaded = listOf(program("179197"), program("179198"))
+        doReturn(13L).`when`(repository).startSyncGeneration("MSIT")
+        doReturn(loaded).`when`(facade).load()
+        doReturn(mapOf("179198" to SupportProgramApplicationPeriod(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-10-14"), "신청기간 2026. 9. 1. ~ 10. 14.")))
+            .`when`(periods).findExtracted("MSIT")
+        val expected = listOf(loaded[0], loaded[1].copy(program = loaded[1].program.copy(
+            applicationPeriod = "2026.09.01 ~ 2026.10.14", applicationStartDate = LocalDate.parse("2026-09-01"),
+            applicationEndDate = LocalDate.parse("2026-10-14"), summary = SupportProgramApplicationPeriodExtractorHelper.OFFICIAL_ATTACHMENT_SUMMARY,
+        )))
+        doReturn(true).`when`(repository).publishSnapshotIfCurrent("MSIT", expected, 13L)
+
+        assertEquals(2, service().sync())
+
+        verify(index).indexSnapshot(expected)
+        verify(repository).publishSnapshotIfCurrent("MSIT", expected, 13L)
+    }
 
     @Test
     fun publishesOnlyTheMsitSnapshotAfterTheWholeCollectionAndIndexHaveSucceeded() {
@@ -112,7 +136,7 @@ class MsitSupportProgramCatalogSyncServiceTest {
         assertEquals(listOf(recordingFailure), thrown.suppressed.toList())
     }
 
-    private fun service() = MsitSupportProgramCatalogSyncService(facade, repository, index, ai.govbiz.core.supportprogram.service.sync.SupportProgramCatalogPublicationService(repository, org.mockito.Mockito.mock(ai.govbiz.core.applicationpreparation.repository.ApplicationFormAvailabilityRepository::class.java)))
+    private fun service() = MsitSupportProgramCatalogSyncService(facade, repository, index, ai.govbiz.core.supportprogram.service.sync.SupportProgramCatalogPublicationService(repository, org.mockito.Mockito.mock(ai.govbiz.core.applicationpreparation.repository.ApplicationFormAvailabilityRepository::class.java)), periods)
 
     private fun program(id: String) = CatalogSupportProgram(
         program = SupportProgram(
