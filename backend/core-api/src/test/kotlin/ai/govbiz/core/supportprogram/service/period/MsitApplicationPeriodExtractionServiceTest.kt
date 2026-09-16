@@ -6,7 +6,9 @@ import ai.govbiz.core.supportprogram.client.document.SupportProgramDocumentBlock
 import ai.govbiz.core.supportprogram.client.document.SupportProgramDocumentException
 import ai.govbiz.core.supportprogram.client.document.SupportProgramDocumentParser
 import ai.govbiz.core.supportprogram.client.msit.MsitAttachmentClient
+import ai.govbiz.core.supportprogram.helper.MsitNoticeExtraction
 import ai.govbiz.core.supportprogram.helper.SupportProgramApplicationPeriod
+import ai.govbiz.core.supportprogram.helper.SupportProgramNoticeSections
 import ai.govbiz.core.supportprogram.repository.SupportProgramPeriodExtractionRepository
 import ai.govbiz.core.supportprogram.repository.SupportProgramPeriodExtractionRepository.Status
 import ai.govbiz.core.supportprogram.repository.mapper.SupportProgramPeriodExtractionTargetDbRow
@@ -43,14 +45,19 @@ class MsitApplicationPeriodExtractionServiceTest {
         doReturn(listOf(target("1"))).`when`(repository).findDueTargets("MSIT", now, 3)
         doReturn(files("공고문.pdf", "신청서.hwp")).`when`(attachments).collect("MSIT", "1", URL)
         doThrow(SupportProgramDocumentException(SupportProgramDocumentException.Reason.UNSUPPORTED)).`when`(parser).parse(BYTES_PDF, "PDF")
-        doReturn(listOf(SupportProgramDocumentBlock("HWP paragraphs 1-3", "□ 접수기간 : 2026. 9. 1.(화) ~ 2026. 10. 14.(수) 18:00까지")))
-            .`when`(parser).parse(BYTES_HWP, "HWP")
+        doReturn(listOf(
+            SupportProgramDocumentBlock("HWP paragraphs 1-3", "□ 사업목적 ᄋ 국내 AI 보안 유망기업의 시제품 개발부터 사업화까지 지원"),
+            SupportProgramDocumentBlock("HWP paragraphs 4-6", "□ 접수기간 : 2026. 9. 1.(화) ~ 2026. 10. 14.(수) 18:00까지"),
+        )).`when`(parser).parse(BYTES_HWP, "HWP")
 
         assertEquals(1, service().runBatch())
 
-        verify(repository).saveExtracted(
+        verify(repository).saveExtraction(
             "MSIT", "1",
-            SupportProgramApplicationPeriod(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-10-14"), "접수기간 : 2026. 9. 1.(화) ~ 2026. 10. 14.(수) 18:00"),
+            MsitNoticeExtraction(
+                SupportProgramApplicationPeriod(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-10-14"), "접수기간 : 2026. 9. 1.(화) ~ 2026. 10. 14.(수) 18:00"),
+                SupportProgramNoticeSections("국내 AI 보안 유망기업의 시제품 개발부터 사업화까지 지원", null),
+            ),
             1, now, now.plus(properties.extractedRecheckAfter),
         )
     }
@@ -59,15 +66,19 @@ class MsitApplicationPeriodExtractionServiceTest {
     fun recordsMissingPeriodsAndDocumentsWithoutGuessing() {
         doReturn(listOf(target("1"), target("2"))).`when`(repository).findDueTargets("MSIT", now, 3)
         doReturn(files("공고문.pdf")).`when`(attachments).collect("MSIT", "1", URL)
-        doReturn(listOf(SupportProgramDocumentBlock("PDF page 1 part 1", "연구기간 2026. 10. 1. ~ 2027. 9. 30."))).`when`(parser).parse(BYTES_PDF, "PDF")
+        doReturn(listOf(SupportProgramDocumentBlock("PDF page 1 part 1", "연구기간 2026. 10. 1. ~ 2027. 9. 30. □ 지원대상 : 국내 대학 및 정부출연연구기관 컨소시엄")))
+            .`when`(parser).parse(BYTES_PDF, "PDF")
         doThrow(SupportProgramDocumentException(SupportProgramDocumentException.Reason.UNSUPPORTED)).`when`(attachments).collect("MSIT", "2", URL)
 
         assertEquals(2, service().runBatch())
 
         verify(repository).reapplyUnapplied("MSIT")
         verify(repository).findDueTargets("MSIT", now, 3)
-        verify(repository).saveOutcome("MSIT", "1", Status.NOT_FOUND, "PERIOD_NOT_FOUND", 1, now, now.plus(properties.recheckAfter))
-        verify(repository).saveOutcome("MSIT", "2", Status.DOCUMENT_UNAVAILABLE, "UNSUPPORTED", 1, now, now.plus(properties.recheckAfter))
+        verify(repository).saveExtraction(
+            "MSIT", "1", MsitNoticeExtraction(null, SupportProgramNoticeSections(null, "국내 대학 및 정부출연연구기관 컨소시엄")),
+            1, now, now.plus(properties.recheckAfter),
+        )
+        verify(repository).saveFailure("MSIT", "2", Status.DOCUMENT_UNAVAILABLE, "UNSUPPORTED", 1, now, now.plus(properties.recheckAfter))
         verifyNoMoreInteractions(repository)
     }
 
@@ -79,8 +90,8 @@ class MsitApplicationPeriodExtractionServiceTest {
 
         service().runBatch()
 
-        verify(repository).saveOutcome("MSIT", "1", Status.RETRY_WAITING, "UNAVAILABLE", 1, now, now.plus(Duration.ofHours(1)))
-        verify(repository).saveOutcome("MSIT", "2", Status.RETRY_WAITING, "INVALID", 3, now, now.plus(properties.recheckAfter))
+        verify(repository).saveFailure("MSIT", "1", Status.RETRY_WAITING, "UNAVAILABLE", 1, now, now.plus(Duration.ofHours(1)))
+        verify(repository).saveFailure("MSIT", "2", Status.RETRY_WAITING, "INVALID", 3, now, now.plus(properties.recheckAfter))
     }
 
     @Test
@@ -99,7 +110,7 @@ class MsitApplicationPeriodExtractionServiceTest {
         assertEquals(false, MsitApplicationPeriodExtractionProperties().enabled)
     }
 
-    private fun service() = MsitApplicationPeriodExtractionService(attachments, parser, repository, properties, clock)
+    private fun service() = MsitApplicationPeriodExtractionService(attachments, parser, repository, properties, MsitCatalogWriteGuard(), clock)
 
     private fun target(id: String, attempts: Int = 0) = SupportProgramPeriodExtractionTargetDbRow(id, URL, "2026-09-01", attempts)
 

@@ -6,6 +6,7 @@ import ai.govbiz.core.supportprogram.client.msit.helper.MsitDetailUrlHelper
 import ai.govbiz.core.supportprogram.domain.CatalogSupportProgram
 import ai.govbiz.core.supportprogram.domain.SupportProgram
 import ai.govbiz.core.supportprogram.domain.SupportProgramStatus
+import ai.govbiz.core.supportprogram.helper.MsitNoticeContentHelper
 import java.time.LocalDate
 import java.time.format.DateTimeParseException
 import org.jsoup.Jsoup
@@ -26,9 +27,9 @@ internal object MsitProgramMapper {
             CatalogSupportProgram(
                 program = SupportProgram(
                     id = id, sourceCode = "MSIT", title = title, organization = organization,
-                    summary = "공식 API에 지원 대상·접수 기간·본문이 제공되지 않습니다. 모집 여부와 신청 자격은 원문을 확인해 주세요.",
-                    categories = emptyList(), regions = emptyList(), targetDescription = "정보 없음",
-                    applicationPeriod = "정보 없음", applicationStartDate = null, applicationEndDate = null,
+                    summary = MsitNoticeContentHelper.MISSING_CONTENT_SUMMARY,
+                    categories = emptyList(), regions = emptyList(), targetDescription = MsitNoticeContentHelper.MISSING_TARGET,
+                    applicationPeriod = MsitNoticeContentHelper.MISSING_PERIOD, applicationStartDate = null, applicationEndDate = null,
                     status = SupportProgramStatus.UNKNOWN, sourceName = "과학기술정보통신부", sourceUrl = sourceUrl,
                     matchedReasons = emptyList(),
                 ),

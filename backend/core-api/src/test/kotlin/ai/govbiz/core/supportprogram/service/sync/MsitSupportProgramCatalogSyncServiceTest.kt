@@ -4,11 +4,13 @@ import ai.govbiz.core.supportprogram.domain.CatalogSupportProgram
 import ai.govbiz.core.supportprogram.domain.SupportProgram
 import ai.govbiz.core.supportprogram.domain.SupportProgramStatus
 import ai.govbiz.core.supportprogram.facade.SupportProgramCatalogFacade
+import ai.govbiz.core.supportprogram.helper.MsitNoticeContentHelper
+import ai.govbiz.core.supportprogram.helper.MsitNoticeExtraction
 import ai.govbiz.core.supportprogram.helper.SupportProgramApplicationPeriod
-import ai.govbiz.core.supportprogram.helper.SupportProgramApplicationPeriodExtractorHelper
+import ai.govbiz.core.supportprogram.helper.SupportProgramNoticeSections
 import ai.govbiz.core.supportprogram.repository.SupportProgramPeriodExtractionRepository
-import java.time.LocalDate
 import ai.govbiz.core.supportprogram.repository.SupportProgramRepository
+import java.time.LocalDate
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertSame
@@ -34,18 +36,28 @@ class MsitSupportProgramCatalogSyncServiceTest {
 
     @Test
     fun keepsPeriodsAlreadyFoundInOfficialAttachmentsInsteadOfResettingThemToUnknown() {
-        val loaded = listOf(program("179197"), program("179198"))
+        val loaded = listOf(program("179197"), program("179198"), program("179199"))
         doReturn(13L).`when`(repository).startSyncGeneration("MSIT")
         doReturn(loaded).`when`(facade).load()
-        doReturn(mapOf("179198" to SupportProgramApplicationPeriod(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-10-14"), "신청기간 2026. 9. 1. ~ 10. 14.")))
-            .`when`(periods).findExtracted("MSIT")
-        val expected = listOf(loaded[0], loaded[1].copy(program = loaded[1].program.copy(
-            applicationPeriod = "2026.09.01 ~ 2026.10.14", applicationStartDate = LocalDate.parse("2026-09-01"),
-            applicationEndDate = LocalDate.parse("2026-10-14"), summary = SupportProgramApplicationPeriodExtractorHelper.OFFICIAL_ATTACHMENT_SUMMARY,
-        )))
+        val period = SupportProgramApplicationPeriod(LocalDate.parse("2026-09-01"), LocalDate.parse("2026-10-14"), "신청기간 2026. 9. 1. ~ 10. 14.")
+        doReturn(mapOf(
+            "179198" to MsitNoticeExtraction(period, SupportProgramNoticeSections(null, null)),
+            "179199" to MsitNoticeExtraction(null, SupportProgramNoticeSections("AI 반도체 원천기술 확보 및 생태계 조성", "국내 중소·중견기업")),
+        )).`when`(periods).findApplicable("MSIT")
+        val expected = listOf(
+            loaded[0],
+            loaded[1].copy(program = loaded[1].program.copy(
+                applicationPeriod = "2026.09.01 ~ 2026.10.14", applicationStartDate = LocalDate.parse("2026-09-01"),
+                applicationEndDate = LocalDate.parse("2026-10-14"), summary = MsitNoticeContentHelper.PERIOD_ONLY_SUMMARY,
+            )),
+            loaded[2].copy(program = loaded[2].program.copy(
+                summary = "AI 반도체 원천기술 확보 및 생태계 조성\n\n※ 공식 첨부 공고문에서 자동으로 발췌한 원문입니다. 신청 자격과 접수 기간은 원문을 확인해 주세요.",
+                targetDescription = "국내 중소·중견기업",
+            )),
+        )
         doReturn(true).`when`(repository).publishSnapshotIfCurrent("MSIT", expected, 13L)
 
-        assertEquals(2, service().sync())
+        assertEquals(3, service().sync())
 
         verify(index).indexSnapshot(expected)
         verify(repository).publishSnapshotIfCurrent("MSIT", expected, 13L)
@@ -136,7 +148,7 @@ class MsitSupportProgramCatalogSyncServiceTest {
         assertEquals(listOf(recordingFailure), thrown.suppressed.toList())
     }
 
-    private fun service() = MsitSupportProgramCatalogSyncService(facade, repository, index, ai.govbiz.core.supportprogram.service.sync.SupportProgramCatalogPublicationService(repository, org.mockito.Mockito.mock(ai.govbiz.core.applicationpreparation.repository.ApplicationFormAvailabilityRepository::class.java)), periods)
+    private fun service() = MsitSupportProgramCatalogSyncService(facade, repository, index, ai.govbiz.core.supportprogram.service.sync.SupportProgramCatalogPublicationService(repository, org.mockito.Mockito.mock(ai.govbiz.core.applicationpreparation.repository.ApplicationFormAvailabilityRepository::class.java)), periods, ai.govbiz.core.supportprogram.service.period.MsitCatalogWriteGuard())
 
     private fun program(id: String) = CatalogSupportProgram(
         program = SupportProgram(

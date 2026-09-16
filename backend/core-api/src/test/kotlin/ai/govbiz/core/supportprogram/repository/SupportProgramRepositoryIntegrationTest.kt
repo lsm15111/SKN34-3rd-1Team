@@ -1156,7 +1156,7 @@ class SupportProgramRepositoryIntegrationTest {
 
     private fun syncNotice(source: String, facade: SupportProgramCatalogFacade, index: SupportProgramIndexSyncService): Int? =
         when (source) {
-            "MSIT" -> MsitSupportProgramCatalogSyncService(facade, repository, index, publicationService, periodRepository).sync()
+            "MSIT" -> MsitSupportProgramCatalogSyncService(facade, repository, index, publicationService, periodRepository, ai.govbiz.core.supportprogram.service.period.MsitCatalogWriteGuard()).sync()
             "CNTRADE_NOTICE" -> CnTradeNoticeSupportProgramCatalogSyncService(facade, repository, index, publicationService).sync()
             else -> error("Unexpected test source")
         }

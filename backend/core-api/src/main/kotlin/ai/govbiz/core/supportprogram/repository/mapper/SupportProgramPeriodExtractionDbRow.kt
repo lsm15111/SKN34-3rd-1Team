@@ -10,6 +10,8 @@ data class SupportProgramPeriodExtractionDbRow(
     var applicationStartDate: LocalDate? = null,
     var applicationEndDate: LocalDate? = null,
     var evidenceText: String? = null,
+    var summaryText: String? = null,
+    var targetText: String? = null,
     var reasonCode: String? = null,
     var extractorVersion: Int = 0,
     var attemptCount: Int = 0,

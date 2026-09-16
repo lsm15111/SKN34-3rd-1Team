@@ -21,12 +21,8 @@ data class SupportProgramApplicationPeriod(
  * 연구·협약·사업기간, 목차 줄, 연도 없는 날짜는 추측하지 않으며 표 안의 일정표처럼 표제와 떨어진 날짜는 찾지 않습니다.
  */
 object SupportProgramApplicationPeriodExtractorHelper {
-    /** 추출 규칙을 바꾸면 올려 기존 결과를 다시 계산하게 합니다. */
-    const val VERSION = 1
-
-    /** 기간만 공고문에서 확인한 공고의 안내 문구입니다. 지원 대상·자격은 여전히 추정하지 않습니다. */
-    const val OFFICIAL_ATTACHMENT_SUMMARY =
-        "신청 기간은 공식 첨부 공고문에서 자동으로 확인했습니다. 지원 대상·신청 자격·지원 내용은 원문을 확인해 주세요."
+    /** 기간·발췌 규칙을 바꾸면 올려 저장된 공고를 다시 확인하게 합니다. 2: 사업목적·지원대상 원문 발췌 추가. */
+    const val VERSION = 2
 
     private val WHITESPACE = Regex("\\s+")
     private val KEYWORD = Regex("(접수|신청|공모|제출|모집|공고)\\s*(기간|기한|마감\\s*일시|마감일|마감)")

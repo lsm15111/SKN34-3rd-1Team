@@ -7,8 +7,8 @@ import org.apache.ibatis.annotations.Mapper
 @Mapper
 interface SupportProgramPeriodExtractionMapper {
     fun findDueTargets(sourceCode: String, now: LocalDateTime, extractorVersion: Int, limit: Int): List<SupportProgramPeriodExtractionTargetDbRow>
-    fun findExtracted(sourceCode: String, extractorVersion: Int): List<SupportProgramPeriodExtractionDbRow>
-    fun findUnapplied(sourceCode: String, extractorVersion: Int): List<SupportProgramPeriodExtractionDbRow>
+    fun findApplicable(sourceCode: String): List<SupportProgramPeriodExtractionDbRow>
+    fun findUnapplied(sourceCode: String): List<SupportProgramPeriodExtractionDbRow>
     fun upsert(row: SupportProgramPeriodExtractionDbRow): Int
     fun updateProgramPeriod(
         sourceCode: String,
@@ -16,6 +16,7 @@ interface SupportProgramPeriodExtractionMapper {
         applicationStartDate: LocalDate?,
         applicationEndDate: LocalDate,
         applicationPeriodRaw: String,
-        summary: String,
+        missingSummary: String,
+        periodOnlySummary: String,
     ): Int
 }

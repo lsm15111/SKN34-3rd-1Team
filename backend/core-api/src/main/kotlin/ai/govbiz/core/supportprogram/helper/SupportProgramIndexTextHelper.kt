@@ -14,8 +14,12 @@ object SupportProgramIndexTextHelper {
     fun buildText(candidate: CatalogSupportProgram): String {
         val program = candidate.program
         val sourceLines = if (program.sourceCode == "MSIT") {
-            // MSIT 목록 API는 제목·담당 부서만 제공합니다. 모든 공고에 같은 미제공 안내 문구를 색인하면 검색 잡음이 됩니다.
-            listOf("제목: ${program.title}", "기관: ${program.organization}")
+            // MSIT 목록 API는 제목·담당 부서만 제공합니다. 공통 미제공 안내 문구는 검색 잡음이므로 넣지 않고, 동기화가 반영한 첨부 발췌만 추가합니다.
+            listOfNotNull(
+                "제목: ${program.title}", "기관: ${program.organization}",
+                "지원대상: ${program.targetDescription}".takeIf { program.targetDescription != MsitNoticeContentHelper.MISSING_TARGET },
+                "내용: ${program.summary}".takeIf { MsitNoticeContentHelper.isExcerptSummary(program.summary) },
+            )
         } else {
             listOf(
                 "제목: ${program.title}", "기관: ${program.organization}", "지원대상: ${program.targetDescription}",

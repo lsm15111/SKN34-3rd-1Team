@@ -8,6 +8,8 @@
   <result column="application_start_date" property="applicationStartDate" />
   <result column="application_end_date" property="applicationEndDate" />
   <result column="evidence_text" property="evidenceText" />
+  <result column="summary_text" property="summaryText" />
+  <result column="target_text" property="targetText" />
   <result column="reason_code" property="reasonCode" />
   <result column="extractor_version" property="extractorVersion" />
   <result column="attempt_count" property="attemptCount" />
@@ -20,9 +22,13 @@
   <result column="source_sort_timestamp" property="sourceSortTimestamp" />
   <result column="attempt_count" property="attemptCount" />
  </resultMap>
+ <sql id="columns">extraction.source_code, extraction.source_program_id, extraction.status, extraction.application_start_date,
+  extraction.application_end_date, extraction.evidence_text, extraction.summary_text, extraction.target_text, extraction.reason_code,
+  extraction.extractor_version, extraction.attempt_count, extraction.checked_at, extraction.next_check_at</sql>
  <!-- 처음 보는 공고, 추출 규칙이 바뀐 공고, 재확인 시점이 된 공고를 최신 게시물부터 고릅니다. -->
  <select id="findDueTargets" resultMap="target">
- SELECT program.source_program_id, program.source_url, program.source_sort_timestamp, COALESCE(extraction.attempt_count, 0) AS attempt_count
+ SELECT program.source_program_id, program.source_url, program.source_sort_timestamp,
+  CASE WHEN extraction.extractor_version = #{extractorVersion} THEN extraction.attempt_count ELSE 0 END AS attempt_count
  FROM support_program program
  LEFT JOIN support_program_period_extraction extraction
   ON extraction.source_code = program.source_code AND extraction.source_program_id = program.source_program_id
@@ -31,21 +37,20 @@
  ORDER BY program.source_sort_timestamp DESC, program.source_program_id
  LIMIT #{limit}
  </select>
- <select id="findExtracted" resultMap="row">
- SELECT source_code, source_program_id, status, application_start_date, application_end_date, evidence_text, reason_code,
-  extractor_version, attempt_count, checked_at, next_check_at
- FROM support_program_period_extraction
- WHERE source_code = #{sourceCode} AND status = 'EXTRACTED' AND extractor_version = #{extractorVersion}
+ <!-- 카탈로그 동기화가 병합할 기간·발췌입니다. 규칙 버전이 바뀌어 재확인 전인 결과도 새 결과로 바뀔 때까지 유지합니다. -->
+ <select id="findApplicable" resultMap="row">
+ SELECT <include refid="columns"/>
+ FROM support_program_period_extraction extraction
+ WHERE extraction.source_code = #{sourceCode}
+  AND (extraction.status = 'EXTRACTED' OR (extraction.status = 'NOT_FOUND' AND (extraction.summary_text IS NOT NULL OR extraction.target_text IS NOT NULL)))
  </select>
  <!-- 카탈로그 동기화가 추출 도중 기간을 null로 공개했으면 저장된 추출 결과와 공개 행이 어긋납니다. -->
  <select id="findUnapplied" resultMap="row">
- SELECT extraction.source_code, extraction.source_program_id, extraction.status, extraction.application_start_date,
-  extraction.application_end_date, extraction.evidence_text, extraction.reason_code, extraction.extractor_version,
-  extraction.attempt_count, extraction.checked_at, extraction.next_check_at
+ SELECT <include refid="columns"/>
  FROM support_program_period_extraction extraction
  JOIN support_program program
   ON program.source_code = extraction.source_code AND program.source_program_id = extraction.source_program_id
- WHERE extraction.source_code = #{sourceCode} AND extraction.status = 'EXTRACTED' AND extraction.extractor_version = #{extractorVersion}
+ WHERE extraction.source_code = #{sourceCode} AND extraction.status = 'EXTRACTED'
   AND program.is_source_present = TRUE
   AND (NOT (program.application_end_date &lt;=&gt; extraction.application_end_date)
    OR NOT (program.application_start_date &lt;=&gt; extraction.application_start_date))
@@ -54,19 +59,23 @@
  </select>
  <insert id="upsert">
  INSERT INTO support_program_period_extraction (source_code, source_program_id, status, application_start_date, application_end_date,
-  evidence_text, reason_code, extractor_version, attempt_count, checked_at, next_check_at)
- VALUES (#{sourceCode}, #{sourceProgramId}, #{status}, #{applicationStartDate}, #{applicationEndDate}, #{evidenceText}, #{reasonCode},
-  #{extractorVersion}, #{attemptCount}, #{checkedAt}, #{nextCheckAt})
+  evidence_text, summary_text, target_text, reason_code, extractor_version, attempt_count, checked_at, next_check_at)
+ VALUES (#{sourceCode}, #{sourceProgramId}, #{status}, #{applicationStartDate}, #{applicationEndDate}, #{evidenceText}, #{summaryText},
+  #{targetText}, #{reasonCode}, #{extractorVersion}, #{attemptCount}, #{checkedAt}, #{nextCheckAt})
  ON DUPLICATE KEY UPDATE status = VALUES(status), application_start_date = VALUES(application_start_date),
-  application_end_date = VALUES(application_end_date), evidence_text = VALUES(evidence_text), reason_code = VALUES(reason_code),
-  extractor_version = VALUES(extractor_version), attempt_count = VALUES(attempt_count), checked_at = VALUES(checked_at),
-  next_check_at = VALUES(next_check_at)
+  application_end_date = VALUES(application_end_date), evidence_text = VALUES(evidence_text), summary_text = VALUES(summary_text),
+  target_text = VALUES(target_text), reason_code = VALUES(reason_code), extractor_version = VALUES(extractor_version),
+  attempt_count = VALUES(attempt_count), checked_at = VALUES(checked_at), next_check_at = VALUES(next_check_at)
  </insert>
- <!-- 다음 카탈로그 동기화 전에도 검색 상태가 바로 바뀌도록 공개 행의 기간만 갱신합니다. -->
+ <!--
+  기간은 검색 색인 텍스트에 들어가지 않으므로 바로 갱신합니다. 요약은 아직 미제공 안내일 때만 기간 안내로 바꾸고,
+  색인에 들어가는 원문 발췌(요약·지원대상)는 색인을 먼저 갱신하는 카탈로그 동기화에서만 반영합니다.
+ -->
  <update id="updateProgramPeriod">
  UPDATE support_program
  SET application_start_date = #{applicationStartDate}, application_end_date = #{applicationEndDate},
-  application_period_raw = #{applicationPeriodRaw}, summary = #{summary}
+  application_period_raw = #{applicationPeriodRaw},
+  summary = CASE WHEN summary = #{missingSummary} THEN #{periodOnlySummary} ELSE summary END
  WHERE source_code = #{sourceCode} AND source_program_id = #{sourceProgramId}
  </update>
 </mapper>
