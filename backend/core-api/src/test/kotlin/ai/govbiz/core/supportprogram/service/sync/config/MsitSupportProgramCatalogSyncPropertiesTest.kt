@@ -3,6 +3,7 @@ package ai.govbiz.core.supportprogram.service.sync.config
 import ai.govbiz.core.supportprogram.service.sync.MsitSupportProgramCatalogSyncScheduler
 import ai.govbiz.core.supportprogram.service.sync.MsitSupportProgramCatalogSyncService
 import java.time.Duration
+import java.time.Period
 import java.util.concurrent.TimeUnit
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -59,5 +60,20 @@ class MsitSupportProgramCatalogSyncPropertiesTest {
             MsitSupportProgramCatalogSyncProperties(fixedDelay = Duration.ZERO)
         }
         MsitSupportProgramCatalogSyncProperties(initialDelay = Duration.ZERO)
+    }
+
+    @Test
+    fun collectsTheLastTwelveMonthsOncePerDayByDefaultAndRejectsUnboundedLookbacks() {
+        val defaults = MsitSupportProgramCatalogSyncProperties()
+        assertEquals(Period.ofMonths(12), defaults.lookback)
+        assertEquals(Duration.ofHours(24), defaults.fixedDelay)
+        for (lookback in listOf(Period.ZERO, Period.ofDays(-1), Period.ofMonths(241), Period.ofYears(20).plusDays(31))) {
+            assertThrows(IllegalArgumentException::class.java) { MsitSupportProgramCatalogSyncProperties(lookback = lookback) }
+        }
+        MsitSupportProgramCatalogSyncProperties(lookback = Period.ofDays(1))
+        MsitSupportProgramCatalogSyncProperties(lookback = Period.ofYears(20))
+        context.withUserConfiguration(MsitSupportProgramCatalogSyncConfig::class.java)
+            .withPropertyValues("app.msit.sync.lookback=P6M")
+            .run { assertEquals(Period.ofMonths(6), it.getBean(MsitSupportProgramCatalogSyncProperties::class.java).lookback) }
     }
 }

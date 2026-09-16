@@ -7,6 +7,7 @@ import java.net.SocketTimeoutException
 import java.net.URI
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
+import java.time.LocalDate
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -43,11 +44,20 @@ class MsitClientTest {
     fun verifyRequests() { server.verify() }
 
     @Test
-    fun readsEveryTenItemPageAndThePartialLastPageUsingStableAnnouncementIds() {
+    fun readsEveryTenItemPageAndThePartialLastPageWhenAllAnnouncementsAreRecent() {
         expectPage(1, page((1..10).map { row(it.toString()) }, total = 12))
         expectPage(2, page((11..12).map { row(it.toString()) }, total = 12, number = 2))
 
-        assertEquals((1..12).map { "사업 $it" }, client.fetchAll().map { it.title })
+        assertEquals((1..12).map { "사업 $it" }, client.fetchPublishedSince(SINCE).map { it.title })
+    }
+
+    @Test
+    fun stopsAtTheFirstPageThatReachesAnnouncementsOlderThanTheLookback() {
+        expectPage(1, page((1..10).map { row(it.toString(), "2026-09-0${if (it < 5) 9 else 1}") }, total = 4_253))
+        expectPage(2, page(listOf(row("11", "2025-09-17"), row("12", "2025-09-16")) +
+            (13..20).map { row(it.toString(), "2013-03-02") }, total = 4_253, number = 2))
+
+        assertEquals((1..11).map { "사업 $it" }, client.fetchPublishedSince(SINCE).map { it.title })
     }
 
     @Test
@@ -59,7 +69,7 @@ class MsitClientTest {
             "files":[{"file":{"fileName":"공고문.hwp", "fileUrl":"https://attachments.example.test/file"}}]
         }}""")))
 
-        val item = client.fetchAll().single()
+        val item = client.fetchPublishedSince(SINCE).single()
         assertEquals("첨단 산업 R&amp;D 공고", item.title)
         assertEquals("연구개발정책과", item.organization)
         assertEquals("2026-09-09", item.publishedAt)
@@ -69,7 +79,7 @@ class MsitClientTest {
     @Test
     fun acceptsAnExplicitlyCompleteEmptySnapshot() {
         expectPage(1, page(emptyList()))
-        assertEquals(emptyList<Any>(), client.fetchAll())
+        assertEquals(emptyList<Any>(), client.fetchPublishedSince(SINCE))
     }
 
     @Test
@@ -81,7 +91,7 @@ class MsitClientTest {
     @Test
     fun rejectsIncompletePagesAndUnsupportedPaginationBeforeReturningAnyData() {
         val bodies = listOf(
-            page(listOf(row("1")), total = 2),
+            page(emptyList(), total = 2, perPage = 1),
             page(listOf(row("1")), number = 2),
             page(emptyList(), perPage = 0), page(emptyList(), perPage = 11),
             page(emptyList(), total = 20_001), page(emptyList(), total = 2001, perPage = 1),
@@ -91,12 +101,11 @@ class MsitClientTest {
     }
 
     @Test
-    fun rejectsChangedTotalsSizesAndPageNumbersOnLaterPages() {
+    fun rejectsChangedPageSizesPageNumbersAndPartialIntermediatePages() {
         val badSecondPages = listOf(
-            page(listOf(row("2")), total = 3, number = 2, perPage = 1),
             page(listOf(row("2")), total = 2, number = 2, perPage = 2),
             page(listOf(row("2")), total = 2, number = 1, perPage = 1),
-            page(emptyList(), total = 2, number = 2, perPage = 1),
+            page(emptyList(), total = 3, number = 2, perPage = 1),
         )
         badSecondPages.forEach {
             expectPage(1, page(listOf(row("1")), total = 2, perPage = 1))
@@ -106,10 +115,25 @@ class MsitClientTest {
     }
 
     @Test
-    fun rejectsDuplicateStableIdsEvenIfUnrelatedQueryParametersDiffer() {
+    fun keepsOneCopyWhenANewPostShiftsTheSameAnnouncementToTheNextPage() {
         expectPage(1, page(listOf(row("1")), total = 2, perPage = 1))
-        expectPage(2, page(listOf(row("1").replace("nttSeqNo=1", "nttSeqNo=1&mId=311")), total = 2, number = 2, perPage = 1))
+        expectPage(2, page(listOf(row("1").replace("nttSeqNo=1", "nttSeqNo=1&mId=311")), total = 3, number = 2, perPage = 1))
+        expectPage(3, page(listOf(row("2", "2025-01-01")), total = 3, number = 3, perPage = 1))
+
+        assertEquals(listOf("사업 1"), client.fetchPublishedSince(SINCE).map { it.title })
+    }
+
+    @Test
+    fun rejectsAListThatIsNoLongerOrderedByPublishedDate() {
+        expectPage(1, page(listOf(row("1", "2026-09-01")), total = 2, perPage = 1))
+        expectPage(2, page(listOf(row("2", "2026-09-10")), total = 2, number = 2, perPage = 1))
         assertFailure(MsitClientException.Failure.INVALID_RESPONSE)
+    }
+
+    @Test
+    fun skipsAnnouncementsWithoutAValidPublishedDateInsteadOfGuessingTheirAge() {
+        expectPage(1, page(listOf(row("1"), row("2", "미정"), row("3", "2026-02-30"), row("4").replace(",\"pressDt\":\"2026-09-09\"", ""))))
+        assertEquals(listOf("사업 1"), client.fetchPublishedSince(SINCE).map { it.title })
     }
 
     @Test
@@ -181,18 +205,20 @@ class MsitClientTest {
     }
 
     private fun assertFailure(expected: MsitClientException.Failure): MsitClientException {
-        val failure = assertThrows(MsitClientException::class.java) { client.fetchAll() }
+        val failure = assertThrows(MsitClientException::class.java) { client.fetchPublishedSince(SINCE) }
         assertEquals(expected, failure.failure)
         return failure
     }
 
     private fun properties(key: String = "test%2Bkey%2F%3D") = MsitClientProperties(URI(BASE_URL), key, null, null)
-    private fun row(id: String) = """{"item":{"subject":"사업 $id","viewUrl":"https://www.msit.go.kr/bbs/view.do?bbsSeqNo=100&nttSeqNo=$id"}}"""
+    private fun row(id: String, publishedAt: String = "2026-09-09") =
+        """{"item":{"subject":"사업 $id","pressDt":"$publishedAt","viewUrl":"https://www.msit.go.kr/bbs/view.do?bbsSeqNo=100&nttSeqNo=$id"}}"""
     private fun page(items: List<String>, total: Int = items.size, number: Int = 1, perPage: Int = 10) =
         """{"response":[{"header":{"resultCode":"00","resultMsg":"NORMAL_CODE"}},{"body":{"pageNo":"$number","totalCount":$total,"numOfRows":$perPage,"items":[${items.joinToString(",")}]}}]}"""
 
     private companion object {
         const val BASE_URL = "https://msit-api.test"
         const val RAW_KEY = "test+key/="
+        val SINCE: LocalDate = LocalDate.parse("2025-09-17")
     }
 }

@@ -13,11 +13,16 @@ object SupportProgramIndexTextHelper {
 
     fun buildText(candidate: CatalogSupportProgram): String {
         val program = candidate.program
-        val sourceLines = listOf(
-            "제목: ${program.title}", "기관: ${program.organization}", "지원대상: ${program.targetDescription}",
-            "분야: ${program.categories.joinToString(", ")}", "지역: ${program.regions.joinToString(", ")}",
-            "신청기간: ${program.applicationPeriod}", "내용: ${program.summary}",
-        )
+        val sourceLines = if (program.sourceCode == "MSIT") {
+            // MSIT 목록 API는 제목·담당 부서만 제공합니다. 모든 공고에 같은 미제공 안내 문구를 색인하면 검색 잡음이 됩니다.
+            listOf("제목: ${program.title}", "기관: ${program.organization}")
+        } else {
+            listOf(
+                "제목: ${program.title}", "기관: ${program.organization}", "지원대상: ${program.targetDescription}",
+                "분야: ${program.categories.joinToString(", ")}", "지역: ${program.regions.joinToString(", ")}",
+                "신청기간: ${program.applicationPeriod}", "내용: ${program.summary}",
+            )
+        }
         val startupLines = candidate.startupDetails?.takeIf { program.sourceCode == "KSTARTUP" }?.let { details ->
             buildList {
                 if (details.startupStages.isNotEmpty()) add("창업 업력 분류: ${details.startupStages.joinToString(", ")}")

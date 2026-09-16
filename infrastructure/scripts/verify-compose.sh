@@ -30,6 +30,8 @@ export MSIT_API_KEY="compose%2Bnotice%2Fverification%3D"
 export MSIT_SYNC_ENABLED="true"
 export MSIT_SYNC_INITIAL_DELAY="PT0S"
 export MSIT_SYNC_FIXED_DELAY="PT2S"
+# 고정 fixture의 게시일이 시간이 지나 수집 기간 밖으로 밀리지 않게 합니다.
+export MSIT_SYNC_LOOKBACK="P20Y"
 export CNTRADE_NOTICE_API_BASE_URL="http://public-notices-stub:8004"
 export CNTRADE_NOTICE_API_KEY="compose%2Bnotice%2Fverification%3D"
 export CNTRADE_NOTICE_SYNC_ENABLED="true"
