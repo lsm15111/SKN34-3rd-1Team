@@ -24,6 +24,17 @@ class SupportProgramNoticeSectionExtractorHelperTest {
     }
 
     @Test
+    fun stopsAtTheNextNumberedHeadingButNotInsideDates() {
+        val text = "1. 사업목적 ㅇ 세계적 수준의 우수한 연구자를 리더급 국가과학기술자로 선정하여 예우 " +
+            "(2026. 9. 11. 공고) 2. 공모방식 : 자유공모 3. 신청자격 ㅇ 국내 대학 소속 이공계 전임교원 및 연구원 4. 신청기간"
+
+        val sections = SupportProgramNoticeSectionExtractorHelper.extract(text)
+
+        assertEquals("세계적 수준의 우수한 연구자를 리더급 국가과학기술자로 선정하여 예우 (2026. 9. 11. 공고)", sections.purpose)
+        assertEquals("국내 대학 소속 이공계 전임교원 및 연구원", sections.target)
+    }
+
+    @Test
     fun skipsTableOfContentsLinesAndUsesTheRealSectionLater() {
         val text = "목 차 1. 사업개요 1 2. 지원대상 3 3. 신청방법 7 4. 선정평가 9 " +
             "□ 지원대상 : 중소기업 애로기술에 대한 연구를 희망하는 시니어 과학기술인 단체 □ 신청방법 : 이메일"

@@ -395,7 +395,7 @@ GET /api/v1/support-programs/detail
 
 ### 공고별 공식 원문 근거 질문
 
-기업마당 상세 화면의 **이 공고에 질문하기** 링크는
+기업마당·과학기술정보통신부 상세 화면의 **이 공고에 질문하기** 링크는
 `/support-programs/detail/question?sourceCode={sourceCode}&sourceProgramId={id}`로 이동합니다.
 질문 페이지는 URL 식별자를 검증하므로 직접 접속·새로고침이 가능하며 상세 화면으로 돌아가는 링크를
 제공합니다. 페이지 진입 시 API를 호출하지 않고, 사용자가 질문을 제출할 때 아래 기존 API를 호출합니다.
@@ -407,8 +407,11 @@ POST /api/v1/support-programs/detail/answers
   → SupportProgramDetailService → 현재 공개 공고 확인
   → SupportProgramRepository → MySQL의 공고별 원문 캐시 조회
   → 캐시가 없거나 URL이 바뀌었거나 6시간이 지남:
-      BizInfoSupportProgramSourceDocumentFacade → BizInfoSourceDocumentClient
+      BIZINFO: BizInfoSupportProgramSourceDocumentFacade → BizInfoSourceDocumentClient
         → 기업마당 공식 HTTPS 상세 페이지의 HTML만 수집·읽기 가능한 텍스트로 정규화
+      MSIT: MsitSupportProgramSourceDocumentFacade → MsitAttachmentClient → SupportProgramDocumentParser
+        → 상세가 직접 연결한 공식 PDF/HWP/HWPX를 공고문 우선·서식 뒤 순서로 읽고, HWP 글꼴 기호 등
+          사용자 정의·제어 문자를 공백으로 바꾼 뒤 청크 50개 한도(55,000자)에서 줄 단위로 자름
       → SupportProgramRepository → MySQL 원문 UPSERT
   → 같은 공고 ID·내용 해시의 불변 청크 재사용 (Core 인스턴스별 최근 32개 공고)
     → 없으면 SupportProgramEvidenceChunker → 결정적 청크 최대 50개
@@ -575,7 +578,7 @@ MySQL의 `support_program`은 `(source_code, source_program_id)` 고유키로 �
 삭제하지 않고 `is_source_present=false`로 바꿉니다. UPSERT는 대소문자만 바뀐 원본 ID도 최신 표기로
 갱신하여 MySQL과 벡터 식별자를 맞춥니다. 고유키 비교는 MySQL의 `utf8mb4_0900_ai_ci` collation을 따릅니다.
 
-`support_program_source_document`는 원문 근거 답변에만 쓰는 공고별 공식 HTML 정규화 텍스트·원문 URL·해시·수집
+`support_program_source_document`는 원문 근거 답변에만 쓰는 공고별 공식 원문(기업마당 HTML, 과기정통부 첨부 공고문) 정규화 텍스트·원문 URL·해시·수집
 시각을 같은 복합 식별자로 저장하고 공고를 FK로 참조합니다. 조회 시 공고의 공개 상태를 확인하므로 미노출 공고에는
 원문 질문을 제공하지 않습니다. 이 테이블은 정기 목록 동기화에서 채우지 않고 명시적 원문 질문의 수집·검증이
 성공했을 때 UPSERT합니다.
