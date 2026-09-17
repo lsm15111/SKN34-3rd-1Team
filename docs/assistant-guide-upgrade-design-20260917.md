@@ -232,3 +232,25 @@ Frontend
 - Anthropic, Building effective agents · Writing tools for agents: https://www.anthropic.com/engineering/building-effective-agents · https://www.anthropic.com/engineering/writing-tools-for-agents
 - 채널코퍼레이션 기술 블로그: https://docs.channel.io/tech-blog/ko/articles/tech-ax-channel-labs-b085ab62
 - OWASP Top 10 for LLM 2025 · Agentic Applications 2026: https://genai.owasp.org/
+
+## 진행 상황 (2026-09-17)
+
+| 단계 | 상태 | 커밋 | 확인 |
+|---|---|---|---|
+| 0. 화면 버그·문구 | 완료 | `1692862` | 프런트 테스트 추가(안정성 10·대화 규칙 34), 고친 동작을 되돌리면 4건 실패하는지 확인, 브라우저 확인 |
+| 1. 서버 카탈로그 + 단일 가이드 | 완료 | `ad20275` | AI Service 가이드 테스트 110(대본 모델 도구 루프·SDK↔스텁 7사례·계약 파일), Core 61, 실제 평가 70문항(아래) |
+| 1. 대화 기억(Redis) | 완료 | `3926149` | Redis Testcontainers 3, Core 서비스 2, 프런트 대화 id 흐름 |
+| 2. 액션 카드 + 작업 상태 | 대기 | | |
+| 3. 스트리밍 | 대기 | | |
+| 4. 평가·운영 | 일부 | | 평가 도구를 v2 계약으로 전환(`evaluation/assistant`) |
+
+설계와 달라진 점:
+- 도구는 기존 Core 읽기 API 3개(기업 프로필·모집글·관심 공고 목록)로 시작했고, `find_programs`·작업 상태 도구는 2단계로 미뤘습니다.
+- 관심 공고 묶음 질문의 원문 RAG(질문당 최대 13회 호출)는 없애고 목록 정보 + 원문 질문 안내로 바꿨습니다.
+- 대화 기억은 요약 없이 최근 6개만 보관합니다. 메뉴 알약으로 주고받은 대화는 서버 기억에 들어가지 않습니다.
+- 로그인 회원 질문에는 기존 주소당 분당 3회 추가 한도(`ASSISTANT_AGENT_PER_CLIENT_PER_MINUTE`)가 그대로 걸립니다. 실제 사용에서 빠듯하면 조정이 필요합니다.
+
+실측(로컬 Docker, 실제 OpenAI `gpt-5.6-luna`/low):
+- 평가 70문항: 의도 95.6%, 인용 100%, 기권 100%, 도구 선택 94.7%, 카드 유효 100%, 평균 3.6초. 실패 사례를 고친 뒤 12문항 재측정 전부 통과.
+- E2E: 비로그인 사용법 답 2~3초(입력 약 6천 토큰), 회원 관심 공고 마감 5.3초(모델 2회·도구 1회), 모집글 매칭 9.3초(모델 4회·도구 3회, 캐시 입력 74%).
+  조작한 도움말·대화를 보내도 답에 섞이지 않았고, Redis 키는 회원 24시간·비로그인 1시간 TTL로 저장됐습니다.
