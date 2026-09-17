@@ -21,7 +21,9 @@ import ai.govbiz.core.assistant.domain.AssistantCard
 import ai.govbiz.core.assistant.domain.AssistantCardKind
 import ai.govbiz.core.assistant.domain.AssistantIntent
 import ai.govbiz.core.assistant.domain.AssistantNavigation
+import ai.govbiz.core.assistant.domain.AssistantHistoryMessage
 import ai.govbiz.core.assistant.domain.AssistantQuestion
+import ai.govbiz.core.assistant.repository.AssistantConversationRepository
 import ai.govbiz.core.partner.domain.PartnerProposalBox
 import ai.govbiz.core.partner.domain.PartnerProposalStatus
 import ai.govbiz.core.partner.service.PartnerProposalService
@@ -39,7 +41,7 @@ import org.springframework.stereotype.Service
  * GovBiz 가이드 자유 질문 한 건을 처리합니다. 개인 정보를 가린 질문과 Core 도움말 카탈로그를 AI Service에 한 번 보내고,
  * 로그인 회원이면 이 요청에만 쓰는 계정 묶음 토큰을 함께 실어 AI Service의 읽기 도구가 회원 자료를 되부를 수 있게 합니다.
  * 돌아온 의도·답·카드는 형식·인용·경로 허용 목록으로 다시 검증하고, 회원 상태 템플릿·로그인 안내는 Core가 붙입니다.
- * 대화 전문은 저장하지 않습니다.
+ * 최근 대화는 [AssistantConversationRepository]가 서버에서 확정한 질문(개인 정보를 가린 문장)과 답만 짧게 보관하며 MySQL에는 남기지 않습니다.
  */
 @Service
 class AssistantMessageService(
@@ -50,10 +52,19 @@ class AssistantMessageService(
     private val catalog: AssistantHelpCatalog,
     private val properties: AssistantAgentProperties,
     private val tokenService: AssistantToolTokenService,
+    private val conversations: AssistantConversationRepository,
 ) {
     fun answer(account: Account?, question: AssistantQuestion): AssistantAnswer {
-        val verified = verify(client.answer(toRequest(account, question)), account)
-        return when (verified.intent) {
+        val history = conversations.recent(account?.id, question.conversationId)
+        val request = toRequest(account, question, history)
+        val answer = answerFor(verify(client.answer(request), account), account, question)
+        // 사용자에게 보인 답만 다음 질문의 맥락으로 남깁니다. AI 장애·계약 위반으로 끝난 질문은 남기지 않습니다.
+        (answer.answer ?: answer.clarificationQuestion)?.let { conversations.append(account?.id, question.conversationId, request.message, it) }
+        return answer
+    }
+
+    private fun answerFor(verified: VerifiedPayload, account: Account?, question: AssistantQuestion): AssistantAnswer =
+        when (verified.intent) {
             AssistantIntent.PRODUCT_HELP -> productHelp(verified)
             AssistantIntent.ACCOUNT_STATE -> accountState(verified, account)
             AssistantIntent.SEARCH -> search(verified.searchQuery!!)
@@ -62,14 +73,13 @@ class AssistantMessageService(
             AssistantIntent.UNCLEAR -> AssistantAnswer(verified.intent, null, emptyList(), verified.clarificationQuestion, null, null, null)
             AssistantIntent.PARTNER_MATCH, AssistantIntent.SAVED_PROGRAMS_QUESTION -> toolAnswer(verified, account)
         }
-    }
 
     /** 도구 비밀이 설정된 경우에만 회원 토큰을 싣습니다. 없으면 AI Service도 도구를 숨기고 의도만 돌려줍니다. */
-    private fun toRequest(account: Account?, question: AssistantQuestion): AiAssistantAnswerRequest =
+    private fun toRequest(account: Account?, question: AssistantQuestion, history: List<AssistantHistoryMessage>): AiAssistantAnswerRequest =
         AiAssistantAnswerRequest(
             SCHEMA_VERSION,
             AssistantPiiMasker.mask(question.message).take(MESSAGE_MAX),
-            question.history.map { AiAssistantHistoryMessage(it.role.name, AssistantPiiMasker.mask(it.content).take(HISTORY_MAX)) },
+            history.map { AiAssistantHistoryMessage(it.role.name, AssistantPiiMasker.mask(it.content).take(HISTORY_MAX)) },
             AiAssistantSession(account != null, account?.company != null),
             AiAssistantContext(question.context.route, question.context.programSelected),
             catalog.entries.map {

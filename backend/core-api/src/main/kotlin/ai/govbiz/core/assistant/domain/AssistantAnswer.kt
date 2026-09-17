@@ -95,8 +95,9 @@ data class AssistantScreenContext(
     val programSelected: Boolean,
 )
 
+/** 가이드 질문 한 건입니다. 이전 대화는 브라우저가 아니라 [conversationId]로 서버 저장소에서 읽습니다. */
 data class AssistantQuestion(
     val message: String,
-    val history: List<AssistantHistoryMessage>,
+    val conversationId: String,
     val context: AssistantScreenContext,
 )

@@ -24,6 +24,8 @@ import ai.govbiz.core.assistant.domain.AssistantIntent
 import ai.govbiz.core.assistant.domain.AssistantNavigation
 import ai.govbiz.core.assistant.domain.AssistantQuestion
 import ai.govbiz.core.assistant.domain.AssistantScreenContext
+import ai.govbiz.core.assistant.repository.AssistantConversationRepository
+import ai.govbiz.core.assistant.repository.exception.AssistantConversationStoreException
 import ai.govbiz.core.partner.domain.PartnerProposal
 import ai.govbiz.core.partner.domain.PartnerProposalBox
 import ai.govbiz.core.partner.domain.PartnerProposalInput
@@ -68,12 +70,14 @@ class AssistantMessageServiceTest {
         "기업을 등록한 회원만 모집글을 씁니다.", emptyList(), null, "member", "available", null,
     )
     private val catalog = AssistantHelpCatalog(listOf(scoreEntry, partnerEntry))
-    private val service = AssistantMessageService(client, savedPrograms, proposals, clock, catalog, properties, tokens)
+    private val conversations = Mockito.mock(AssistantConversationRepository::class.java)
+    private val service = AssistantMessageService(client, savedPrograms, proposals, clock, catalog, properties, tokens, conversations)
+    private val conversationId = "8f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f"
     private val member = Account(7L, "member@example.com", AccountRole.USER, LocalDateTime.of(2026, 9, 1, 9, 0), null, LocalDateTime.of(2026, 9, 1, 9, 0))
     private val companyMember = member.copy(company = CompanySummary(3L, "데이터브릿지 주식회사", "1248100998"))
 
-    private fun question(message: String = "점수가 무슨 뜻이야?", programSelected: Boolean = false, history: List<AssistantHistoryMessage> = emptyList()) =
-        AssistantQuestion(message, history, AssistantScreenContext("/app/chat", programSelected))
+    private fun question(message: String = "점수가 무슨 뜻이야?", programSelected: Boolean = false) =
+        AssistantQuestion(message, conversationId, AssistantScreenContext("/app/chat", programSelected))
 
     private fun payload(
         intent: String, answer: String? = null, citations: List<String?>? = emptyList(), clarification: String? = null,
@@ -127,7 +131,8 @@ class AssistantMessageServiceTest {
     fun masksPersonalIdentifiersAndSendsSessionAndTheServerCatalogToAiService() {
         respondWith(payload("OUT_OF_SCOPE", answer = "그 내용은 도와드리기 어렵습니다."))
         val history = listOf(AssistantHistoryMessage(AssistantHistoryRole.USER, "제 번호는 010-1234-5678이고 메일은 me@example.com"))
-        service.answer(companyMember, question("사업자번호 123-45-67890으로 조회해 줘", history = history))
+        `when`(conversations.recent(7L, conversationId)).thenReturn(history)
+        service.answer(companyMember, question("사업자번호 123-45-67890으로 조회해 줘"))
         val sent = lastSent()
         assertEquals("govbiz-assistant-v2", sent.schemaVersion)
         assertEquals("사업자번호 [사업자등록번호]으로 조회해 줘", sent.message)
@@ -295,7 +300,7 @@ class AssistantMessageServiceTest {
         service.answer(null, question("나한테 맞는 파트너 모집글 있어?"))
         assertNull(lastSent().principal)
 
-        val withoutSecret = AssistantMessageService(client, savedPrograms, proposals, clock, catalog, AssistantAgentProperties(), AssistantToolTokenService(AssistantAgentProperties(), clock))
+        val withoutSecret = AssistantMessageService(client, savedPrograms, proposals, clock, catalog, AssistantAgentProperties(), AssistantToolTokenService(AssistantAgentProperties(), clock), conversations)
         withoutSecret.answer(companyMember, question("나한테 맞는 파트너 모집글 있어?"))
         assertNull(lastSent().principal)
     }
@@ -396,6 +401,34 @@ class AssistantMessageServiceTest {
         assertEquals("관심 공고 두 건 중 하나가 9월 30일에 마감돼요.", fromTools.answer)
         assertEquals(1, fromTools.cards.size)
         Mockito.verifyNoInteractions(savedPrograms)
+    }
+
+    @Test
+    fun readsHistoryFromTheServerStoreAndAppendsOnlyTheMaskedQuestionWithTheShownAnswer() {
+        `when`(conversations.recent(null, conversationId)).thenReturn(listOf(
+            AssistantHistoryMessage(AssistantHistoryRole.USER, "점수가 뭐야?"),
+            AssistantHistoryMessage(AssistantHistoryRole.ASSISTANT, "점수는 관련도입니다."),
+        ))
+        respondWith(payload("UNCLEAR", clarification = "어떤 점수가 궁금하세요?"))
+        service.answer(null, question("그거 010-1234-5678로 알려줘"))
+
+        assertEquals(listOf("USER" to "점수가 뭐야?", "ASSISTANT" to "점수는 관련도입니다."), lastSent().history.map { it.role to it.content })
+        Mockito.verify(conversations).append(null, conversationId, "그거 [전화번호]로 알려줘", "어떤 점수가 궁금하세요?")
+
+        respondWith(payload("PARTNER_MATCH"))
+        service.answer(member, question("모집글 찾아줘"))
+        Mockito.verify(conversations).append(7L, conversationId, "모집글 찾아줘", AssistantAnswerTexts.PARTNER_MATCH_NEEDS_COMPANY)
+    }
+
+    @Test
+    fun failedAnswersAreNotRememberedAndStoreFailuresAreNotHiddenAsEmptyConversations() {
+        respondWith(payload("PRODUCT_HELP", answer = "인용이 없는 답"))
+        assertThrows(AiServiceCallException::class.java) { service.answer(null, question()) }
+        Mockito.verify(conversations, Mockito.never()).append(Mockito.isNull(), Mockito.anyString(), Mockito.anyString(), Mockito.anyString())
+
+        `when`(conversations.recent(7L, conversationId)).thenThrow(AssistantConversationStoreException())
+        assertThrows(AssistantConversationStoreException::class.java) { service.answer(member, question()) }
+        Mockito.verify(client, Mockito.times(1)).answer(any(AiAssistantAnswerRequest::class.java) ?: EMPTY_REQUEST)
     }
 
     private companion object {

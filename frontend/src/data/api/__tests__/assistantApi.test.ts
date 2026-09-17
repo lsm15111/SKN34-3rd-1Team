@@ -10,7 +10,7 @@ afterEach(() => {
 
 const question: AssistantQuestion = {
   message: '점수가 무슨 뜻이야?',
-  history: [{ role: 'ASSISTANT', content: '무엇을 도와드릴까요?' }],
+  conversationId: '8f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f',
   context: { route: '/', programSelected: false },
 }
 const answer = {

@@ -165,9 +165,9 @@ describe('GovBiz 가이드 위젯', () => {
     const sent = ask.mock.calls[0]![0]
     expect(sent.message).toBe('이 공고 지원 대상이 누구야?')
     expect(sent.context).toEqual({ route: '/app/proposals', programSelected: false })
-    expect(sent.history.length).toBeGreaterThan(0)
-    // 근거 도움말은 Core 카탈로그가 가지므로 요청에 싣지 않습니다.
-    expect(Object.keys(sent).sort()).toEqual(['context', 'history', 'message'])
+    // 최근 대화와 근거 도움말은 Core가 가지므로 요청에는 대화 id만 싣습니다.
+    expect(Object.keys(sent).sort()).toEqual(['context', 'conversationId', 'message'])
+    expect(sent.conversationId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
 
     // 메뉴의 새 대화는 인사로 되돌립니다.
     fireEvent.click(within(panel).getByRole('button', { name: assistantMessages.menu }))

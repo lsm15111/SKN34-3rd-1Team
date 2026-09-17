@@ -91,16 +91,32 @@ describe('GovBiz 가이드 대화 안정성', () => {
     expect(within(panel).getByRole('group', { name: '빠른 답변' })).toBeTruthy()
   })
 
-  it('최근 대화에는 인사 말풍선을 싣지 않는다', async () => {
+  it('같은 대화의 질문은 같은 대화 id로 보내고, 새 대화·새로고침 복원에서 id를 바르게 바꾸거나 이어 간다', async () => {
     const ask = vi.spyOn(appContainer.resolve('askAssistantUseCase'), 'execute').mockResolvedValue(answered('첫 답'))
     renderApp('/', null)
-    const { input, log } = openPanel()
+    const { panel, input, log } = openPanel()
     type(input, '첫 질문')
     expect(await within(log).findByText('첫 답')).toBeTruthy()
     type(input, '두 번째 질문')
+    await within(log).findAllByText('첫 답')
+    const first = ask.mock.calls[0]![0].conversationId
+    expect(ask.mock.calls[1]![0].conversationId).toBe(first)
+    // 대화 본문은 보내지 않습니다.
+    expect(JSON.stringify(ask.mock.calls[1]![0])).not.toContain('첫 답')
 
-    expect(ask.mock.calls[0]![0].history).toEqual([])
-    expect(ask.mock.calls[1]![0].history).toEqual([{ role: 'USER', content: '첫 질문' }, { role: 'ASSISTANT', content: '첫 답' }])
+    fireEvent.click(within(panel).getByRole('button', { name: assistantMessages.menu }))
+    fireEvent.click(within(panel).getByRole('menuitem', { name: assistantMessages.newConversation }))
+    type(input, '새 대화 질문')
+    await within(log).findByText('첫 답')
+    const renewed = ask.mock.calls[2]![0].conversationId
+    expect(renewed).not.toBe(first)
+
+    cleanup()
+    renderApp('/', null)
+    const reopened = openPanel()
+    type(reopened.input, '새로고침 뒤 질문')
+    await within(reopened.log).findAllByText('첫 답')
+    expect(ask.mock.calls[3]![0].conversationId).toBe(renewed)
   })
 
   it('로그아웃하거나 다른 계정으로 바뀌면 이전 계정의 대화를 지우고 다음 질문에 싣지 않는다', async () => {
@@ -123,7 +139,7 @@ describe('GovBiz 가이드 대화 안정성', () => {
     const { input, log } = openPanel()
     type(input, '질문')
     expect(await within(log).findByText('다른 계정 답')).toBeTruthy()
-    expect(JSON.stringify(ask.mock.calls[0]![0].history)).not.toContain('비공개 공고')
+    expect(JSON.stringify(ask.mock.calls[0]![0])).not.toContain('비공개 공고')
 
     act(() => { store.dispatch(signedOut()) })
     expect(screen.queryByText('다른 계정 답')).toBeNull()
@@ -140,6 +156,7 @@ describe('GovBiz 가이드 대화 안정성', () => {
     cleanup()
     window.sessionStorage.setItem(assistantConversationStorageKey, JSON.stringify({
       messages: [{ id: 'u-1', role: 'user', text: '남의 대화' }], quickReplies: [], owner: 'other@govbiz.local', startedAt: new Date().toISOString(),
+      conversationId: '8f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f',
     }))
     renderApp('/app/partners', memberAccount)
     openPanel()
@@ -151,6 +168,7 @@ describe('GovBiz 가이드 대화 안정성', () => {
     const yesterday = new Date(Date.now() - 36 * 60 * 60 * 1000)
     window.sessionStorage.setItem(assistantConversationStorageKey, JSON.stringify({
       messages: [{ id: 'u-1', role: 'user', text: '어제 질문' }], quickReplies: [], owner: null, startedAt: yesterday.toISOString(),
+      conversationId: '8f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f',
     }))
     renderApp('/', null)
     const { log } = openPanel()

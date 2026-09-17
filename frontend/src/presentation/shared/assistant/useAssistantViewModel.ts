@@ -50,17 +50,26 @@ export const assistantAnswerTimeoutMs = 45_000
 
 /** 대화는 브라우저 세션 동안만 남습니다. 탭을 닫으면 사라지고 서버에는 보내지 않습니다. */
 export const assistantConversationStorageKey = 'govbiz.assistant.conversation'
-/** 자유 질문에 싣는 최근 대화 수입니다. 인사 말풍선은 세지 않습니다. */
-export const assistantHistoryLimit = 6
 const labelShownStorageKey = 'govbiz.assistant.labelShown'
 /** 첫 방문에 런처 옆 라벨을 보여 주는 시간입니다. */
 export const assistantLauncherLabelMs = 5_000
 
 /**
  * 세션에 남기는 대화입니다. [owner]는 대화를 시작한 계정(비로그인은 null)이라, 다른 계정으로 바뀐 뒤에는 복원하지 않습니다.
- * [startedAt]은 대화 구분선의 날짜입니다.
+ * [startedAt]은 대화 구분선의 날짜이고, [conversationId]는 서버가 최근 대화를 찾는 id입니다.
  */
-type StoredConversation = { messages: AssistantMessage[]; quickReplies: AssistantQuickReply[]; owner: string | null; startedAt: string }
+type StoredConversation = {
+  messages: AssistantMessage[]
+  quickReplies: AssistantQuickReply[]
+  owner: string | null
+  startedAt: string
+  conversationId: string
+}
+
+/** 서버 대화 저장소의 키가 되는 새 대화 id입니다. */
+function newConversationId(): string {
+  return crypto.randomUUID()
+}
 
 function readStored(): StoredConversation | null {
   try {
@@ -71,8 +80,8 @@ function readStored(): StoredConversation | null {
     const record = parsed as Partial<StoredConversation>
     if (!Array.isArray(record.messages) || !Array.isArray(record.quickReplies)) return null
     if (typeof record.owner !== 'string' && record.owner !== null) return null
-    if (typeof record.startedAt !== 'string') return null
-    return { messages: record.messages, quickReplies: record.quickReplies, owner: record.owner, startedAt: record.startedAt }
+    if (typeof record.startedAt !== 'string' || typeof record.conversationId !== 'string') return null
+    return { messages: record.messages, quickReplies: record.quickReplies, owner: record.owner, startedAt: record.startedAt, conversationId: record.conversationId }
   } catch {
     return null
   }
@@ -121,6 +130,7 @@ export function useAssistantViewModel(
   const [messages, setMessages] = useState<AssistantMessage[]>(() => stored?.messages ?? [])
   const [quickReplies, setQuickReplies] = useState<AssistantQuickReply[]>(() => stored?.quickReplies ?? [])
   const [startedAt, setStartedAt] = useState(() => stored?.startedAt ?? new Date().toISOString())
+  const [conversationId, setConversationId] = useState(() => stored?.conversationId ?? newConversationId())
   const [isTyping, setIsTyping] = useState(false)
   const conversationOwnerRef = useRef<string | null | undefined>(stored?.owner)
   // 진행 중인 요청과 대화 세대입니다. 새 대화·계정 전환으로 세대가 바뀌면 늦게 온 답을 버립니다.
@@ -149,8 +159,8 @@ export function useAssistantViewModel(
     // 계정을 아직 모르면 저장을 미룹니다. 주인이 없는 대화가 다른 계정에 복원되지 않게 합니다.
     const conversationOwner = conversationOwnerRef.current ?? owner
     if (conversationOwner === undefined) return
-    writeStored({ messages, quickReplies, owner: conversationOwner, startedAt })
-  }, [messages, owner, quickReplies, startedAt])
+    writeStored({ messages, quickReplies, owner: conversationOwner, startedAt, conversationId })
+  }, [conversationId, messages, owner, quickReplies, startedAt])
 
   const routeReplies = useCallback(() => quickRepliesFor(session, pathname), [pathname, session])
 
@@ -175,6 +185,7 @@ export function useAssistantViewModel(
     setMessages([])
     setQuickReplies([])
     setStartedAt(new Date().toISOString())
+    setConversationId(newConversationId())
     writeStored(null)
   }, [cancelPending, owner])
 
@@ -209,12 +220,13 @@ export function useAssistantViewModel(
     setMessages(greetingMessages())
     setQuickReplies(routeReplies())
     setStartedAt(new Date().toISOString())
+    setConversationId(newConversationId())
   }, [cancelPending, routeReplies])
 
   const returnTo = `${pathname}${search}`
 
   /**
-   * 자유 질문을 Core에 보냅니다. 최근 대화 6개와 현재 화면 경로·공고 선택 여부를 싣고, 근거 도움말은 Core 카탈로그가 씁니다.
+   * 자유 질문을 Core에 보냅니다. 대화 id와 현재 화면 경로·공고 선택 여부만 싣고, 최근 대화와 근거 도움말은 Core가 가진 것을 씁니다.
    * 45초 안에 답이 없으면 끊고 다시 시도를 안내합니다.
    * 답을 기다리는 동안에는 새 질문을 받지 않고, 그 사이 대화가 바뀌면 늦게 온 답을 버립니다.
    */
@@ -226,9 +238,6 @@ export function useAssistantViewModel(
       append([asked, freeTextFallback()], routeReplies())
       return
     }
-    const history = messages.filter((item) => item.role === 'user' || item.greeting !== true).slice(-assistantHistoryLimit).map((item) => (item.role === 'user'
-      ? { role: 'USER' as const, content: item.text }
-      : { role: 'ASSISTANT' as const, content: item.paragraphs.join(' ') }))
     setMessages((current) => [...current, asked])
     setQuickReplies([])
     setIsTyping(true)
@@ -239,7 +248,7 @@ export function useAssistantViewModel(
     try {
       const result = await askAssistant.execute({
         message: trimmed,
-        history,
+        conversationId,
         context: { route: pathname.replace(/\/+$/, '') || '/', programSelected: programIdentityFrom(pathname, search) !== null },
       }, controller.signal)
       if (generation !== generationRef.current) return
@@ -258,7 +267,7 @@ export function useAssistantViewModel(
         setIsTyping(false)
       }
     }
-  }, [aiEnabled, append, askAssistant, messages, pathname, returnTo, routeReplies, search, session])
+  }, [aiEnabled, append, askAssistant, conversationId, pathname, returnTo, routeReplies, search, session])
 
   /** 검색 이동 버튼은 검색 입력창에 도우미가 고른 검색어를 미리 채웁니다. 검색 자체는 사용자가 보낼 때 시작합니다. */
   const prepareNavigation = useCallback((button: AssistantCardButton) => {

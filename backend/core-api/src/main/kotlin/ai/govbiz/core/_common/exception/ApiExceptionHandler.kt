@@ -59,6 +59,7 @@ import ai.govbiz.core.partner.service.exception.RecruitmentProgramNotFoundExcept
 import ai.govbiz.core.supportprogram.service.detail.exception.SupportProgramNotFoundException
 import ai.govbiz.core.supportprogram.service.search.exception.SupportProgramSearchResultExpiredException
 import ai.govbiz.core.supportprogram.repository.exception.SupportProgramSearchResultStoreException
+import ai.govbiz.core.assistant.repository.exception.AssistantConversationStoreException
 import ai.govbiz.core.supportprogram.service.catalog.exception.SupportProgramCatalogFilterException
 import ai.govbiz.core.supportprogram.service.evidence.exception.SupportProgramEvidenceNotSupportedException
 import ai.govbiz.core.supportprogram.service.evidence.exception.SupportProgramEvidenceUnavailableException
@@ -208,6 +209,16 @@ class ApiExceptionHandler {
                 HttpStatus.SERVICE_UNAVAILABLE, URI.create("urn:govbiz:problem:support-program-search-result-store-unavailable"),
                 "Search Result Store Unavailable", "The saved search result cannot be stored or restored right now. Please try again later.",
                 "SUPPORT_PROGRAM_SEARCH_RESULT_STORE_UNAVAILABLE",
+            ), request,
+        )
+
+    @ExceptionHandler(AssistantConversationStoreException::class)
+    fun handleAssistantConversationStoreUnavailable(request: HttpServletRequest): ResponseEntity<ProblemDetail> =
+        problemResponse(
+            ProblemDefinition(
+                HttpStatus.SERVICE_UNAVAILABLE, URI.create("urn:govbiz:problem:assistant-conversation-store-unavailable"),
+                "Assistant Conversation Store Unavailable", "The guide conversation cannot be read or saved right now. Please try again later.",
+                "ASSISTANT_CONVERSATION_STORE_UNAVAILABLE",
             ), request,
         )
 

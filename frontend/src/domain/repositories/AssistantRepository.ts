@@ -1,20 +1,18 @@
 import type { AssistantAnswer } from '../entities/AssistantAnswer'
 
-export type AssistantHistoryMessage = {
-  role: 'USER' | 'ASSISTANT'
-  content: string
-}
-
 /** 사용자가 지금 보고 있는 화면입니다. `programSelected`는 공고 상세처럼 원문 질문을 열 수 있는 화면인지입니다. */
 export type AssistantScreenContext = {
   route: string
   programSelected: boolean
 }
 
-/** 자유 질문 한 건입니다. 답의 근거인 도움말은 Core가 가지므로 보내지 않습니다. */
+/**
+ * 자유 질문 한 건입니다. 이전 대화는 [conversationId]로 서버가 저장해 둔 것을 쓰고, 답의 근거인 도움말도 Core가 가지므로
+ * 대화 본문·도움말은 보내지 않습니다. [conversationId]는 대화를 시작할 때 브라우저가 만든 UUID입니다.
+ */
 export type AssistantQuestion = {
   message: string
-  history: AssistantHistoryMessage[]
+  conversationId: string
   context: AssistantScreenContext
 }
 

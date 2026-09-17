@@ -204,15 +204,16 @@ Core 내부 전용 소비자가 기존 검색·근거 답변을 재사용하며 
 
 ```text
 AssistantMessageController (공유 요청 한도 + 로그인 회원은 주소당 추가 한도)
-  → AssistantMessageService: 길이 상한·개인 정보 마스킹, Core 도움말 카탈로그(assistant/help-catalog.json) 첨부,
-    로그인 회원이면 계정 묶음 HMAC 토큰(5분) 발급
+  → AssistantMessageService: Redis에서 이 대화의 최근 6개 턴 읽기, 길이 상한·개인 정보 마스킹,
+    Core 도움말 카탈로그(assistant/help-catalog.json) 첨부, 로그인 회원이면 계정 묶음 HMAC 토큰(5분) 발급
   → AiAssistantClient → AI Service POST /internal/v1/assistant/answers
       → AssistantAgent (Agents SDK 에이전트 하나, OPENAI_ASSISTANT_MODEL 기본 gpt-5.6-luna/low)
           → 로그인 회원만 보이는 읽기 도구(최대 3회): get_my_company_profile · search_partner_recruitments · list_saved_programs
               → Core GET /internal/v1/assistant/tools/{company-profile|recruitments|saved-programs} (공유 비밀 + 계정 토큰)
       → AssistantService: 인용은 요청 카탈로그 안, 카드는 이번 실행의 도구 결과 안(제목·경로는 도구 결과로 다시 만듦),
         자료를 읽지 않은 회원 자료 답은 버림
-  → Core 재검증(의도별 필드·카탈로그 인용·카드 경로·이동 허용 목록) → 템플릿 답·로그인 안내 → 응답
+  → Core 재검증(의도별 필드·카탈로그 인용·카드 경로·이동 허용 목록) → 템플릿 답·로그인 안내
+  → Redis에 가린 질문과 보여 준 답 한 쌍 추가 → 응답
 ```
 
 답의 근거인 도움말은 Core 카탈로그가 원본입니다. 브라우저는 질문·최근 대화·화면 경로만 보내며 도움말 본문을 보내도 쓰지 않습니다.
@@ -222,7 +223,10 @@ AssistantMessageController (공유 요청 한도 + 로그인 회원은 주소당
 자료로 답과 카드를 만들고, 비로그인이거나 공유 비밀(`ASSISTANT_TOOLS_TOKEN`, 32자 이상)이 없으면 도구가 보이지 않아 Core가 로그인 안내나
 템플릿 답(관심 공고 마감·받은 제안·기업 등록)을 붙입니다. 관심 공고 묶음 질문은 목록(제목·기관·마감·상태)만 읽고, 원문이 필요한 내용은
 해당 공고의 원문 질문으로 안내합니다. 도구 실패·카드 조작·계약 위반은 답을 지어내지 않고 오류(503·502)로 끝냅니다.
-대화는 브라우저 세션 저장소에만 남고 서버는 저장하지 않으며, 로그아웃·계정 전환 시 지웁니다.
+브라우저는 대화 본문 대신 대화를 시작할 때 만든 UUID(`conversationId`)만 보냅니다. Core의 `AssistantConversationRepository`가 Redis 목록 하나에
+서버가 확정한 질문(개인 정보를 가린 문장)과 보여 준 답만 최근 6개까지 보관하고(키는 계정·대화 id 해시, 마지막 질문 뒤 회원 24시간·비로그인 1시간),
+AI 장애로 끝난 질문은 남기지 않습니다. Redis 장애는 빈 대화로 숨기지 않고 503 `ASSISTANT_CONVERSATION_STORE_UNAVAILABLE`로 끝냅니다.
+화면의 말풍선은 브라우저 세션 저장소에 남고, 로그아웃·계정 전환·새 대화 시 지우고 새 대화 id를 만듭니다.
 회귀는 [가이드 평가](../evaluation/assistant/README.md)로 확인합니다.
 
 ### 확인된 조건의 검색

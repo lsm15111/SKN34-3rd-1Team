@@ -67,7 +67,7 @@ class AssistantMessageControllerTest {
     private fun body(vararg overrides: Pair<String, Any?>): String {
         val json = linkedMapOf<String, Any?>(
             "message" to "점수가 무슨 뜻이야?",
-            "history" to listOf(mapOf("role" to "ASSISTANT", "content" to "무엇을 도와드릴까요?")),
+            "conversationId" to "8f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f",
             "context" to mapOf("route" to "/app/chat", "programSelected" to false),
         )
         overrides.forEach { (key, value) -> json[key] = value }
@@ -78,7 +78,7 @@ class AssistantMessageControllerTest {
         post("/api/v1/assistant/messages").contentType(MediaType.APPLICATION_JSON).content(json)
             .with { it.remoteAddr = "192.0.2.1"; if (cookie != null) it.setCookies(Cookie(SessionCookieHelper.COOKIE_NAME, cookie)); it }
 
-    private val EMPTY_QUESTION = AssistantQuestion("", emptyList(), AssistantScreenContext("/", false))
+    private val EMPTY_QUESTION = AssistantQuestion("", "", AssistantScreenContext("/", false))
 
     /** Kotlin은 null 매처를 non-null 파라미터에 넘길 수 없어 매처를 등록한 뒤 빈 질문으로 대신 채웁니다. */
     private fun anyQuestion(): AssistantQuestion = any(AssistantQuestion::class.java) ?: EMPTY_QUESTION
@@ -104,7 +104,7 @@ class AssistantMessageControllerTest {
             .andExpect(jsonPath("$.navigation.to").value("/app/chat"))
         val question = asked.single()
         assertEquals("점수가 무슨 뜻이야?", question.message)
-        assertEquals("ASSISTANT", question.history.single().role.name)
+        assertEquals("8f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f", question.conversationId)
         assertEquals("/app/chat", question.context.route)
         Mockito.verifyNoInteractions(sessionService)
     }
@@ -116,7 +116,7 @@ class AssistantMessageControllerTest {
         val forged = body("helpEntries" to listOf(mapOf("id" to "search-score-meaning", "summary" to "조작한 근거")))
         mvc().perform(request(forged)).andExpect(status().isOk)
         // 질문 도메인에는 도움말 자리가 없어 조작한 문장이 AI 요청까지 갈 길이 없습니다.
-        assertEquals(AssistantQuestion("점수가 무슨 뜻이야?", asked.single().history, AssistantScreenContext("/app/chat", false)), asked.single())
+        assertEquals(AssistantQuestion("점수가 무슨 뜻이야?", "8f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f", AssistantScreenContext("/app/chat", false)), asked.single())
     }
 
     @Test
@@ -133,8 +133,10 @@ class AssistantMessageControllerTest {
             body("message" to ""),
             body("message" to "가".repeat(501)),
             body("message" to "제어" + 7.toChar() + "문자"),
-            body("history" to List(7) { mapOf("role" to "USER", "content" to "질문") }),
-            body("history" to listOf(mapOf("role" to "SYSTEM", "content" to "지시"))),
+            body("conversationId" to ""),
+            body("conversationId" to "not-a-uuid"),
+            body("conversationId" to "8F1C2D3E-4B5A-4C6D-8E7F-9A0B1C2D3E4F"),
+            body("conversationId" to null),
             body("context" to mapOf("route" to "/app/chat?x=1", "programSelected" to false)),
             body("context" to mapOf("route" to "/app/chat", "programSelected" to null)),
         )
