@@ -11,24 +11,11 @@ export type AssistantScreenContext = {
   programSelected: boolean
 }
 
-/** 요청에 실어 보내는 도움말 한 항목입니다. 원본 `HelpEntry`에서 모델이 쓰는 필드만 고릅니다. */
-export type AssistantHelpEntryInput = {
-  id: string
-  title: string
-  question: string
-  summary: string
-  body: string[]
-  limitation: string | null
-  audience: 'public' | 'member' | 'company' | 'admin'
-  status: 'available' | 'demo' | 'planned'
-  action: { label: string; to: string } | null
-}
-
+/** 자유 질문 한 건입니다. 답의 근거인 도움말은 Core가 가지므로 보내지 않습니다. */
 export type AssistantQuestion = {
   message: string
   history: AssistantHistoryMessage[]
   context: AssistantScreenContext
-  helpEntries: AssistantHelpEntryInput[]
 }
 
 /** 자유 질문 결과입니다. 한도와 AI 장애는 화면이 다르게 안내하고, 그 밖의 실패는 예외로 올라갑니다. */

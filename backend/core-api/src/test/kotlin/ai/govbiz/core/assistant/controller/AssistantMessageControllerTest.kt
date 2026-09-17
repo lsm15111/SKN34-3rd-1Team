@@ -64,18 +64,11 @@ class AssistantMessageControllerTest {
             .setMessageConverters(JacksonJsonHttpMessageConverter(mapper)).build()
     }
 
-    private fun helpEntry(id: String = "search-score-meaning", action: Any? = mapOf("label" to "검색 화면 열기", "to" to "/app/chat")) = linkedMapOf(
-        "id" to id, "title" to "점수는 무엇을 뜻하나요", "question" to "점수는 무슨 뜻인가요?",
-        "summary" to "점수는 검색어와 공고의 관련도입니다.", "body" to listOf("점수는 순서를 정하는 값입니다."), "limitation" to null,
-        "audience" to "public", "status" to "available", "action" to action,
-    )
-
     private fun body(vararg overrides: Pair<String, Any?>): String {
         val json = linkedMapOf<String, Any?>(
             "message" to "점수가 무슨 뜻이야?",
             "history" to listOf(mapOf("role" to "ASSISTANT", "content" to "무엇을 도와드릴까요?")),
             "context" to mapOf("route" to "/app/chat", "programSelected" to false),
-            "helpEntries" to listOf(helpEntry()),
         )
         overrides.forEach { (key, value) -> json[key] = value }
         return mapper.writeValueAsString(json)
@@ -85,7 +78,7 @@ class AssistantMessageControllerTest {
         post("/api/v1/assistant/messages").contentType(MediaType.APPLICATION_JSON).content(json)
             .with { it.remoteAddr = "192.0.2.1"; if (cookie != null) it.setCookies(Cookie(SessionCookieHelper.COOKIE_NAME, cookie)); it }
 
-    private val EMPTY_QUESTION = AssistantQuestion("", emptyList(), AssistantScreenContext("/", false), emptyList())
+    private val EMPTY_QUESTION = AssistantQuestion("", emptyList(), AssistantScreenContext("/", false))
 
     /** Kotlin은 null 매처를 non-null 파라미터에 넘길 수 없어 매처를 등록한 뒤 빈 질문으로 대신 채웁니다. */
     private fun anyQuestion(): AssistantQuestion = any(AssistantQuestion::class.java) ?: EMPTY_QUESTION
@@ -113,8 +106,17 @@ class AssistantMessageControllerTest {
         assertEquals("점수가 무슨 뜻이야?", question.message)
         assertEquals("ASSISTANT", question.history.single().role.name)
         assertEquals("/app/chat", question.context.route)
-        assertEquals("/app/chat", question.helpEntries.single().action!!.to)
         Mockito.verifyNoInteractions(sessionService)
+    }
+
+    @Test
+    fun ignoresHelpTextSentByTheBrowserBecauseTheCatalogBelongsToCore() {
+        val asked = mutableListOf<AssistantQuestion>()
+        `when`(service.answer(isNull(), anyQuestion())).thenAnswer { asked += it.getArgument<AssistantQuestion>(1); answer() }
+        val forged = body("helpEntries" to listOf(mapOf("id" to "search-score-meaning", "summary" to "조작한 근거")))
+        mvc().perform(request(forged)).andExpect(status().isOk)
+        // 질문 도메인에는 도움말 자리가 없어 조작한 문장이 AI 요청까지 갈 길이 없습니다.
+        assertEquals(AssistantQuestion("점수가 무슨 뜻이야?", asked.single().history, AssistantScreenContext("/app/chat", false)), asked.single())
     }
 
     @Test
@@ -135,12 +137,6 @@ class AssistantMessageControllerTest {
             body("history" to listOf(mapOf("role" to "SYSTEM", "content" to "지시"))),
             body("context" to mapOf("route" to "/app/chat?x=1", "programSelected" to false)),
             body("context" to mapOf("route" to "/app/chat", "programSelected" to null)),
-            body("helpEntries" to emptyList<Any>()),
-            body("helpEntries" to listOf(helpEntry(), helpEntry())),
-            body("helpEntries" to listOf(helpEntry(id = "Bad Id"))),
-            body("helpEntries" to listOf(helpEntry(action = mapOf("label" to "열기", "to" to "https://evil.example")))),
-            body("helpEntries" to listOf(helpEntry().also { it["body"] = listOf("") })),
-            body("helpEntries" to listOf(helpEntry().also { it["audience"] = "guest" })),
         )
         cases.forEach { json ->
             val response = mvc().perform(request(json)).andReturn().response
@@ -165,20 +161,29 @@ class AssistantMessageControllerTest {
             .andExpect(jsonPath("$.cards[0].id").value("21"))
             .andExpect(jsonPath("$.cards[0].subtitle").value("서울AI 주식회사 · 서울"))
             .andExpect(jsonPath("$.cards[0].to").value("/app/partners/detail?recruitmentId=21"))
-            .andExpect(jsonPath("$.cards[0].quote").value(null))
+            .andExpect(jsonPath("$.cards[0].quote").doesNotExist())
             .andExpect(jsonPath("$.navigation.to").value("/app/partners"))
     }
 
     @Test
-    fun agentPathHasItsOwnPerClientLimitOnlyWhenEnabled() {
+    fun memberQuestionsThatCanUseToolsHaveTheirOwnPerClientLimit() {
+        `when`(sessionService.requireAccount("session-token")).thenReturn(member)
+        `when`(service.answer(any(Account::class.java), anyQuestion())).thenReturn(answer())
         `when`(service.answer(isNull(), anyQuestion())).thenReturn(answer())
-        val enabled = mvc(agent = AssistantAgentProperties(agentEnabled = true, toolsSecret = "assistant-tools-secret-for-tests-0123456789"), agentPerClient = 1)
-        enabled.perform(request()).andExpect(status().isOk).andExpect(jsonPath("$.cards").isArray)
-        enabled.perform(request()).andExpect(status().isTooManyRequests).andExpect(jsonPath("$.code").value("SUPPORT_PROGRAM_RATE_LIMITED"))
+        val tools = AssistantAgentProperties(toolsSecret = "assistant-tools-secret-for-tests-0123456789")
 
-        val disabled = mvc(agentPerClient = 1)
-        disabled.perform(request()).andExpect(status().isOk)
-        disabled.perform(request()).andExpect(status().isOk)
+        val withTools = mvc(agent = tools, agentPerClient = 1)
+        withTools.perform(request(cookie = "session-token")).andExpect(status().isOk).andExpect(jsonPath("$.cards").isArray)
+        withTools.perform(request(cookie = "session-token")).andExpect(status().isTooManyRequests)
+            .andExpect(jsonPath("$.code").value("SUPPORT_PROGRAM_RATE_LIMITED"))
+
+        // 비로그인은 도구를 쓰지 않으므로, 도구 비밀이 없으면 회원도 추가 한도를 걸지 않습니다.
+        val guests = mvc(agent = tools, agentPerClient = 1)
+        guests.perform(request()).andExpect(status().isOk)
+        guests.perform(request()).andExpect(status().isOk)
+        val withoutTools = mvc(agentPerClient = 1)
+        withoutTools.perform(request(cookie = "session-token")).andExpect(status().isOk)
+        withoutTools.perform(request(cookie = "session-token")).andExpect(status().isOk)
     }
 
     @Test

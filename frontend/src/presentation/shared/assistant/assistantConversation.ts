@@ -244,7 +244,7 @@ function agentCardRows(cards: AssistantAnswerCard[], inApp: boolean): AssistantC
   return cards.map((card) => ({
     tag: { label: card.kind === 'RECRUITMENT' ? assistantMessages.cardRecruitment : assistantMessages.cardProgram, tone: 'ok' },
     title: card.title,
-    detail: [card.subtitle, card.reason, card.quote === null ? null : assistantMessages.cardQuote(card.quote)].filter((part): part is string => part !== null).join(' · '),
+    detail: [card.subtitle, card.reason].filter((part): part is string => part !== null).join(' · '),
     to: helpActionHref(card.to, inApp),
   }))
 }

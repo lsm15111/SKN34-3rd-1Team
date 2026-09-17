@@ -70,8 +70,7 @@ AI Service가 하는 일:
 - Core가 준비한 공고 상세 원문 청크를 별도 Qdrant collection에 색인하고, 지정된 현재 청크 안에서 근거를 최대 5개 검색
 - 검색된 공고 상세 근거만 사용해 한국어 답변과 인용 청크 ID를 strict structured output으로 반환
 - 새 메시지와 작은 검색 상태를 해석해 사용자 확인 전 조건 변경 패치 또는 확인 질문을 반환
-- 도우미 자유 질문을 여섯 의도 중 하나로 분류하고, 사용법 답은 Core가 보낸 도움말 항목만 인용해 반환 (`govbiz-assistant-v1`)
-- 도우미 도구 에이전트: 분류 뒤 자료가 필요한 의도(모집글 매칭·내 상태·관심 공고)는 LangGraph로 Core 내부 도구를 최대 3회 부르고 답·카드를 반환 (`govbiz-assistant-agent-v1`)
+- GovBiz 가이드: 에이전트 하나가 자유 질문의 의도를 고르고, 사용법은 Core 카탈로그만 인용하며, 로그인 회원이면 Core 내부 읽기 도구를 최대 3회 불러 답·카드를 반환 (`govbiz-assistant-v2`)
 - Core가 보낸 정확히 2개 사업의 전체 근거·참여 사실을 단일 Agent로 대조하고 한 사업쌍의 여섯 단계 판단·질문·정확한 인용을 반환 (`combination-review-v2`)
 
 AI Service가 하지 않는 일:
@@ -150,71 +149,46 @@ ANSWERED는 비어 있지 않은 answer와 빈 updates, null 질문을 반환합
 한 번의 typed structured 호출만 실행합니다. 기존 client/model, store=false, tracing 비활성을 공유하며
 이 역할의 모델·HTTP 25초/전체 실행 30초 제한과 최대 출력 2,000 tokens를 유지합니다.
 
-## 도우미 자유 질문 분류 (C2)
+## GovBiz 가이드 자유 질문
 
-`POST /internal/v1/assistant/answers`는 `govbiz-assistant-v1` 계약을 사용합니다. 화면 오른쪽 아래 도우미에
-사용자가 자유롭게 쓴 한 마디를 받아 의도 하나를 고르고, 그 의도에 필요한 필드만 채웁니다. 실제 기능 실행과
-화면 이동은 분류 결과를 받은 Core가 하며 모델은 도구를 호출하지 않습니다.
-입력은 `schemaVersion`, `message`(1~500자), 최근 대화 `history`(최대 6개, USER/ASSISTANT), `session`
-(`authenticated`, `hasCompany`), `context`(`route`, 공고 상세처럼 원문 질문이 가능한 화면인지 `programSelected`),
-`helpEntries`(1~40개, id 고유)입니다. 도움말 항목은 프런트 `helpContent`와 같은 필드
-(`id`·`title`·`question`·`summary`·`body`·`limitation`·`audience`·`status`·`action`)이며 AI Service는 사본을 갖지 않습니다.
-응답 `intent`와 함께 채워야 하는 필드는 아래와 같고 나머지는 null 또는 빈 배열입니다.
+`POST /internal/v1/assistant/answers`는 `govbiz-assistant-v2` 계약을 사용합니다. 화면 오른쪽 아래 GovBiz 가이드에 사용자가 자유롭게 쓴
+한 마디를 받아 **에이전트 하나**(Agents SDK)가 의도를 고르고, 로그인 회원이면 읽기 도구로 회원 자료를 모아 답과 카드를 고릅니다.
+실제 기능 실행과 화면 이동은 Core와 화면이 합니다. 별도 graph·handoff 계층은 없습니다.
 
-분류·인용 회귀는 [도우미 의도 분류 평가](../../evaluation/assistant/README.md)의 가상 질문 50문항으로 확인합니다. 기본 실행은 모델을 부르지 않고, `--live` 첫 측정(2026-09-13)은 의도 50/50·인용 30/30·기권 10/10이었습니다.
+입력은 `schemaVersion`, `message`(1~500자), 최근 대화 `history`(최대 6개), `session`(`authenticated`, `hasCompany`), `context`(`route`,
+`programSelected`), Core 카탈로그의 `helpEntries`(1~40개), `principal`(`accountId`, `toolToken`, `hasCompany`; 비로그인은 `null`)입니다.
+응답은 의도별 필드에 `cards[]`(최대 5장, `kind` RECRUITMENT/PROGRAM, `id`, `title`, `subtitle`, `reason`, `to`), `navigation`(`label`, `to`),
+`toolCalls[]`(`name`, `ms`)를 더한 것입니다. 두 서비스의 테스트가 `backend/core-api/src/test/resources/assistant/contract-*.json`을 함께 읽습니다.
 
 | intent | 채우는 필드 | 뜻 |
 |---|---|---|
-| `PRODUCT_HELP` | `answer`, `citations`(요청 helpEntries의 id 1~3개) | 사용법·화면·정책 질문 |
-| `ACCOUNT_STATE` | `accountTopic`(`SAVED_PROGRAMS`/`RECEIVED_PROPOSALS`/`COMPANY_PROFILE`) | 내 상태 질문. 숫자는 Core가 붙임 |
+| `PRODUCT_HELP` | `answer`, `citations`(helpEntries id 1~3개) | 사용법·화면·정책 질문 |
+| `ACCOUNT_STATE` | `accountTopic`, 도구로 읽었으면 `answer`·카드 | 내 상태 질문. 자료가 없으면 Core 템플릿 |
 | `SEARCH` | `searchQuery` | 지원사업을 찾아 달라는 말 |
-| `PROGRAM_QUESTION` | 없음 | 특정 공고 내용 질문. 원문 근거 경로로 위임 |
+| `PROGRAM_QUESTION` | 없음 | 특정 공고 내용 질문. 원문 질문 화면으로 안내 |
 | `OUT_OF_SCOPE` | `answer` | 할 수 없는 일임을 알리고 가장 가까운 기능 안내 |
 | `UNCLEAR` | `clarificationQuestion` | 종류를 정할 수 없어 한 번 되묻기 |
+| `PARTNER_MATCH` | 도구로 읽었으면 `answer`·카드 | 내 기업에 맞는 모집글 찾기 |
+| `SAVED_PROGRAMS_QUESTION` | 도구로 읽었으면 `answer`·카드 | 관심 공고 여러 건을 묶어 묻기(목록 정보만) |
 
-Service는 의도별 필드 조합과 인용 id가 요청의 도움말 항목에 있는지 검증하고 위반이면 503으로 거절합니다.
-`HTTP API → AssistantService → AssistantAgent → OpenAI → Response`로 한 번의 typed structured 호출만 실행하며
-C02와 같은 모델·HTTP 25초/전체 실행 30초 제한, 최대 출력 1,200 tokens, store=false, tracing 비활성을 씁니다.
-로그에는 결과·소요 시간·토큰 수만 남기고 메시지·답변 본문은 남기지 않습니다.
-세션·전체 대화 이력·영속성·추가 provider는 없습니다.
-
-## 도우미 도구 에이전트 (LangGraph)
-
-`POST /internal/v1/assistant/agent`는 `govbiz-assistant-agent-v1` 계약을 사용합니다. 요청은 `answers`와 같은 본문에
-`principal`(`accountId`, `toolToken`, `hasCompany`; 비로그인은 `null`)과, 관심 공고 묶음 질문의 두 번째 호출에만
-`savedProgramDocuments[]`(최대 10건 × 청크 `{id, contentHash}` 50개, 청크가 비면 원문 미수집)·`resumeIntent`를 더한 것이고, 응답은 위 표의 필드에
-`cards[]`(최대 5장, `kind` RECRUITMENT/PROGRAM, `id`, `title`, `subtitle`, `reason`, `quote`, `to`), `navigation`(`label`, `to`),
-`toolCalls[]`(`name`, `ms`, `ok`), `needsDocuments`를 더한 것입니다. 이 경로만 LangGraph를 쓰며 대화 검색·공고 추천·상세 질의응답·중복 지원 검토·신청 문서는 LangChain, 도우미 자유 질문 분류는 Agents SDK를 사용합니다.
-
-```
-classify(nano, 구조화) ─┬─ PRODUCT_HELP·SEARCH·PROGRAM_QUESTION·OUT_OF_SCOPE·UNCLEAR·(제안함) ─► finalize
-                       └─ PARTNER_MATCH·ACCOUNT_STATE·SAVED_PROGRAMS_QUESTION + principal ─► plan(luna, bind_tools)
-                                                                                           ⇅ tools(Core GET, 병렬, ≤3회)
-                                                                                           answer(luna, 구조화) ─► verify ─► finalize
+```text
+HTTP API → AssistantService → AssistantAgent(Runner.run, max_turns = 도구 상한 + 1)
+  → OpenAI (OPENAI_ASSISTANT_MODEL, 기본 gpt-5.6-luna/low)
+  ⇄ 읽기 도구(principal이 있고 ASSISTANT_TOOLS_TOKEN이 설정됐을 때만 보임, 질문당 최대 ASSISTANT_AGENT_MAX_TOOL_CALLS=3회)
+      get_my_company_profile · search_partner_recruitments · list_saved_programs → Core GET /internal/v1/assistant/tools/*
+  → AssistantService 검증 → Response
 ```
 
-- 도구는 `app/assistant_agent/tools.py`의 세 개(`get_my_company_profile`, `search_partner_recruitments`, `list_saved_programs`)이며
-  Core `GET /internal/v1/assistant/tools/*`를 `X-Internal-Token`(공유 비밀)과 `X-Assistant-Tool-Token`(계정 묶음 단기 토큰)으로 부릅니다.
-  전부 읽기 전용이고 결과는 개인정보·URL을 다시 가리고 600자로 잘라 `<data>`로만 씁니다. 도구 실패는 예외가 아니라 `toolCalls[].ok=false`와
-  강등된 문장("지금은 자료를 확인하지 못했어요")입니다.
-- `plan`은 같은 도구·같은 인자 반복과 모르는 도구를 버리고 질문당 최대 3회(`ASSISTANT_AGENT_MAX_TOOL_CALLS`)만 실행합니다.
-  실패한 도구 뒤나 상한에 닿으면 다시 계획하지 않고 지금 자료로 답합니다.
-- `answer`는 카드의 `kind`·`id`·`reason`만 내고, 제목·부제·경로는 `verify`가 도구 결과에서 채웁니다. 도구 결과에 없는 id가 하나라도 있으면
-  답을 한 번 다시 만들고, 그래도 실패하면 카드 없이 문장만 남깁니다. `navigation`은 허용 목록(`/app/partners`, `/app/saved-programs`,
-  `/app/proposals`, `/app/profile`, `/app/chat`)에서만 고릅니다.
-- `principal`이 없으면 도구 경로가 막혀 분류 결과만 돌아가고 Core가 로그인 안내를 붙입니다. 기업 미등록 회원의 모집글 매칭은
-  모델 없이 "기업 등록이 먼저" 문장과 프로필 이동을 돌려줍니다.
-- 모델 호출은 질문당 최대 5회(분류 1, 계획 ≤3, 답 ≤2)이고 전체 제한 시간은 `ASSISTANT_AGENT_TIMEOUT_SECONDS`(기본 15초)입니다.
-  넘으면 504, 그 밖의 장애·계약 위반은 503입니다. 체크포인터·서버 대화 세션은 없습니다.
-- 로그는 결과·의도·모델 호출 수·도구 호출 수·실패 수·토큰 수·시간만 남깁니다. 질문·답·도구 결과 본문은 남기지 않습니다.
-- 관심 공고 묶음 질문(`SAVED_PROGRAMS_QUESTION`)은 도구 루프 대신 서브그래프 `retrieve → map → reduce → verify`
-  (`app/assistant_agent/subgraphs/saved_programs_question.py`)를 씁니다. 첫 호출에 청크 허용 목록이 없으면 `needsDocuments=true`로 끝나고,
-  Core가 원문을 준비해 `resumeIntent`로 다시 부르면 분류를 건너뜁니다. `retrieve`는 기존 근거 컬렉션을 허용 청크 id로 좁혀 질문과 가까운 청크를
-  공고당 4개까지 읽고(`SupportProgramEvidenceService.search_documents`, 색인 때부터 payload에 청크 원문을 함께 저장), `map`은 공고마다 분류 모델(nano)이
-  `{verdict, value, quote, confidence}`를 병렬로 내며, `reduce`는 판단 결과만 보고 답 모델(luna)이 문장·카드 순서를 정합니다. `verify`는 카드의
-  문서 id가 관심 공고 안에 있는지와 인용이 검색 청크 원문에 글자 그대로 있는지를 보고, 대조에 실패한 인용은 카드에서 뺍니다.
-- 단위 테스트(`tests/assistant_agent`)는 대본대로 답하는 채팅 모델과 httpx 대역 Core로 분기·상한·재시도·강등을 검증하고,
-  `infrastructure/stubs/openai/server.py`는 `govbiz-assistant-agent-v1` 입력의 분류·도구 호출·답 픽스처를 갖습니다.
+- 도구는 `app/assistant/tools.py`에 있고 `X-Internal-Token`(공유 비밀)과 `X-Assistant-Tool-Token`(계정 묶음 단기 토큰)으로 Core를 부릅니다.
+  결과는 개인정보·URL을 다시 가리고 잘라서 자료로만 씁니다. 도구가 실패하면 모델에 오류 문장을 넘기지 않고 실행 전체를 503으로 끝냅니다.
+- 모델 입력에는 principal을 넣지 않습니다. 매 질문 같은 도움말 카탈로그를 질문보다 앞에 두어 지침·도구 정의·카탈로그가 프롬프트 캐시 접두사가 됩니다.
+- Service는 의도별 필드 조합, 인용이 요청 카탈로그 안인지, 카드 id가 이번 실행의 도구 결과 안인지 검증하고 카드 제목·부제·경로를 도구 결과로
+  다시 만듭니다. 지어낸 카드는 답 전체를 503으로 끝냅니다. 비로그인이거나 도구를 읽지 않은 회원 자료 답(받은 제안 포함)은 버리고 Core가 안내합니다.
+- 전체 실행 제한은 `ASSISTANT_AGENT_TIMEOUT_SECONDS`(기본 30초), 모델 호출은 `LLM_MODEL_TIMEOUT_SECONDS`(25초)이며 넘으면 504입니다.
+  store=false, tracing 비활성이고 로그에는 결과·모델 호출 수·도구 호출 수·토큰 수·시간만 남깁니다. 서버 대화 세션은 없습니다.
+- 단위 테스트(`tests/assistant`)는 `agents.testing.ScriptedModel`과 httpx 대역 Core로 도구 순서·상한·실패·카드 검증을 확인하고,
+  `test_compose_stub.py`는 실제 `OpenAIResponsesModel`과 `infrastructure/stubs/openai/server.py`의 도구 호출·최종 출력 픽스처를 맞춥니다.
+- 회귀는 [가이드 평가](../../evaluation/assistant/README.md)로 확인합니다.
 
 모델은 상태·패치·질문 또는 결과 설명을 출력하고 Service가 검증 후 계약 버전을 붙입니다. 검색/임베딩/랭킹은 호출하지 않습니다.
 
@@ -661,14 +635,12 @@ OPENAI_MODEL=gpt-5.6-luna
 OPENAI_RANKING_MODEL=gpt-5.6-luna
 OPENAI_RANKING_REASONING_EFFORT=low
 OPENAI_RANKING_SERVICE_TIER=priority
-OPENAI_ASSISTANT_MODEL=gpt-5-nano
+OPENAI_ASSISTANT_MODEL=gpt-5.6-luna
 OPENAI_ASSISTANT_REASONING_EFFORT=low
-OPENAI_ASSISTANT_AGENT_MODEL=gpt-5.6-luna
-OPENAI_ASSISTANT_AGENT_REASONING_EFFORT=none
 ASSISTANT_TOOLS_BASE_URL=http://127.0.0.1:8080
 ASSISTANT_TOOLS_TOKEN=
 ASSISTANT_AGENT_MAX_TOOL_CALLS=3
-ASSISTANT_AGENT_TIMEOUT_SECONDS=15
+ASSISTANT_AGENT_TIMEOUT_SECONDS=30
 ASSISTANT_TOOL_TIMEOUT_SECONDS=3
 LLM_MODEL_TIMEOUT_SECONDS=25.0
 LLM_RUN_TIMEOUT_SECONDS=30.0
@@ -695,26 +667,7 @@ Luna의 Responses·구조화 출력·`low` 지원은 [OpenAI 공식 모델 문�
 기준으로 확인했습니다. 무료 스텁 테스트는 요청·출력 계약 검증이며 실제 검색 품질 측정이 아닙니다.
 직접 생성하는 `SupportProgramRecommendationAgent`의 추론 기본값도 `none`으로 유지합니다.
 
-도우미 자유 질문 분류(`app/assistant`)만 `OPENAI_ASSISTANT_MODEL`(기본 `gpt-5-nano`)과
-`OPENAI_ASSISTANT_REASONING_EFFORT`(기본 `low`, `none`·`minimal` 허용)를 따로 씁니다. [의도 분류 평가](../../evaluation/assistant/README.md)
-50문항에서 nano/low는 48개(luna/none 50개, nano/minimal 28개)를 맞혀 비용이 절반인 nano/low를 기본으로 두었습니다.
-조건 해석·근거 답변·랭킹 모델은 바뀌지 않습니다.
-도우미 도구 에이전트(`app/assistant_agent`)는 분류에 같은 nano/low를 쓰고, 계획·답에는 `OPENAI_ASSISTANT_AGENT_MODEL`
-(기본 `gpt-5.6-luna`)과 `OPENAI_ASSISTANT_AGENT_REASONING_EFFORT`(기본 `none`, `low` 허용)를 씁니다. Core 내부 도구 API 주소는
-`ASSISTANT_TOOLS_BASE_URL`(Compose는 `http://core-api:8080`), 공유 비밀은 Core와 같은 `ASSISTANT_TOOLS_TOKEN`(32자 이상)입니다.
-비밀이 비어 있으면 도구 호출이 전부 실패로 기록되고 답이 강등되므로, 에이전트를 켤 때는 Core와 AI Service에 같은 값을 넣습니다.
-이는 시작 시 선택하는 명시적 설정이며, 장애 시 다른 모델로 재시도하는 fallback이 아닙니다.
-출력 축약은 미채택이며 기존 후보 ID·필드명·출력 계약을 유지합니다. 실험 구현은 평가 경로에만 보존합니다.
-`OPENAI_RANKING_SERVICE_TIER` 미설정 시 코드·Compose 기본값은 `default`입니다. 위 예제와 루트
-`.env.example`은 사용자 승인에 따른 Fast 상시 사용 프로필인 `priority`를 명시합니다.
-Fast는 일반 처리보다 추가 요금이 있으며, 모델별 지원 범위와 단가는 공식 문서에서 확인해야 합니다.
-[OpenAI 공식 Fast 문서](https://developers.openai.com/api/docs/guides/fast-mode)를 참고하세요.
-이 설정은 랭킹 요청에만 적용하며 대화 해석·RAG 답변·임베딩 설정은 바꾸지 않습니다.
-추론·후보 수·배점·출력/시간 상한·HTTP 계약도 유지합니다. 일반 처리로 돌아가려면
-`default`를 명시하고 AI Service를 재시작하거나 Compose 컨테이너를 재생성합니다.
-이전 Sol 프로필의 배포·실측은 [지역 충돌·Fast 기록](../../docs/region-conflict-fast-20260908.md)에 보존하며,
-그 결과를 현재 Luna 프로필의 품질·속도 측정값으로 사용하지 않습니다. 기존 `.env`는 예제 변경으로 갱신되지 않으므로
-`OPENAI_RANKING_MODEL=gpt-5.6-luna`를 직접 반영하고 AI Service 컨테이너를 재생성해야 합니다.
+GovBiz 가이드(`app/assistant`)는 `OPENAI_ASSISTANT_MODEL`(기본 `gpt-5.6-luna`)과 `OPENAI_ASSISTANT_REASONING_EFFORT`(기본 `low`, `none`·`minimal` 허용)를 따로 씁니다. 에이전트 하나가 의도 분류·도구 선택·답을 모두 맡으므로 도구 선택이 안정적인 luna를 기본으로 둡니다.
 
 순위화만 모델·HTTP `45s` < 전체 Agent `50s` < Core 순위화 읽기 `55s`의 별도 기본 제한을 사용합니다.
 두 `LLM_RANKING_*` 값은 유한한 0초 초과·60초 이하이며 모델 제한이 전체 제한보다 작아야 합니다.

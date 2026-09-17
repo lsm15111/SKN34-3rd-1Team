@@ -17,7 +17,7 @@ def get_assistant_service(request: Request) -> AssistantService:
     return request.app.state.container.assistant_service
 
 
-@router.post("/answers", response_model=AssistantAnswerResponse, summary="도우미 자유 질문 의도 분류와 답변")
+@router.post("/answers", response_model=AssistantAnswerResponse, summary="GovBiz 가이드 자유 질문(의도 분류·회원 자료 도구·답·카드)")
 async def answer_assistant_message(
     payload: AssistantAnswerRequest,
     service: Annotated[AssistantService, Depends(get_assistant_service)],

@@ -42,11 +42,10 @@ data class AssistantCardResponse(
     val title: String,
     val subtitle: String?,
     val reason: String,
-    val quote: String?,
     val to: String,
 ) {
     companion object {
         fun from(card: AssistantCard) =
-            AssistantCardResponse(card.kind.name, card.id, card.title, card.subtitle, card.reason, card.quote, card.to)
+            AssistantCardResponse(card.kind.name, card.id, card.title, card.subtitle, card.reason, card.to)
     }
 }

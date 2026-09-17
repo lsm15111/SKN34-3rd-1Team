@@ -155,15 +155,17 @@ def test_absent_ranking_model_preserves_the_general_model(monkeypatch, value):
 
 
 @pytest.mark.parametrize("value", [None, "", "   "])
-def test_assistant_model_defaults_to_the_cheapest_model(monkeypatch, value):
+def test_assistant_model_defaults_to_the_tool_capable_guide_model(monkeypatch, value):
     monkeypatch.setenv("OPENAI_MODEL", "custom-existing-model")
     for name in ("OPENAI_ASSISTANT_MODEL", "OPENAI_ASSISTANT_REASONING_EFFORT"):
         monkeypatch.delenv(name, raising=False)
         if value is not None:
             monkeypatch.setenv(name, value)
     settings = Settings.from_environment()
-    assert settings.openai_assistant_model == "gpt-5-nano"
+    # 가이드는 도구 선택까지 하므로 luna가 기본이며, 다른 기능의 OPENAI_MODEL을 따라가지 않습니다.
+    assert settings.openai_assistant_model == "gpt-5.6-luna"
     assert settings.openai_assistant_reasoning_effort == "low"
+    assert settings.assistant_agent_timeout_seconds == 30.0
     assert settings.openai_model == "custom-existing-model"
 
 

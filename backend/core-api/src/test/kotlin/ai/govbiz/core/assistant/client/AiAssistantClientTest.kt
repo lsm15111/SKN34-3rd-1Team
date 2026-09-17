@@ -3,9 +3,7 @@ package ai.govbiz.core.assistant.client
 import ai.govbiz.core._common.config.JsonDeserializationConfig
 import ai.govbiz.core._common.exception.AiServiceCallException
 import ai.govbiz.core._common.exception.AiServiceFailure
-import ai.govbiz.core.assistant.client.dto.AiAssistantAgentRequest
 import ai.govbiz.core.assistant.client.dto.AiAssistantAnswerRequest
-import ai.govbiz.core.assistant.client.dto.AiAssistantPrincipal
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -23,7 +21,7 @@ import org.springframework.web.client.RestClient
 import tools.jackson.databind.json.JsonMapper
 import tools.jackson.module.kotlin.KotlinModule
 
-/** AI Service `tests/assistant/conftest.py`의 요청·출력 fixture와 같은 본문을 주고받는지 확인합니다. */
+/** AI Service `tests/assistant/test_core_contract.py`가 읽는 것과 같은 요청·응답 파일을 주고받는지 확인합니다. */
 class AiAssistantClientTest {
     private val mapper = JsonMapper.builder().addModule(KotlinModule.Builder().build()).also {
         JsonDeserializationConfig().strictJsonRequestTypes().customize(it)
@@ -39,18 +37,28 @@ class AiAssistantClientTest {
     fun verifyRequests() = server.verify()
 
     @Test
-    fun sendsTheSharedContractAndDecodesNullableIntentFields() {
+    fun sendsTheSharedContractWithThePrincipalAndDecodesCards() {
         server.expect(requestTo(URL)).andExpect(method(HttpMethod.POST))
             .andExpect(content().contentType(MediaType.APPLICATION_JSON))
             .andExpect(content().json(requestJson, JsonCompareMode.STRICT))
             .andRespond(withSuccess(resource("contract-response.json"), MediaType.APPLICATION_JSON))
         val payload = client.answer(request)
-        assertEquals("govbiz-assistant-v1", payload.schemaVersion)
-        assertEquals("PRODUCT_HELP", payload.intent)
-        assertEquals(listOf("search-score-meaning"), payload.citations)
+        assertEquals("govbiz-assistant-v2", payload.schemaVersion)
+        assertEquals("PARTNER_MATCH", payload.intent)
+        assertEquals(7L, request.principal!!.accountId)
+        assertEquals("21", payload.cards!!.single()!!.id)
+        assertEquals("/app/partners/detail?recruitmentId=21", payload.cards!!.single()!!.to)
+        assertEquals("/app/partners", payload.navigation!!.to)
+        assertEquals(listOf("get_my_company_profile", "search_partner_recruitments"), payload.toolCalls!!.map { it!!.name })
         assertNull(payload.clarificationQuestion)
-        assertNull(payload.searchQuery)
-        assertNull(payload.accountTopic)
+    }
+
+    @Test
+    fun sendsNullPrincipalForGuests() {
+        val guest = request.copy(principal = null)
+        server.expect(requestTo(URL)).andExpect(content().json("""{"principal":null}""", JsonCompareMode.LENIENT))
+            .andRespond(withSuccess(resource("contract-response.json"), MediaType.APPLICATION_JSON))
+        client.answer(guest)
     }
 
     @ParameterizedTest
@@ -58,35 +66,6 @@ class AiAssistantClientTest {
     fun mapsAiServiceStatusesToSharedFailures(status: Int, failure: AiServiceFailure) {
         server.expect(requestTo(URL)).andRespond(withStatus(HttpStatusCode.valueOf(status)))
         val error = assertThrows(AiServiceCallException::class.java) { client.answer(request) }
-        assertEquals(failure, error.failure)
-    }
-
-    @Test
-    fun sendsTheAgentContractWithThePrincipalAndDecodesCards() {
-        val agentRequest = AiAssistantAgentRequest(
-            "govbiz-assistant-agent-v1", request.message, request.history, request.session, request.context, request.helpEntries,
-            AiAssistantPrincipal(7L, "7.1900000000.sig", true),
-        )
-        val expectedJson = requestJson.replace("govbiz-assistant-v1", "govbiz-assistant-agent-v1").trimEnd().removeSuffix("}") +
-            ""","principal":{"accountId":7,"toolToken":"7.1900000000.sig","hasCompany":true},"savedProgramDocuments":null,"resumeIntent":null}"""
-        server.expect(requestTo(AGENT_URL)).andExpect(method(HttpMethod.POST))
-            .andExpect(content().json(expectedJson, JsonCompareMode.STRICT))
-            .andRespond(withSuccess(resource("contract-agent-response.json"), MediaType.APPLICATION_JSON))
-        val payload = client.agent(agentRequest)
-        assertEquals("govbiz-assistant-agent-v1", payload.schemaVersion)
-        assertEquals("PARTNER_MATCH", payload.intent)
-        assertEquals("21", payload.cards!!.single()!!.id)
-        assertEquals("/app/partners/detail?recruitmentId=21", payload.cards!!.single()!!.to)
-        assertEquals("/app/partners", payload.navigation!!.to)
-        assertEquals(listOf(true, true), payload.toolCalls!!.map { it!!.ok })
-    }
-
-    @ParameterizedTest
-    @CsvSource("503,UNAVAILABLE", "504,TIMEOUT", "204,INVALID_RESPONSE", "500,UPSTREAM_ERROR")
-    fun mapsAgentStatusesToTheSameFailures(status: Int, failure: AiServiceFailure) {
-        server.expect(requestTo(AGENT_URL)).andRespond(withStatus(HttpStatusCode.valueOf(status)))
-        val agentRequest = AiAssistantAgentRequest("govbiz-assistant-agent-v1", request.message, request.history, request.session, request.context, request.helpEntries, null)
-        val error = assertThrows(AiServiceCallException::class.java) { client.agent(agentRequest) }
         assertEquals(failure, error.failure)
     }
 
@@ -102,6 +81,5 @@ class AiAssistantClientTest {
 
     private companion object {
         const val URL = "http://ai-service.test/internal/v1/assistant/answers"
-        const val AGENT_URL = "http://ai-service.test/internal/v1/assistant/agent"
     }
 }

@@ -166,7 +166,8 @@ describe('GovBiz 가이드 위젯', () => {
     expect(sent.message).toBe('이 공고 지원 대상이 누구야?')
     expect(sent.context).toEqual({ route: '/app/proposals', programSelected: false })
     expect(sent.history.length).toBeGreaterThan(0)
-    expect(sent.helpEntries.map((entry) => entry.id)).toContain('search-score-meaning')
+    // 근거 도움말은 Core 카탈로그가 가지므로 요청에 싣지 않습니다.
+    expect(Object.keys(sent).sort()).toEqual(['context', 'history', 'message'])
 
     // 메뉴의 새 대화는 인사로 되돌립니다.
     fireEvent.click(within(panel).getByRole('button', { name: assistantMessages.menu }))
@@ -267,8 +268,8 @@ describe('가이드 자유 질문', () => {
         intent: 'PARTNER_MATCH', answer: '지역과 역할이 맞는 모집글 두 건이에요.',
         navigation: { label: '파트너 모집 열기', to: '/app/partners' },
         cards: [
-          { kind: 'RECRUITMENT', id: '21', title: 'AI 실증 참여기관 구합니다', subtitle: '서울AI 주식회사 · 서울', reason: '지역과 역할이 맞아요.', quote: null, to: '/app/partners/detail?recruitmentId=21' },
-          { kind: 'RECRUITMENT', id: '22', title: '스마트공장 참여기관 모집', subtitle: null, reason: '역량이 일부 맞아요.', quote: null, to: '/app/partners/detail?recruitmentId=22' },
+          { kind: 'RECRUITMENT', id: '21', title: 'AI 실증 참여기관 구합니다', subtitle: '서울AI 주식회사 · 서울', reason: '지역과 역할이 맞아요.', to: '/app/partners/detail?recruitmentId=21' },
+          { kind: 'RECRUITMENT', id: '22', title: '스마트공장 참여기관 모집', subtitle: null, reason: '역량이 일부 맞아요.', to: '/app/partners/detail?recruitmentId=22' },
         ],
       }) })
     renderApp('/app/chat', companyAccount)
@@ -292,12 +293,12 @@ describe('가이드 자유 질문', () => {
     expect(screen.queryByRole('dialog', { name: assistantMessages.name })).toBeNull()
   })
 
-  it('관심 공고 묶음 질문의 카드는 원문 인용을 함께 보여 준다', async () => {
+  it('관심 공고 묶음 질문의 카드는 공고 상세로 가는 링크와 확인 방법을 보여 준다', async () => {
     vi.spyOn(appContainer.resolve('askAssistantUseCase'), 'execute')
       .mockResolvedValueOnce({ outcome: 'answered', answer: freeAnswer({
         intent: 'SAVED_PROGRAMS_QUESTION', answer: '관심 공고 두 건 중 한 건이 온라인으로 접수해요.',
         navigation: { label: '관심 공고함 열기', to: '/app/saved-programs' },
-        cards: [{ kind: 'PROGRAM', id: 'BIZINFO:PBLN_000000000000001', title: '서울 AI 실증 지원사업', subtitle: '2026-09-30 마감', reason: '온라인 접수로 확인됐어요.', quote: '기업마당 온라인 신청', to: '/app/support-programs/detail?sourceCode=BIZINFO&sourceProgramId=PBLN_000000000000001' }],
+        cards: [{ kind: 'PROGRAM', id: 'BIZINFO:PBLN_000000000000001', title: '서울 AI 실증 지원사업', subtitle: '2026-09-30 마감', reason: '원문 질문에서 접수 방법을 확인하세요.', to: '/app/support-programs/detail?sourceCode=BIZINFO&sourceProgramId=PBLN_000000000000001' }],
       }) })
     renderApp('/app/chat', memberAccount)
     fireEvent.click(screen.getByRole('button', { name: assistantMessages.openLauncher }))
@@ -308,7 +309,7 @@ describe('가이드 자유 질문', () => {
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(await within(log).findByText('관심 공고 두 건 중 한 건이 온라인으로 접수해요.')).toBeTruthy()
     expect(within(log).getByRole('link', { name: `${assistantMessages.cardProgram}서울 AI 실증 지원사업` }).getAttribute('href')).toBe('/app/support-programs/detail?sourceCode=BIZINFO&sourceProgramId=PBLN_000000000000001')
-    expect(within(log).getByText(`2026-09-30 마감 · 온라인 접수로 확인됐어요. · ${assistantMessages.cardQuote('기업마당 온라인 신청')}`)).toBeTruthy()
+    expect(within(log).getByText('2026-09-30 마감 · 원문 질문에서 접수 방법을 확인하세요.')).toBeTruthy()
     expect(within(log).getByText(assistantMessages.aiToolSource(assistantMessages.savedSource))).toBeTruthy()
   })
 

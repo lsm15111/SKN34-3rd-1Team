@@ -2,8 +2,6 @@ package ai.govbiz.core.assistant.client
 
 import ai.govbiz.core._common.exception.AiServiceCallException
 import ai.govbiz.core._common.helper.executeAiServiceCall
-import ai.govbiz.core.assistant.client.dto.AiAssistantAgentPayload
-import ai.govbiz.core.assistant.client.dto.AiAssistantAgentRequest
 import ai.govbiz.core.assistant.client.dto.AiAssistantAnswerPayload
 import ai.govbiz.core.assistant.client.dto.AiAssistantAnswerRequest
 import org.springframework.beans.factory.annotation.Qualifier
@@ -13,8 +11,8 @@ import org.springframework.stereotype.Component
 import org.springframework.web.client.RestClient
 
 /**
- * 도우미 자유 질문을 AI Service에 한 번 요청합니다. `answer`는 의도 분류만, `agent`는 분류 뒤 Core 내부 도구를 부르는
- * LangGraph 경로입니다. 검색·조회·저장은 하지 않습니다.
+ * GovBiz 가이드 자유 질문을 AI Service에 한 번 요청합니다. AI Service의 에이전트가 의도를 고르고, 로그인 회원이면
+ * Core 내부 읽기 도구를 되불러 답과 카드를 만듭니다. 검색 실행·저장은 하지 않습니다.
  */
 @Component
 class AiAssistantClient(
@@ -22,9 +20,6 @@ class AiAssistantClient(
 ) {
     fun answer(request: AiAssistantAnswerRequest): AiAssistantAnswerPayload =
         executeAiServiceCall { post(ANSWERS_PATH, request).toEntity(AiAssistantAnswerPayload::class.java).body ?: empty() }
-
-    fun agent(request: AiAssistantAgentRequest): AiAssistantAgentPayload =
-        executeAiServiceCall { post(AGENT_PATH, request).toEntity(AiAssistantAgentPayload::class.java).body ?: empty() }
 
     private fun post(path: String, request: Any): RestClient.ResponseSpec =
         restClient.post()
@@ -49,6 +44,5 @@ class AiAssistantClient(
 
     companion object {
         const val ANSWERS_PATH = "/internal/v1/assistant/answers"
-        const val AGENT_PATH = "/internal/v1/assistant/agent"
     }
 }

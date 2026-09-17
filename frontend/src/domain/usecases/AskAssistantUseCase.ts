@@ -21,7 +21,6 @@ export class AskAssistantUseCase {
   execute(question: AssistantQuestion, signal?: AbortSignal): Promise<AskAssistantResult> {
     const message = question.message.trim()
     if (!isValidAssistantMessage(message)) throw new RangeError(`message must be 1~${assistantQuestionLimits.message} characters`)
-    if (question.helpEntries.length === 0) throw new RangeError('helpEntries must not be empty')
     const history = question.history
       .filter((item) => item.content.trim() !== '')
       .slice(-assistantQuestionLimits.history)

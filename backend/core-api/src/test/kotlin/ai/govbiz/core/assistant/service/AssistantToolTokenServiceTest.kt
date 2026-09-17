@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test
 class AssistantToolTokenServiceTest {
     private val secret = "assistant-tools-secret-for-tests-0123456789"
     private val now = Instant.parse("2026-09-14T09:00:00Z")
-    private val properties = AssistantAgentProperties(agentEnabled = true, toolsSecret = secret, toolTokenTtl = Duration.ofMinutes(5))
+    private val properties = AssistantAgentProperties(toolsSecret = secret, toolTokenTtl = Duration.ofMinutes(5))
     private val service = AssistantToolTokenService(properties, Clock.fixed(now, ZoneOffset.UTC))
 
     @Test
@@ -53,9 +53,12 @@ class AssistantToolTokenServiceTest {
     }
 
     @Test
-    fun propertiesRequireASecretWhenTheAgentIsOn() {
-        assertThrows(IllegalArgumentException::class.java) { AssistantAgentProperties(agentEnabled = true, toolsSecret = "") }
+    fun toolsOpenOnlyWithALongEnoughSecretAndTokensNeedThem() {
         assertFalse(AssistantAgentProperties().toolsEnabled)
+        assertFalse(AssistantAgentProperties(toolsSecret = "short").toolsEnabled)
+        assertThrows(IllegalArgumentException::class.java) {
+            AssistantToolTokenService(AssistantAgentProperties(), Clock.fixed(now, ZoneOffset.UTC)).issue(7L)
+        }
         assertTrue(properties.toolsEnabled)
     }
 }

@@ -12,11 +12,6 @@ const question: AssistantQuestion = {
   message: '점수가 무슨 뜻이야?',
   history: [{ role: 'ASSISTANT', content: '무엇을 도와드릴까요?' }],
   context: { route: '/', programSelected: false },
-  helpEntries: [{
-    id: 'search-score-meaning', title: '점수는 무엇을 뜻하나요', question: '점수는 무슨 뜻인가요?',
-    summary: '점수는 검색어와 공고의 관련도입니다.', body: ['점수는 순서를 정하는 값입니다.'], limitation: null,
-    audience: 'public', status: 'available', action: { label: '검색 화면 열기', to: '/app/chat' },
-  }],
 }
 const answer = {
   intent: 'PRODUCT_HELP', answer: '점수는 관련도입니다.', citations: ['search-score-meaning'],
@@ -45,7 +40,7 @@ describe('askAssistantApi', () => {
   })
 
   it('accepts agent cards with internal detail routes and rejects other card routes', async () => {
-    const card = { kind: 'RECRUITMENT', id: '21', title: 'AI 실증 참여기관 구합니다', subtitle: null, reason: '지역이 맞아요.', quote: null, to: '/app/partners/detail?recruitmentId=21' }
+    const card = { kind: 'RECRUITMENT', id: '21', title: 'AI 실증 참여기관 구합니다', subtitle: null, reason: '지역이 맞아요.', to: '/app/partners/detail?recruitmentId=21' }
     const agentAnswer = { ...answer, intent: 'PARTNER_MATCH', citations: [], navigation: { label: '파트너 모집 열기', to: '/app/partners' }, cards: [card] }
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(agentAnswer)))
     await expect(askAssistantApi(question)).resolves.toEqual(agentAnswer)

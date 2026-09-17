@@ -52,8 +52,8 @@ class ProductionConfigTest(unittest.TestCase):
             self.assertNotIn("DOCUMENT_HWP_BRIDGE_URL", environment)
             self.assertNotIn("DOCUMENT_HWP_BRIDGE_TOKEN", environment)
 
-    def test_assistant_disabled_by_default(self):
-        self.assertEqual(self.config["services"]["core-api"]["environment"]["ASSISTANT_AGENT_ENABLED"], "false")
+    def test_assistant_tools_closed_by_default(self):
+        self.assertNotIn("ASSISTANT_AGENT_ENABLED", self.config["services"]["core-api"]["environment"])
         for name in ("core-api", "ai-service"):
             self.assertEqual(self.config["services"][name]["environment"]["ASSISTANT_TOOLS_TOKEN"], "")
 
@@ -61,7 +61,7 @@ class ProductionConfigTest(unittest.TestCase):
         token = "dummy-server-only-assistant-token-" * 2
         result = subprocess.run(["docker", "compose", "--env-file", os.devnull, "-f", str(checker.COMPOSE),
                                  "config", "--format", "json"],
-                                env={**self.env, "ASSISTANT_AGENT_ENABLED": "true", "ASSISTANT_TOOLS_TOKEN": token},
+                                env={**self.env, "ASSISTANT_TOOLS_TOKEN": token},
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0)
         config = json.loads(result.stdout)
@@ -73,8 +73,7 @@ class ProductionConfigTest(unittest.TestCase):
                 self.assertNotIn("ASSISTANT_TOOLS_TOKEN", service.get("environment", {}))
         for name, key, value in [("core-api", "ASSISTANT_TOOLS_TOKEN", "short"),
                                  ("ai-service", "ASSISTANT_TOOLS_TOKEN", "different-token-" * 3),
-                                 ("ai-service", "ASSISTANT_TOOLS_BASE_URL", "http://127.0.0.1:8080"),
-                                 ("core-api", "ASSISTANT_AGENT_ENABLED", "yes")]:
+                                 ("ai-service", "ASSISTANT_TOOLS_BASE_URL", "http://127.0.0.1:8080")]:
             with self.subTest(service=name, key=key):
                 invalid = copy.deepcopy(config)
                 invalid["services"][name]["environment"][key] = value

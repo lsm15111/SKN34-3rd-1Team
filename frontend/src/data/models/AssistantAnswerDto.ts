@@ -22,7 +22,6 @@ export const assistantCardDtoSchema = z.object({
   subtitle: z.string().trim().min(1).max(160).nullable(),
   reason: z.string().trim().min(1).max(200),
   /** 관심 공고 묶음 질문에서만: 공고 원문에서 그대로 옮긴 근거 구절입니다. */
-  quote: z.string().trim().min(1).max(300).nullable(),
   to: z.string().regex(/^\/app\/[A-Za-z0-9/_-]+(\?[A-Za-z0-9_=&%.:+-]*)?$/),
 })
 
@@ -48,6 +47,6 @@ export function toAssistantAnswer(dto: AssistantAnswerDto): AssistantAnswer {
     searchQuery: dto.searchQuery,
     accountTopic: dto.accountTopic,
     navigation: dto.navigation === null ? null : { label: dto.navigation.label, to: dto.navigation.to },
-    cards: dto.cards.map((card) => ({ kind: card.kind, id: card.id, title: card.title, subtitle: card.subtitle, reason: card.reason, quote: card.quote, to: card.to })),
+    cards: dto.cards.map((card) => ({ kind: card.kind, id: card.id, title: card.title, subtitle: card.subtitle, reason: card.reason, to: card.to })),
   }
 }

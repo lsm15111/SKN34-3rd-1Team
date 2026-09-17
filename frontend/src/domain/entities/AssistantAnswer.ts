@@ -26,7 +26,6 @@ export type AssistantCard = {
   /** 이 항목을 고른 이유 한 문장입니다. */
   reason: string
   /** 관심 공고 묶음 질문에서만: 공고 원문에서 그대로 옮긴 근거 구절입니다. Core가 원문과 대조한 것만 옵니다. */
-  quote: string | null
   to: string
 }
 

@@ -196,24 +196,34 @@ Core 내부 전용 소비자가 기존 검색·근거 답변을 재사용하며 
 서버 대화 세션·영구 프로필·무제한 이력·Agent graph는 추가하지 않습니다.
 [C02 계약·검증 기록](conversation-condition-update.md)에 상태·문자·날짜·실패 경계를 명시합니다.
 
-### 도우미 자유 질문
+### GovBiz 가이드 자유 질문
 
-`POST /api/v1/assistant/messages`는 화면 오른쪽 아래 도우미 위젯의 자유 질문을 받습니다. 주제·질문 알약(C1)은 네트워크 없이
-프런트 도움말 데이터로 답하고, 프런트 스위치 `VITE_ASSISTANT_AI_ENABLED=true`일 때만 자유 입력이 이 경로로 옵니다(기본 꺼짐, 꺼지면 알약 안내로만 답함). Core는 길이 상한·개인 정보 마스킹·공유 요청 한도를 거친 뒤
-AI Service의 `/internal/v1/assistant/answers`를 한 번 호출해 의도 하나와 그 의도의 필드(인용·검색어·계정 영역·확인 질문)를 받습니다.
-AI Service는 DB를 보지 않고 도구도 없습니다. 상태 답(`ACCOUNT_STATE`)은 Core가 세션 계정으로 관심 공고함·받은 제안함·기업 등록을
-읽어 문장을 만들고, 검색(`SEARCH`)·원문 질문(`PROGRAM_QUESTION`)은 실행하지 않고 기존 화면으로 이동 버튼만 붙입니다.
-인용 id는 요청에 실린 도움말 안에서만, 이동 경로는 Core 상수와 도움말 행동 경로 안에서만 인정하며 어긋나면 502로 버립니다.
-대화는 브라우저 세션 저장소에만 남고 서버는 저장하지 않습니다. 분류·인용 회귀는 [도우미 의도 분류 평가](../evaluation/assistant/README.md)로 확인합니다.
+`POST /api/v1/assistant/messages`는 화면 오른쪽 아래 GovBiz 가이드 위젯의 자유 질문을 받습니다. 주제·질문 알약은 네트워크 없이
+프런트 도움말 데이터로 답하고, 메뉴 맨 앞에는 지금 화면의 도움말 질문을 둡니다. 프런트 스위치 `VITE_ASSISTANT_AI_ENABLED=true`일 때만
+자유 입력이 이 경로로 옵니다(기본 꺼짐, 꺼지면 알약 안내로만 답함).
 
-Core 설정 `app.assistant.agent-enabled=true`(루트 `ASSISTANT_AGENT_ENABLED`, 기본 꺼짐)면 같은 질문을 AI Service의
-`/internal/v1/assistant/agent`(LangGraph 도구 에이전트)로 보냅니다. 분류 뒤 회원 자료가 필요한 의도(`PARTNER_MATCH` 모집글 매칭,
-`ACCOUNT_STATE` 내 상태, `SAVED_PROGRAMS_QUESTION` 관심 공고 묶음 질문)만 AI Service가 Core 내부 읽기 도구
-`GET /internal/v1/assistant/tools/{company-profile|recruitments|saved-programs}`를 최대 3회 되불러 답과 카드(`cards[]`, 모집글·공고, 이유·인용·상세 경로)를 만듭니다.
-도구 호출은 Core·AI Service가 공유하는 비밀(`ASSISTANT_TOOLS_TOKEN`, 32자 이상)과 요청마다 발급하는 계정 묶음 HMAC 토큰(5분) 둘 다 있어야 통과하고,
-응답 카드 id·경로·인용은 Core가 도구 결과·허용 목록·청크 원문과 다시 대조합니다. 관심 공고 묶음 질문은 첫 응답이 `needsDocuments`면 Core가 관심 공고
-최대 10건의 원문을 확보·청킹·색인(6초 예산, 부분 성공 허용)해 같은 의도로 한 번 더 부르고, 관심 공고를 담을 때 원문을 미리 수집·색인하는
-outbox 큐(`ASSISTANT_PREFETCH_QUEUE_ENABLED`, RabbitMQ)가 첫 질문 지연을 줄입니다. 비로그인은 도구 경로가 막혀 로그인 안내로 끝납니다.
+```text
+AssistantMessageController (공유 요청 한도 + 로그인 회원은 주소당 추가 한도)
+  → AssistantMessageService: 길이 상한·개인 정보 마스킹, Core 도움말 카탈로그(assistant/help-catalog.json) 첨부,
+    로그인 회원이면 계정 묶음 HMAC 토큰(5분) 발급
+  → AiAssistantClient → AI Service POST /internal/v1/assistant/answers
+      → AssistantAgent (Agents SDK 에이전트 하나, OPENAI_ASSISTANT_MODEL 기본 gpt-5.6-luna/low)
+          → 로그인 회원만 보이는 읽기 도구(최대 3회): get_my_company_profile · search_partner_recruitments · list_saved_programs
+              → Core GET /internal/v1/assistant/tools/{company-profile|recruitments|saved-programs} (공유 비밀 + 계정 토큰)
+      → AssistantService: 인용은 요청 카탈로그 안, 카드는 이번 실행의 도구 결과 안(제목·경로는 도구 결과로 다시 만듦),
+        자료를 읽지 않은 회원 자료 답은 버림
+  → Core 재검증(의도별 필드·카탈로그 인용·카드 경로·이동 허용 목록) → 템플릿 답·로그인 안내 → 응답
+```
+
+답의 근거인 도움말은 Core 카탈로그가 원본입니다. 브라우저는 질문·최근 대화·화면 경로만 보내며 도움말 본문을 보내도 쓰지 않습니다.
+카탈로그는 프런트 `helpContent.ts`의 챗봇 항목과 같아야 하고, 프런트 계약 테스트(`helpCatalogContract.test.ts`)가 두 파일을 맞춥니다.
+의도는 여덟 가지입니다. 사용법(`PRODUCT_HELP`)은 카탈로그 인용으로 답하고, 검색(`SEARCH`)·원문 질문(`PROGRAM_QUESTION`)은 실행하지 않고
+기존 화면으로 이동 버튼만 붙입니다. 회원 자료 의도(`ACCOUNT_STATE`·`PARTNER_MATCH`·`SAVED_PROGRAMS_QUESTION`)는 로그인 회원이면 도구로 읽은
+자료로 답과 카드를 만들고, 비로그인이거나 공유 비밀(`ASSISTANT_TOOLS_TOKEN`, 32자 이상)이 없으면 도구가 보이지 않아 Core가 로그인 안내나
+템플릿 답(관심 공고 마감·받은 제안·기업 등록)을 붙입니다. 관심 공고 묶음 질문은 목록(제목·기관·마감·상태)만 읽고, 원문이 필요한 내용은
+해당 공고의 원문 질문으로 안내합니다. 도구 실패·카드 조작·계약 위반은 답을 지어내지 않고 오류(503·502)로 끝냅니다.
+대화는 브라우저 세션 저장소에만 남고 서버는 저장하지 않으며, 로그아웃·계정 전환 시 지웁니다.
+회귀는 [가이드 평가](../evaluation/assistant/README.md)로 확인합니다.
 
 ### 확인된 조건의 검색
 
@@ -710,9 +720,8 @@ Core의 공개 계약은 기능별 `controller/dto`, 외부 계약은 시스템�
 
 AI Service는 조건 변경 해석·점수화·원문 근거 답변에서 각각 `HTTP API → Service → Agent → LangChain → OpenAI → Response` 흐름으로
 실행합니다. `bootstrap.py`가 클라이언트와 서비스 수명주기를 구성하고, 역할이 다른 Agent가 각각
-`ChatPromptTemplate | ChatOpenAI.bind(...)` 체인으로 strict structured output을 한 번 요청합니다. 도우미 도구 에이전트(`app/assistant_agent`)만 예외로 LangGraph 그래프
-(`classify → plan ⇄ tools → answer → verify`, 관심 공고 묶음 질문은 `retrieve → map → reduce → verify` 서브그래프)를 쓰며
-도구는 Core 내부 읽기 API 세 개와 기존 근거 컬렉션의 문서 id 제한 검색뿐입니다. 그 밖의 tool·handoff·multi-agent orchestration은 없습니다. 일반 공고 색인·검색은
+`ChatPromptTemplate | ChatOpenAI.bind(...)` 체인으로 strict structured output을 한 번 요청합니다. GovBiz 가이드(`app/assistant`)만
+Agents SDK 에이전트 하나가 Core 내부 읽기 API 세 개를 도구로 씁니다. 그 밖의 tool·handoff·graph·multi-agent orchestration은 없습니다. 일반 공고 색인·검색은
 `support_program_index`, 원문 청크 색인·검색은 `support_program_evidence`가 OpenAI 임베딩과 분리된 Qdrant
 컬렉션을 직접 사용합니다.
 공고 추천은 Qdrant·Elasticsearch 검색 후 Core가 병합·검증한 공식 후보를, 상세 질의응답은
@@ -725,8 +734,8 @@ LangSmith 추적·응답 저장·자동 재시도를 사용하지 않습니다.
 랭킹 모델은 `OPENAI_RANKING_MODEL`로 지정하고 미설정이면 공통 `OPENAI_MODEL`을 상속합니다.
 `OPENAI_RANKING_REASONING_EFFORT`는 `none`/`low`만 허용합니다. 제공 설정 예제는 비용 절감을 위해 랭킹도
 Luna/low를 사용하며 대화·원문 답변 모델은 바꾸지 않습니다. 모델 객체는 분리하되 동일한 OpenAI
-클라이언트·인증·재시도 정책을 공유하며 새 provider는 없습니다. orchestration 계층은 위 도우미 도구 에이전트의 LangGraph 하나뿐입니다.
-도우미 자유 질문 분류는 `OPENAI_ASSISTANT_MODEL`(기본 `gpt-5-nano`, 추론 `low`)로 가장 싼 모델을 따로 씁니다.
+클라이언트·인증·재시도 정책을 공유하며 새 provider는 없습니다. 별도 orchestration·graph 계층은 없습니다.
+GovBiz 가이드는 `OPENAI_ASSISTANT_MODEL`(기본 `gpt-5.6-luna`, 추론 `low`)을 따로 씁니다.
 출력 축약은 미채택이며 기존 후보 ID·필드명·출력 계약을 유지합니다. 축약 구현은 평가 경로에만 남깁니다.
 `OPENAI_RANKING_SERVICE_TIER` 미설정 시 코드·Compose 기본값은 `default`입니다. 제공 `.env.example`은
 기존 Fast 상시 사용 프로필인 `priority`를 유지합니다. 일반 처리보다 추가 요금이 있으며 일반 처리는 `default`로 지정합니다.

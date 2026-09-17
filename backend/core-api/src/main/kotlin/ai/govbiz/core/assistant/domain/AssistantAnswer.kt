@@ -2,7 +2,7 @@ package ai.govbiz.core.assistant.domain
 
 /**
  * AI Service가 고른 의도입니다. Core는 의도별로 무엇을 조회하고 어디로 안내할지 정합니다.
- * `PARTNER_MATCH`·`SAVED_PROGRAMS_QUESTION`은 도구 에이전트 경로(`app.assistant.agent-enabled`)에서만 나옵니다.
+ * `ACCOUNT_STATE`·`PARTNER_MATCH`·`SAVED_PROGRAMS_QUESTION`은 로그인 회원이면 AI Service가 회원 자료 도구로 답합니다.
  */
 enum class AssistantIntent {
     PRODUCT_HELP,
@@ -49,8 +49,6 @@ data class AssistantCard(
     val subtitle: String?,
     val reason: String,
     val to: String,
-    /** 관심 공고 묶음 질문에서만: 근거 청크 원문에서 글자 그대로 옮긴 구절입니다. Core가 청크와 대조해 통과한 것만 남깁니다. */
-    val quote: String? = null,
 )
 
 /** 프런트 말풍선 하나에 해당하는 답입니다. 의도에 따라 채워지는 필드가 다릅니다. */
@@ -68,7 +66,7 @@ data class AssistantAnswer(
     val cards: List<AssistantCard> = emptyList(),
 )
 
-/** 도우미가 요청과 함께 받은 도움말 한 항목입니다. 프런트 `helpContent.ts`가 원본이며 Core는 사본을 두지 않습니다. */
+/** 가이드 답변의 근거가 되는 도움말 한 항목입니다. Core 카탈로그(`assistant/help-catalog.json`)가 원본입니다. */
 data class AssistantHelpEntry(
     val id: String,
     val title: String,
@@ -101,5 +99,4 @@ data class AssistantQuestion(
     val message: String,
     val history: List<AssistantHistoryMessage>,
     val context: AssistantScreenContext,
-    val helpEntries: List<AssistantHelpEntry>,
 )

@@ -5,14 +5,14 @@ from typing import Literal, cast
 
 
 DEFAULT_OPENAI_MODEL = "gpt-5.6-luna"
-# 도우미 자유 질문은 짧은 분류 작업이라 가장 싼 모델을 기본으로 쓴다. 다른 기능의 모델은 바꾸지 않는다.
-# nano는 추론 minimal에서 분류가 흔들려(50문항 중 28개) low를 기본으로 둔다. 평가 기록은 evaluation/assistant/runs 참고.
-DEFAULT_OPENAI_ASSISTANT_MODEL = "gpt-5-nano"
+# GovBiz 가이드는 의도 분류와 도구 선택·답을 한 에이전트가 하므로 도구 선택이 안정적인 luna를 기본으로 쓴다.
+# 평가 기록은 evaluation/assistant/runs 참고.
+DEFAULT_OPENAI_ASSISTANT_MODEL = DEFAULT_OPENAI_MODEL
 ASSISTANT_REASONING_EFFORTS = ("none", "minimal", "low")
-# 도우미 도구 에이전트(LangGraph)의 계획·답 모델. 도구 선택 정확도를 위해 luna를 기본으로 둔다.
 DEFAULT_ASSISTANT_TOOLS_BASE_URL = "http://127.0.0.1:8080"
 DEFAULT_ASSISTANT_AGENT_MAX_TOOL_CALLS = 3
-DEFAULT_ASSISTANT_AGENT_TIMEOUT_SECONDS = 15.0
+# 도구 호출마다 모델을 한 번 더 부르므로 분류 한 번보다 넉넉히 둔다. Core의 도우미 읽기 제한(35초)보다 짧아야 한다.
+DEFAULT_ASSISTANT_AGENT_TIMEOUT_SECONDS = 30.0
 DEFAULT_ASSISTANT_TOOL_TIMEOUT_SECONDS = 3.0
 MAX_ASSISTANT_AGENT_MAX_TOOL_CALLS = 6
 DEFAULT_LLM_MODEL_TIMEOUT_SECONDS = 25.0
@@ -50,8 +50,6 @@ class Settings:
     openai_ranking_service_tier: Literal["default", "priority"] = "default"
     openai_assistant_model: str = DEFAULT_OPENAI_ASSISTANT_MODEL
     openai_assistant_reasoning_effort: Literal["none", "minimal", "low"] = "low"
-    openai_assistant_agent_model: str = DEFAULT_OPENAI_MODEL
-    openai_assistant_agent_reasoning_effort: Literal["none", "low"] = "none"
     assistant_tools_base_url: str = DEFAULT_ASSISTANT_TOOLS_BASE_URL
     assistant_tools_token: str | None = None
     assistant_agent_max_tool_calls: int = DEFAULT_ASSISTANT_AGENT_MAX_TOOL_CALLS
@@ -63,8 +61,6 @@ class Settings:
         run = self.application_form_discovery_run_timeout_seconds
         if isinstance(model, bool) or isinstance(run, bool) or not isfinite(model) or not isfinite(run) or not 0 < model < run <= 1500:
             raise SettingsConfigurationError("Application form discovery requires 0 < model timeout < run timeout <= 1500")
-        if self.openai_assistant_agent_reasoning_effort not in ("none", "low"):
-            raise SettingsConfigurationError("OPENAI_ASSISTANT_AGENT_REASONING_EFFORT must be none or low")
         if (
             isinstance(self.assistant_agent_max_tool_calls, bool)
             or not 1 <= self.assistant_agent_max_tool_calls <= MAX_ASSISTANT_AGENT_MAX_TOOL_CALLS
@@ -123,10 +119,6 @@ class Settings:
             openai_assistant_reasoning_effort=cast(
                 Literal["none", "minimal", "low"],
                 _optional_value(environ.get("OPENAI_ASSISTANT_REASONING_EFFORT")) or "low",
-            ),
-            openai_assistant_agent_model=_optional_value(environ.get("OPENAI_ASSISTANT_AGENT_MODEL")) or DEFAULT_OPENAI_MODEL,
-            openai_assistant_agent_reasoning_effort=cast(
-                Literal["none", "low"], _optional_value(environ.get("OPENAI_ASSISTANT_AGENT_REASONING_EFFORT")) or "none",
             ),
             assistant_tools_base_url=_optional_value(environ.get("ASSISTANT_TOOLS_BASE_URL")) or DEFAULT_ASSISTANT_TOOLS_BASE_URL,
             assistant_tools_token=_optional_value(environ.get("ASSISTANT_TOOLS_TOKEN")),

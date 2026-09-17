@@ -22,6 +22,8 @@ object AssistantAnswerTexts {
     const val PROPOSALS_NEED_COMPANY =
         "받은 제안은 기업을 등록한 뒤 모집글을 올리면 들어옵니다. 프로필에서 사업자등록번호로 기업을 등록해 주세요."
     const val PROPOSALS_NONE = "지금 응답을 기다리는 받은 제안이 없습니다. 수락·거절은 제안함에서 합니다."
+    const val PARTNER_MATCH_NEEDS_COMPANY =
+        "맞는 파트너 모집글은 기업 프로필을 기준으로 찾습니다. 프로필에서 사업자등록번호로 기업을 먼저 등록해 주세요."
     const val COMPANY_NONE = "아직 등록한 기업이 없습니다. 프로필에서 사업자등록번호를 넣으면 국세청 조회로 확인해 등록합니다."
 
     data class Deadline(val title: String, val date: LocalDate, val daysLeft: Int)

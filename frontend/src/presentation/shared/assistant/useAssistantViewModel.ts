@@ -10,7 +10,7 @@ import type { IsAssistantAiEnabled } from '../../../data/config/assistantAi'
 import type { KakaoChannelChatUrl } from '../../../data/config/kakaoChannel'
 import { draftChanged } from '../../features/chat/state/chatSlice'
 import { useAuthSession } from '../auth/hooks/useAuthSession'
-import { findHelpEntry, helpEntriesForSurface } from '../help/helpContent'
+import { findHelpEntry } from '../help/helpContent'
 import { useReceivedProposals } from '../partner-proposal/useReceivedProposals'
 import {
   type AssistantCardButton,
@@ -214,8 +214,8 @@ export function useAssistantViewModel(
   const returnTo = `${pathname}${search}`
 
   /**
-   * 자유 질문을 Core에 보냅니다. 최근 대화 6개, 현재 화면 경로와 공고 선택 여부, 챗봇 표면의 도움말 전량을 함께 실어
-   * 서버가 인용을 그 안에서만 인정하게 합니다. 45초 안에 답이 없으면 끊고 다시 시도를 안내합니다.
+   * 자유 질문을 Core에 보냅니다. 최근 대화 6개와 현재 화면 경로·공고 선택 여부를 싣고, 근거 도움말은 Core 카탈로그가 씁니다.
+   * 45초 안에 답이 없으면 끊고 다시 시도를 안내합니다.
    * 답을 기다리는 동안에는 새 질문을 받지 않고, 그 사이 대화가 바뀌면 늦게 온 답을 버립니다.
    */
   const submitText = useCallback(async (text: string) => {
@@ -241,12 +241,6 @@ export function useAssistantViewModel(
         message: trimmed,
         history,
         context: { route: pathname.replace(/\/+$/, '') || '/', programSelected: programIdentityFrom(pathname, search) !== null },
-        helpEntries: helpEntriesForSurface('chatbot').map((entry) => ({
-          id: entry.id, title: entry.title, question: entry.question, summary: entry.summary, body: [...entry.body],
-          limitation: entry.limitation, audience: entry.audience, status: entry.status,
-          // 서버 계약은 경로만 받으므로 `?mode=filter` 같은 질의는 떼고 보냅니다. 버튼은 화면이 원본 항목으로 다시 만듭니다.
-          action: entry.action === null ? null : { label: entry.action.label, to: entry.action.to.split('?')[0] ?? entry.action.to },
-        })),
       }, controller.signal)
       if (generation !== generationRef.current) return
       const answer = result.outcome === 'answered'

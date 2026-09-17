@@ -99,7 +99,6 @@ GovBiz는 여러 정부기관과 공공 플랫폼에 분산된 지원사업 공�
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)
 ![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=for-the-badge&logo=langchain&logoColor=white)
-![LangGraph](https://img.shields.io/badge/LangGraph-1C3C3C?style=for-the-badge&logo=langgraph&logoColor=white)
 ![Agents SDK](https://img.shields.io/badge/Agents_SDK-412991?style=for-the-badge)
 ![tiktoken](https://img.shields.io/badge/tiktoken-412991?style=for-the-badge)
 
@@ -328,15 +327,11 @@ AI 대화 검색, 신청 문서 작성, GovBiz 도우미는 LLM의 판단과 서
 
 <img width="1280" alt="GovBiz 도우미: Agents SDK 의도 분류 후 도움말, 회원 자료 조회, 관심 공고 묶음 RAG로 분기하는 흐름" src="docs/assets/readme/govbiz-assistant-agent-flow.png" />
 
-1. **의도 분류**: Agents SDK가 질문과 대화·화면 맥락을 바탕으로 의도를 분류합니다. 개인정보를 마스킹하고, 로그인한 회원에게 허용된 자료만 조회합니다.
-2. **의도별 실행**: 도움말·화면 안내는 제공된 도움말을 인용합니다. 도구 모드에서는 LangGraph가 자료 조회와 답변 검증을 연결하며, 요청에 따라 아래 경로로 분기합니다.
+> 위 그림은 2026-09-17 이전 구조(LangGraph 도구 경로·관심 공고 묶음 RAG)입니다. 현재 구조는 아래와 같습니다.
 
-   | 실행 경로 | 처리 내용 |
-   |---|---|
-   | 회원 자료 조회 | 조회 계획 수립 → Core 도구 호출(기본 최대 3회) → 답변 생성·검증 |
-   | 관심 공고 묶음 RAG | 원문 준비 → Qdrant 근거 검색 → 공고별 판단 → 종합·검증 |
-
-3. **응답 제공**: 검증한 답변과 카드·이동 버튼을 표시합니다. 기본 모드에서는 Core가 답변과 이동 경로를 구성하며, 실제 검색과 신청은 해당 기능 화면에서 진행합니다.
+1. **에이전트 하나**: Agents SDK 에이전트가 질문과 대화·화면 맥락으로 의도를 고릅니다. 사용법 답은 Core가 가진 도움말 카탈로그만 인용하고, 개인정보는 마스킹합니다.
+2. **회원 자료 도구**: 로그인 회원이면 기업 프로필·파트너 모집글·관심 공고 목록을 읽는 Core 도구(최대 3회)가 보이고, 비로그인에게는 보이지 않습니다.
+3. **검증과 안내**: 카드는 도구 결과에 있는 항목만 남고 제목·경로는 서버가 다시 만듭니다. 검색·원문 질문·신청은 실행하지 않고 해당 화면으로 안내합니다.
 
 ## 11. 폴더 구조
 

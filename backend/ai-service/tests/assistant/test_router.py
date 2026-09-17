@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.assistant.agent import AssistantAgent
 from app.assistant.models import SCHEMA_VERSION
+from app.assistant.tools import CoreToolClient
 from app.config import Settings
 from app.main import create_app
 
@@ -18,23 +19,31 @@ SETTINGS = Settings(openai_api_key="test-key-never-sent", openai_model="test-mod
 PATH = "/internal/v1/assistant/answers"
 
 
+def guide_agent(model, *, model_timeout_seconds=1, run_timeout_seconds=2):
+    return AssistantAgent(
+        model=model, tool_client=CoreToolClient(base_url="http://core-api:8080", secret=None, timeout_seconds=1),
+        model_timeout_seconds=model_timeout_seconds, run_timeout_seconds=run_timeout_seconds, max_tool_calls=3,
+    )
+
+
 def test_http_to_service_to_agent_to_response(request_data, output_data):
     model = ScriptedModel([[assistant_message(json.dumps(output_data, ensure_ascii=False))]])
-    agent = AssistantAgent(model=model, model_timeout_seconds=1, run_timeout_seconds=2)
+    agent = guide_agent(model)
     with TestClient(create_app(settings=SETTINGS, assistant_agent=agent)) as client:
         response = client.post(PATH, json=request_data)
     assert response.status_code == 200
-    assert response.json() == {"schemaVersion": SCHEMA_VERSION, **output_data}
+    expected = {key: value for key, value in output_data.items() if key not in ("cards", "navigation")}
+    assert response.json() == {"schemaVersion": SCHEMA_VERSION, **expected, "cards": [], "navigation": None, "toolCalls": []}
     assert len(model.calls) == 1
-    # The model receives the request as-is: help entries, session and screen context included.
-    assert json.loads(model.first_call.input[0]["content"]) == request_data
+    # The model receives the request without the principal: help entries, session and screen context included.
+    assert json.loads(model.first_call.input[0]["content"]) == {key: value for key, value in request_data.items() if key != "principal"}
 
 
-@pytest.mark.parametrize("mutation", [{"message": " "}, {"schemaVersion": "v0"}, {"helpEntries": []}, {"turns": []}])
+@pytest.mark.parametrize("mutation", [{"message": " "}, {"schemaVersion": "govbiz-assistant-v1"}, {"helpEntries": []}, {"turns": []}])
 def test_invalid_internal_request_keeps_existing_fastapi_422_policy(request_data, mutation):
     request_data.update(mutation)
     model = ScriptedModel([])
-    agent = AssistantAgent(model=model, model_timeout_seconds=1, run_timeout_seconds=2)
+    agent = guide_agent(model)
     with TestClient(create_app(settings=SETTINGS, assistant_agent=agent)) as client:
         response = client.post(PATH, json=request_data)
     assert response.status_code == 422
@@ -49,7 +58,7 @@ def test_invalid_upstream_output_returns_safe_503(request_data, output_data, kin
         output_data["citations"] = []
     output = "private non-json output" if kind == "invalid_json" else json.dumps(output_data, ensure_ascii=False)
     model = ScriptedModel([[assistant_message(output)]])
-    agent = AssistantAgent(model=model, model_timeout_seconds=1, run_timeout_seconds=2)
+    agent = guide_agent(model)
     with TestClient(create_app(settings=SETTINGS, assistant_agent=agent)) as client:
         response = client.post(PATH, json=request_data)
     assert response.status_code == 503
@@ -71,7 +80,7 @@ def test_deadline_returns_safe_504_without_retry(request_data, deadline, caplog)
         await asyncio.Event().wait()
         return []
     model = ScriptedModel([ModelStep.respond(hang_forever)])
-    agent = AssistantAgent(model=model,
+    agent = guide_agent(model,
         model_timeout_seconds=0.01 if deadline == "model" else 1,
         run_timeout_seconds=1 if deadline == "model" else 0.01)
     with TestClient(create_app(settings=SETTINGS, assistant_agent=agent)) as client:
@@ -88,7 +97,7 @@ def test_deadline_returns_safe_504_without_retry(request_data, deadline, caplog)
 
 def test_agent_log_never_contains_message_or_answer_text(request_data, output_data, caplog):
     model = ScriptedModel([[assistant_message(json.dumps(output_data, ensure_ascii=False))]])
-    agent = AssistantAgent(model=model, model_timeout_seconds=1, run_timeout_seconds=2)
+    agent = guide_agent(model)
     with caplog.at_level(logging.INFO, logger="app.assistant.agent"):
         with TestClient(create_app(settings=SETTINGS, assistant_agent=agent)) as client:
             assert client.post(PATH, json=request_data).status_code == 200

@@ -96,7 +96,6 @@ services:
       AI_SERVICE_BASE_URL: http://ai-service:8000
       DOCUMENT_INTERNAL_TOKEN: ${DOCUMENT_INTERNAL_TOKEN:-}
       # Vercel의 공개 AI 스위치와 별개다. 토큰은 두 서버 컨테이너에만 전달한다.
-      ASSISTANT_AGENT_ENABLED: ${ASSISTANT_AGENT_ENABLED:-false}
       ASSISTANT_TOOLS_TOKEN: ${ASSISTANT_TOOLS_TOKEN:-}
       AI_SERVICE_READ_TIMEOUT: 35s
       AI_RANKING_READ_TIMEOUT: 55s

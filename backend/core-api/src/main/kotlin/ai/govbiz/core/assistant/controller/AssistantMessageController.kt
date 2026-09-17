@@ -17,9 +17,9 @@ import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 
 /**
- * 도우미 자유 질문 입구입니다. 비로그인도 물을 수 있고, 세션이 있으면 회원 상태 답에 씁니다.
- * 요청량·동시 실행 한도는 검색·원문 질문과 같은 Bean을 공유하므로 도우미가 한도를 따로 늘리지 않습니다.
- * 도구 에이전트가 켜져 있으면 모델을 여러 번 부르므로 주소당 분당 상한(`app.assistant.agent-per-client-per-minute`)을 더 겁니다.
+ * GovBiz 가이드 자유 질문 입구입니다. 비로그인도 물을 수 있고, 세션이 있으면 회원 자료 답에 씁니다.
+ * 요청량·동시 실행 한도는 검색·원문 질문과 같은 Bean을 공유하므로 가이드가 한도를 따로 늘리지 않습니다.
+ * 로그인 회원 질문은 도구 때문에 모델을 여러 번 부를 수 있어 주소당 분당 상한(`app.assistant.agent-per-client-per-minute`)을 더 겁니다.
  */
 @RestController
 @RequestMapping("/api/v1/assistant")
@@ -35,12 +35,12 @@ class AssistantMessageController(
         @RequestBody @Valid request: AssistantMessageRequest,
         httpRequest: HttpServletRequest,
     ): ResponseEntity<AssistantMessageResponse> = admission.execute(httpRequest.remoteAddr) {
-        withAgentLimit(httpRequest.remoteAddr) {
+        withMemberLimit(account, httpRequest.remoteAddr) {
             ResponseEntity.ok().cacheControl(CacheControl.noStore())
                 .body(AssistantMessageResponse.from(service.answer(account, request.toDomain())))
         }
     }
 
-    private fun <T> withAgentLimit(clientAddress: String, action: () -> T): T =
-        if (properties.agentEnabled) agentAdmission.execute(clientAddress, action) else action()
+    private fun <T> withMemberLimit(account: Account?, clientAddress: String, action: () -> T): T =
+        if (account != null && properties.toolsEnabled) agentAdmission.execute(clientAddress, action) else action()
 }

@@ -28,7 +28,6 @@ export const assistantMessages = {
   aiToolSource: (basis: string) => `AI 생성 · ${basis}`,
   cardRecruitment: '모집글',
   cardProgram: '공고',
-  cardQuote: (quote: string) => `원문: “${quote}”`,
   openProgramQuestion: '원문 질문 열기',
   quickSavedPrograms: '관심 공고 마감 확인',
   quickReceivedProposals: '받은 제안 확인',

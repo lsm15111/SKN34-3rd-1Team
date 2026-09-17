@@ -3,8 +3,6 @@ package ai.govbiz.core.assistant.service
 import ai.govbiz.core._common.exception.AiServiceCallException
 import ai.govbiz.core.account.domain.Account
 import ai.govbiz.core.assistant.client.AiAssistantClient
-import ai.govbiz.core.assistant.client.dto.AiAssistantAgentPayload
-import ai.govbiz.core.assistant.client.dto.AiAssistantAgentRequest
 import ai.govbiz.core.assistant.client.dto.AiAssistantAnswerPayload
 import ai.govbiz.core.assistant.client.dto.AiAssistantAnswerRequest
 import ai.govbiz.core.assistant.client.dto.AiAssistantCardPayload
@@ -15,12 +13,12 @@ import ai.govbiz.core.assistant.client.dto.AiAssistantHistoryMessage
 import ai.govbiz.core.assistant.client.dto.AiAssistantNavigationPayload
 import ai.govbiz.core.assistant.client.dto.AiAssistantPrincipal
 import ai.govbiz.core.assistant.client.dto.AiAssistantSession
+import ai.govbiz.core.assistant.client.dto.AiAssistantToolCallPayload
 import ai.govbiz.core.assistant.config.AssistantAgentProperties
 import ai.govbiz.core.assistant.domain.AssistantAccountTopic
 import ai.govbiz.core.assistant.domain.AssistantAnswer
 import ai.govbiz.core.assistant.domain.AssistantCard
 import ai.govbiz.core.assistant.domain.AssistantCardKind
-import ai.govbiz.core.assistant.domain.AssistantHelpEntry
 import ai.govbiz.core.assistant.domain.AssistantIntent
 import ai.govbiz.core.assistant.domain.AssistantNavigation
 import ai.govbiz.core.assistant.domain.AssistantQuestion
@@ -38,10 +36,10 @@ import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.stereotype.Service
 
 /**
- * 도우미 자유 질문 한 건을 처리합니다. 개인 정보를 가린 질문을 AI Service에 한 번 보내 의도를 받고,
- * 의도에 따라 Core가 회원 자료(관심 공고함·받은 제안함·기업)를 읽어 답을 만들거나 기존 화면으로 안내합니다.
- * `app.assistant.agent-enabled`가 켜지면 분류 대신 도구 에이전트를 부르고, 에이전트가 회원 자료를 읽어 만든
- * 답과 카드를 형식·경로 허용 목록으로 다시 검증해 씁니다. 대화 전문은 저장하지 않습니다.
+ * GovBiz 가이드 자유 질문 한 건을 처리합니다. 개인 정보를 가린 질문과 Core 도움말 카탈로그를 AI Service에 한 번 보내고,
+ * 로그인 회원이면 이 요청에만 쓰는 계정 묶음 토큰을 함께 실어 AI Service의 읽기 도구가 회원 자료를 되부를 수 있게 합니다.
+ * 돌아온 의도·답·카드는 형식·인용·경로 허용 목록으로 다시 검증하고, 회원 상태 템플릿·로그인 안내는 Core가 붙입니다.
+ * 대화 전문은 저장하지 않습니다.
  */
 @Service
 class AssistantMessageService(
@@ -49,14 +47,14 @@ class AssistantMessageService(
     private val savedSupportProgramService: SavedSupportProgramService,
     private val partnerProposalService: PartnerProposalService,
     @param:Qualifier("seoulClock") private val clock: Clock,
-    private val properties: AssistantAgentProperties = AssistantAgentProperties(),
-    private val tokenService: AssistantToolTokenService? = null,
-    private val documentService: AssistantSavedProgramDocumentService? = null,
+    private val catalog: AssistantHelpCatalog,
+    private val properties: AssistantAgentProperties,
+    private val tokenService: AssistantToolTokenService,
 ) {
     fun answer(account: Account?, question: AssistantQuestion): AssistantAnswer {
-        val verified = if (properties.agentEnabled) askAgent(account, question) else askClassifier(account, question)
+        val verified = verify(client.answer(toRequest(account, question)), account)
         return when (verified.intent) {
-            AssistantIntent.PRODUCT_HELP -> productHelp(verified, question)
+            AssistantIntent.PRODUCT_HELP -> productHelp(verified)
             AssistantIntent.ACCOUNT_STATE -> accountState(verified, account)
             AssistantIntent.SEARCH -> search(verified.searchQuery!!)
             AssistantIntent.PROGRAM_QUESTION -> programQuestion(question)
@@ -66,44 +64,7 @@ class AssistantMessageService(
         }
     }
 
-    private fun askClassifier(account: Account?, question: AssistantQuestion): VerifiedPayload =
-        verify(client.answer(toRequest(account, question)).toRaw(), question, agent = false)
-
-    /**
-     * 로그인 회원이면 이 요청에만 쓰는 계정 묶음 토큰을 발급해 AI Service의 도구가 Core를 되부를 수 있게 합니다.
-     * 관심 공고 묶음 질문은 첫 응답이 `needsDocuments`면 원문 청크 허용 목록을 준비해 같은 의도로 한 번 더 부르고,
-     * 돌아온 인용은 준비한 청크 원문과 다시 대조합니다.
-     */
-    private fun askAgent(account: Account?, question: AssistantQuestion): VerifiedPayload {
-        val tokens = tokenService ?: throw IllegalStateException("assistant agent requires the tool token service")
-        val base = toRequest(account, question)
-        val principal = account?.let { AiAssistantPrincipal(it.id, tokens.issue(it.id).value, it.company != null) }
-        val request = AiAssistantAgentRequest(
-            AGENT_SCHEMA_VERSION, base.message, base.history, base.session, base.context, base.helpEntries, principal,
-        )
-        val first = client.agent(request)
-        val verified = verify(first.toRaw(), question, agent = true)
-        if (first.needsDocuments != true || account == null || verified.intent != AssistantIntent.SAVED_PROGRAMS_QUESTION) return verified
-        val documents = documentService ?: throw IllegalStateException("assistant agent requires the document service")
-        val prepared = documents.prepare(account.id)
-        if (prepared.documents.isEmpty()) return verified
-        val second = client.agent(request.copy(
-            principal = AiAssistantPrincipal(account.id, tokens.issue(account.id).value, account.company != null),
-            savedProgramDocuments = prepared.documents, resumeIntent = AssistantIntent.SAVED_PROGRAMS_QUESTION.name,
-        ))
-        if (second.needsDocuments == true) invalidResponse()
-        val resumed = verify(second.toRaw(), question, agent = true)
-        if (resumed.intent != AssistantIntent.SAVED_PROGRAMS_QUESTION) invalidResponse()
-        val allowed = prepared.documents.map { it.documentId }.toSet()
-        // 카드는 준비한 관심 공고 안에서만, 인용은 그 공고의 청크 원문에 글자 그대로 있어야 남깁니다.
-        val cards = resumed.cards.map { card ->
-            if (card.kind != AssistantCardKind.PROGRAM || card.id !in allowed) invalidResponse()
-            val quote = card.quote?.takeIf { text -> prepared.chunkTexts[card.id].orEmpty().any { it.contains(text) } }
-            card.copy(quote = quote)
-        }
-        return resumed.copy(cards = cards)
-    }
-
+    /** 도구 비밀이 설정된 경우에만 회원 토큰을 싣습니다. 없으면 AI Service도 도구를 숨기고 의도만 돌려줍니다. */
     private fun toRequest(account: Account?, question: AssistantQuestion): AiAssistantAnswerRequest =
         AiAssistantAnswerRequest(
             SCHEMA_VERSION,
@@ -111,27 +72,29 @@ class AssistantMessageService(
             question.history.map { AiAssistantHistoryMessage(it.role.name, AssistantPiiMasker.mask(it.content).take(HISTORY_MAX)) },
             AiAssistantSession(account != null, account?.company != null),
             AiAssistantContext(question.context.route, question.context.programSelected),
-            question.helpEntries.map {
+            catalog.entries.map {
                 AiAssistantHelpEntry(
                     it.id, it.title, it.question, it.summary, it.body, it.limitation, it.audience, it.status,
                     it.action?.let { action -> AiAssistantHelpAction(action.label, action.to) },
                 )
             },
+            account?.takeIf { properties.toolsEnabled }?.let {
+                AiAssistantPrincipal(it.id, tokenService.issue(it.id).value, it.company != null)
+            },
         )
 
     /**
      * AI Service와 같은 의도별 필드 규칙을 Core에서 다시 확인합니다. 어긋나면 답을 고치지 않고 502로 끝냅니다.
-     * 에이전트 응답은 카드 id·경로 형식과 이동 경로 허용 목록까지 봅니다.
+     * 인용은 카탈로그 항목만, 카드는 id·경로 형식, 이동 버튼은 허용 목록 안의 화면만 인정합니다.
+     * 비로그인에게 회원 자료 답이 오면 계약 위반입니다.
      */
-    private fun verify(payload: RawPayload, question: AssistantQuestion, agent: Boolean): VerifiedPayload {
-        if (payload.schemaVersion != (if (agent) AGENT_SCHEMA_VERSION else SCHEMA_VERSION)) invalidResponse()
+    private fun verify(payload: AiAssistantAnswerPayload, account: Account?): VerifiedPayload {
+        if (payload.schemaVersion != SCHEMA_VERSION) invalidResponse()
         val intent = AssistantIntent.entries.firstOrNull { it.name == payload.intent } ?: invalidResponse()
-        if (!agent && intent !in CLASSIFIER_INTENTS) invalidResponse()
         val citations = payload.citations ?: invalidResponse()
         if (citations.size > MAX_CITATIONS || citations.any { it == null } || citations.toSet().size != citations.size) invalidResponse()
-        val helpIds = question.helpEntries.map { it.id }.toSet()
         val citedIds = citations.map { it!! }
-        if (citedIds.any { it !in helpIds }) invalidResponse()
+        if (citedIds.any { it !in catalog.ids }) invalidResponse()
         val answer = payload.answer?.also { if (!validText(it, ANSWER_MAX, multiline = true)) invalidResponse() }
         val clarification = payload.clarificationQuestion?.also { if (!validText(it, SHORT_MAX)) invalidResponse() }
         val searchQuery = payload.searchQuery?.also { if (!validText(it, MESSAGE_MAX, multiline = true)) invalidResponse() }
@@ -147,7 +110,7 @@ class AssistantMessageService(
         }
         val (required, optional) = when (intent) {
             AssistantIntent.PRODUCT_HELP -> setOf("answer", "citations") to emptySet()
-            AssistantIntent.ACCOUNT_STATE -> setOf("accountTopic") to (if (agent) setOf("answer") else emptySet())
+            AssistantIntent.ACCOUNT_STATE -> setOf("accountTopic") to setOf("answer")
             AssistantIntent.SEARCH -> setOf("searchQuery") to emptySet()
             AssistantIntent.PROGRAM_QUESTION -> emptySet<String>() to emptySet()
             AssistantIntent.OUT_OF_SCOPE -> setOf("answer") to emptySet()
@@ -158,7 +121,18 @@ class AssistantMessageService(
         val cards = verifyCards(payload.cards)
         val navigation = payload.navigation?.let(::verifyNavigation)
         if ((cards.isNotEmpty() || navigation != null) && (!intent.usesTools || answer == null)) invalidResponse()
+        if (account == null && intent.usesTools && answer != null) invalidResponse()
+        verifyToolCalls(payload.toolCalls)
         return VerifiedPayload(intent, answer, citedIds, clarification, searchQuery, accountTopic, navigation, cards)
+    }
+
+    private fun verifyToolCalls(toolCalls: List<AiAssistantToolCallPayload?>?) {
+        if (toolCalls == null || toolCalls.size > MAX_TOOL_CALLS) invalidResponse()
+        toolCalls.forEach { call ->
+            val name = call?.name ?: invalidResponse()
+            val ms = call.ms ?: invalidResponse()
+            if (!TOOL_NAME.matches(name) || ms < 0) invalidResponse()
+        }
     }
 
     private fun verifyCards(cards: List<AiAssistantCardPayload?>?): List<AssistantCard> {
@@ -170,10 +144,9 @@ class AssistantMessageService(
             val title = card.title?.takeIf { validText(it, SHORT_MAX) } ?: invalidResponse()
             val subtitle = card.subtitle?.also { if (!validText(it, SHORT_MAX)) invalidResponse() }
             val reason = card.reason?.takeIf { validText(it, REASON_MAX) } ?: invalidResponse()
-            val quote = card.quote?.also { if (kind != AssistantCardKind.PROGRAM || !validText(it, QUOTE_MAX, multiline = true)) invalidResponse() }
             val to = card.to ?: invalidResponse()
             if (to != expectedCardRoute(kind, id)) invalidResponse()
-            AssistantCard(kind, id, title, subtitle, reason, to, quote)
+            AssistantCard(kind, id, title, subtitle, reason, to)
         }
         if (verified.map { it.kind to it.id }.toSet().size != verified.size) invalidResponse()
         return verified
@@ -201,10 +174,10 @@ class AssistantMessageService(
         return AssistantNavigation(label, to)
     }
 
-    /** 사용법 답입니다. 첫 인용 항목의 행동 버튼을 그대로 붙입니다. 경로는 프런트 도움말이 정한 값이라 요청에 실린 것만 씁니다. */
-    private fun productHelp(payload: VerifiedPayload, question: AssistantQuestion): AssistantAnswer {
+    /** 사용법 답입니다. 첫 인용 항목의 행동 버튼을 붙입니다. 경로는 Core 카탈로그가 정한 값입니다. */
+    private fun productHelp(payload: VerifiedPayload): AssistantAnswer {
         val navigation = payload.citations.asSequence()
-            .mapNotNull { id -> question.helpEntries.firstOrNull { it.id == id }?.action }
+            .mapNotNull { id -> catalog.find(id)?.action }
             .firstOrNull()
         return AssistantAnswer(AssistantIntent.PRODUCT_HELP, payload.answer, payload.citations, null, null, null, navigation)
     }
@@ -228,7 +201,7 @@ class AssistantMessageService(
             )
         }
 
-    /** 에이전트가 회원 자료로 답을 만들었으면 그 답과 카드를 쓰고, 아니면 Core가 자료를 읽어 답합니다. */
+    /** AI Service가 회원 자료 도구로 답을 만들었으면 그 답과 카드를 쓰고, 아니면 Core가 자료를 읽어 답합니다. */
     private fun accountState(payload: VerifiedPayload, account: Account?): AssistantAnswer {
         val topic = payload.accountTopic!!
         if (account != null && payload.answer != null) {
@@ -246,6 +219,11 @@ class AssistantMessageService(
     /** 모집글 매칭·관심 공고 묶음 질문입니다. 비로그인은 로그인 안내, 답이 없으면 화면 안내로 끝냅니다. */
     private fun toolAnswer(payload: VerifiedPayload, account: Account?): AssistantAnswer = when {
         account == null -> AssistantAnswer(payload.intent, AssistantAnswerTexts.loginRequired(payload.intent), emptyList(), null, null, null, null)
+        // 모집글 매칭은 기업 프로필이 기준이라, 기업이 없으면 AI 답과 무관하게 등록부터 안내합니다.
+        payload.intent == AssistantIntent.PARTNER_MATCH && account.company == null -> AssistantAnswer(
+            payload.intent, AssistantAnswerTexts.PARTNER_MATCH_NEEDS_COMPANY, emptyList(), null, null, null,
+            AssistantNavigation(AssistantAnswerTexts.OPEN_PROFILE, InternalRoutes.PROFILE),
+        )
         payload.answer == null -> AssistantAnswer(
             payload.intent, AssistantAnswerTexts.agentNoAnswer(payload.intent), emptyList(), null, null, null,
             if (payload.intent == AssistantIntent.PARTNER_MATCH) {
@@ -305,25 +283,6 @@ class AssistantMessageService(
     private fun invalidResponse(): Nothing =
         throw AiServiceCallException.invalidResponse("AI assistant response violated the internal contract", null)
 
-    private fun AiAssistantAnswerPayload.toRaw() =
-        RawPayload(schemaVersion, intent, answer, citations, clarificationQuestion, searchQuery, accountTopic, emptyList(), null)
-
-    private fun AiAssistantAgentPayload.toRaw() =
-        RawPayload(schemaVersion, intent, answer, citations, clarificationQuestion, searchQuery, accountTopic, cards, navigation)
-
-    /** 두 AI 계약(분류·에이전트)의 공통 필드입니다. 분류 응답은 카드가 비고 이동 경로가 없습니다. */
-    private data class RawPayload(
-        val schemaVersion: String?,
-        val intent: String?,
-        val answer: String?,
-        val citations: List<String?>?,
-        val clarificationQuestion: String?,
-        val searchQuery: String?,
-        val accountTopic: String?,
-        val cards: List<AiAssistantCardPayload?>?,
-        val navigation: AiAssistantNavigationPayload?,
-    )
-
     private data class VerifiedPayload(
         val intent: AssistantIntent,
         val answer: String?,
@@ -350,21 +309,17 @@ class AssistantMessageService(
     }
 
     companion object {
-        const val SCHEMA_VERSION = "govbiz-assistant-v1"
-        const val AGENT_SCHEMA_VERSION = "govbiz-assistant-agent-v1"
+        const val SCHEMA_VERSION = "govbiz-assistant-v2"
         const val MESSAGE_MAX = 500
         const val HISTORY_MAX = 1000
         const val ANSWER_MAX = 600
         const val SHORT_MAX = 160
         const val REASON_MAX = 200
-        const val QUOTE_MAX = 300
         const val MAX_CITATIONS = 3
         const val MAX_CARDS = 5
+        const val MAX_TOOL_CALLS = 12
         const val SOON_DAYS = 7L
-        private val CLASSIFIER_INTENTS = setOf(
-            AssistantIntent.PRODUCT_HELP, AssistantIntent.ACCOUNT_STATE, AssistantIntent.SEARCH,
-            AssistantIntent.PROGRAM_QUESTION, AssistantIntent.OUT_OF_SCOPE, AssistantIntent.UNCLEAR,
-        )
+        private val TOOL_NAME = Regex("[a-z_]{1,64}")
         private val UNSUPPORTED_TEXT = Regex("\\p{C}")
         private val UNSUPPORTED_LAYOUT_TEXT = Regex("[\\p{C}&&[^\\n\\r\\t]]")
         private val CARD_ID = Regex("[A-Za-z0-9_:.-]{1,80}")

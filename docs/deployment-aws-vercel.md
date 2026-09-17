@@ -140,7 +140,7 @@ OpenAI·DB·JWT·Redis·RabbitMQ·Qdrant 비밀값은 Vercel이 아닌 EC2에만
 
 - Vercel **Production**에 `VITE_ASSISTANT_AI_ENABLED=true`와 `VITE_KAKAO_CHANNEL_ID`(채널 공개 ID)를
   설정한 뒤 재배포한다. 개발 Compose의 `ASSISTANT_AI_ENABLED`/`KAKAO_CHANNEL_ID` 이름만 Vercel에 넣어서는 반영되지 않는다.
-- EC2 환경 파일에 `ASSISTANT_AGENT_ENABLED=true`, 32자 이상의 `ASSISTANT_TOOLS_TOKEN`을 설정한다.
+- 가이드가 회원 자료를 읽게 하려면 EC2 환경 파일에 32자 이상의 `ASSISTANT_TOOLS_TOKEN`을 설정한다(Core·AI Service 공통).
   운영 Compose가 같은 토큰을 Core와 AI에 전달하고, AI의 도구 주소는 `http://core-api:8080`을 사용한다.
   공유 토큰은 Vercel, `VITE_*`, Git, 브라우저에 넣지 않는다.
 - 호출 흐름은 `브라우저 → 운영 프록시 → Core → AI 도우미 → OpenAI`다. 로그인 사용자 데이터가 필요한 경우에만

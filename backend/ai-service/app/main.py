@@ -8,8 +8,6 @@ from app.application_preparation.agent import ApplicationPreparationAgent
 from app.application_preparation.router import router as application_preparation_router
 from app.assistant.agent import AssistantAgent
 from app.assistant.router import router as assistant_router
-from app.assistant_agent.router import router as assistant_agent_router
-from app.assistant_agent.service import AssistantAgentService
 
 from app.health.router import router as health_router
 from app.support_program_evidence.agent import SupportProgramEvidenceAnswerAgent
@@ -31,7 +29,6 @@ def create_app(
     support_program_conversation_agent: SupportProgramConversationAgent | None = None,
     application_preparation_agent: ApplicationPreparationAgent | None = None,
     assistant_agent: AssistantAgent | None = None,
-    assistant_agent_service: AssistantAgentService | None = None,
 ) -> FastAPI:
     """FastAPI 객체를 조립하는 애플리케이션 팩토리다."""
     container = build_application_container(
@@ -41,7 +38,6 @@ def create_app(
         support_program_conversation_agent=support_program_conversation_agent,
         application_preparation_agent=application_preparation_agent,
         assistant_agent=assistant_agent,
-        assistant_agent_service=assistant_agent_service,
     )
 
     @asynccontextmanager
@@ -75,5 +71,4 @@ def create_app(
     application.include_router(support_program_evidence_router)
     application.include_router(support_program_conversation_router)
     application.include_router(assistant_router)
-    application.include_router(assistant_agent_router)
     return application
