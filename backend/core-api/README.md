@@ -630,6 +630,9 @@ Compose는 일부 주소·CORS 값을 내부 네트워크에 맞게 덮어씁니
 | `SUPPORT_PROGRAM_INDEX_ENABLED` | `true` | 현재 공고의 Elasticsearch·Qdrant 확인·복구 여부. 새 공고 공개 전 필수 색인은 유지 |
 | `SUPPORT_PROGRAM_INDEX_INITIAL_DELAY` | `PT0S` | 첫 키워드·벡터 색인 복구까지의 지연 |
 | `SUPPORT_PROGRAM_INDEX_FIXED_DELAY` | `PT1M` | 이전 복구 작업 종료 후 다음 실행까지의 지연 |
+| `SUPPORT_PROGRAM_INDEX_PRUNE_ENABLED` | `true` (운영 Compose `false`) | 동기화가 없는 제공처의 이전 Elasticsearch·Qdrant 색인 버전 정리 여부 |
+| `SUPPORT_PROGRAM_INDEX_PRUNE_INITIAL_DELAY` / `SUPPORT_PROGRAM_INDEX_PRUNE_FIXED_DELAY` | `PT30M` / `PT6H` | 첫 정리까지의 지연 / 이전 정리 종료 후 다음 실행까지의 지연 |
+| `SUPPORT_PROGRAM_INDEX_PRUNE_QUIET_PERIOD` | `PT30M` | 마지막 공개 뒤 이 기간이 지난 제공처만 정리 |
 | `APP_CORS_ALLOWED_ORIGIN` | `http://localhost:5173` | 허용할 Web origin |
 
 추천 점수화만 AI 모델 `45s`·Agent 실행 `50s`·Core 읽기 `55s`로 제한합니다.

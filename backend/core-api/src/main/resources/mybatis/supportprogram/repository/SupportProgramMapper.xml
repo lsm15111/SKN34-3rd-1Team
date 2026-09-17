@@ -265,6 +265,12 @@
         FOR UPDATE
     </select>
 
+    <select id="findLatestStartedGeneration" resultType="long">
+        SELECT latest_started_generation
+        FROM support_program_sync_generation
+        WHERE source_code = #{sourceCode}
+    </select>
+
     <update id="updateLatestStartedGeneration">
         UPDATE support_program_sync_generation
         SET latest_started_generation = #{generation}

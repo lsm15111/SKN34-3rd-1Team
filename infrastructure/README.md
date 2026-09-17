@@ -183,6 +183,9 @@ OPENAI_API_KEY=발급받은_OpenAI_API_키
 | `SUPPORT_PROGRAM_INDEX_ENABLED` | `true` | MySQL 현재 공고의 Elasticsearch·Qdrant 정기 확인·복구 여부. 공개 전 필수 색인은 중지하지 않음 |
 | `SUPPORT_PROGRAM_INDEX_INITIAL_DELAY` | `PT0S` | 앱 시작 시 첫 키워드·벡터 색인 복구까지의 기간 |
 | `SUPPORT_PROGRAM_INDEX_FIXED_DELAY` | `PT1M` | 이전 복구 완료 뒤 다음 실행까지의 기간 |
+| `SUPPORT_PROGRAM_INDEX_PRUNE_ENABLED` | `true` (운영 Compose `false`) | 동기화가 없는 제공처의 이전 Elasticsearch·Qdrant 색인 버전 정리 여부 |
+| `SUPPORT_PROGRAM_INDEX_PRUNE_INITIAL_DELAY` / `SUPPORT_PROGRAM_INDEX_PRUNE_FIXED_DELAY` | `PT30M` / `PT6H` | 첫 정리까지의 지연 / 이전 정리 종료 후 다음 실행까지의 지연 |
+| `SUPPORT_PROGRAM_INDEX_PRUNE_QUIET_PERIOD` | `PT30M` | 마지막 공개 뒤 이 기간이 지난 제공처만 정리 |
 | `APP_CORS_ALLOWED_ORIGIN` | `http://127.0.0.1:5173` | Compose에서 Core API가 허용할 브라우저 origin |
 | `MYSQL_DATABASE` | `govbiz` | MySQL 초기 데이터베이스 이름 |
 | `MYSQL_USER` | `govbiz` | Core API의 MySQL 사용자 |

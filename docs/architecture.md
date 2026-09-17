@@ -561,9 +561,24 @@ SupportProgramIndexSyncScheduler (기본: 최초 PT0S, 완료 후 PT1M)
 UPDATE가 0행이 되어 새 스냅샷 상태를 건드리지 않습니다. 이 상태는 마지막 전체 색인 준비 결과이며 실시간
 Elasticsearch/Qdrant Health를 뜻하지는 않습니다.
 
-공개 준비와 복구는 모두 `prune`을 호출하지 않습니다. 이전 스냅샷 기준의 삭제가 공개 준비 중인 새 벡터를
-지우는 상황을 피하기 위해 현재 자동 삭제를 연결하지 않았습니다. 내부 `prune` API는 존재하지만,
-안전한 보존·삭제 수명주기와 전체 다중 인스턴스 운영 검증은 후속 과제입니다.
+공개 준비와 복구는 삭제하지 않습니다. 이전 버전은 별도 `SupportProgramIndexPruneScheduler`
+(기본: 최초 PT30M, 완료 후 PT6H, 운영 Compose는 끔)가 제공처별로 정리합니다.
+공개 준비 중인 새 버전은 아직 DB에 없으므로 다음 조건을 모두 만족하는 제공처만 삭제합니다.
+
+```text
+SupportProgramIndexPruneService.prune
+  → 공개 세대·지문이 있고 indexReady=true
+  → 가장 최근에 시작한 동기화 세대 = 공개 세대 (수집 중이거나 실패한 세대가 없음)
+  → 마지막 공개 뒤 SUPPORT_PROGRAM_INDEX_PRUNE_QUIET_PERIOD(PT30M) 경과 (이전 버전으로 시작한 검색 종료)
+  → 읽은 현재 공고의 수·지문 = 상태 행
+  → AI Service prune: 현재 벡터가 모두 있을 때만 같은 제공처의 나머지 point 삭제
+  → Elasticsearch: 현재 버전이 모두 보일 때만 같은 제공처 접두사의 나머지 버전 delete_by_query
+```
+
+동기화는 외부 API 수집을 끝낸 뒤에야 새 버전을 색인하므로 정리 도중 시작한 동기화와 겹칠 가능성은 낮습니다.
+겹쳐서 새 버전이 지워져도 공개 전 색인 확인이나 1분 주기 복구가 다시 채우며, 정리 직후 세대가 바뀌면 경고를 남깁니다.
+정리는 복구와 같은 단일 스레드에서 실행해 한 인스턴스 안에서는 둘이 겹치지 않습니다.
+원문 근거 청크(`support_program_evidence`) 컬렉션은 정리 대상이 아닙니다.
 
 검색 대상의 벡터가 하나라도 없거나 Qdrant·AI Service가 실패하면 일부 후보만으로 성공하지 않고 오류를
 반환합니다. 별도 복구 작업의 성공 후 다시 검색할 수 있습니다. 빈 검색어 목록과 상세는 AI에 의존하지 않습니다.

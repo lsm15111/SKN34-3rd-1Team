@@ -82,6 +82,36 @@ class ElasticsearchSupportProgramClient(
         if (count["count"]?.asInt() != documents.size) invalid()
     }
 
+    /**
+     * 한 제공처에서 현재 공개 버전을 제외한 이전 버전을 삭제하고 삭제 건수를 반환합니다.
+     * 현재 버전이 모두 검색에 보일 때만 삭제하며, 다른 제공처의 문서는 건드리지 않습니다.
+     */
+    fun pruneSource(sourceCode: String, retained: List<ElasticsearchSupportProgramReferenceRequest>): Int {
+        // 잘못된 호출은 색인 장애로 감싸지 않고 즉시 거부합니다.
+        require(SOURCE_CODE.matches(sourceCode))
+        validateReferences(retained)
+        require(retained.all { it.id.startsWith("$sourceCode:") })
+        return guarded { deleteOtherVersions(sourceCode, retained) }
+    }
+
+    private fun deleteOtherVersions(sourceCode: String, retained: List<ElasticsearchSupportProgramReferenceRequest>): Int {
+        checkShards(json(HttpMethod.POST, "/_refresh"))
+        val count = json(HttpMethod.POST, "/_count", mapOf("query" to versionFilter(retained)))
+        checkShards(count)
+        if (count["count"]?.asInt() != retained.size) invalid()
+        val query = mapOf("bool" to mapOf<String, Any>(
+            "filter" to listOf(mapOf("prefix" to mapOf("id" to "$sourceCode:"))),
+            "must_not" to if (retained.isEmpty()) emptyList() else listOf(versionFilter(retained)),
+        ))
+        val result = json(HttpMethod.POST, "/_delete_by_query?refresh=true&conflicts=abort", mapOf("query" to query))
+        if (result["timed_out"]?.isBoolean != true || result["timed_out"].asBoolean()) invalid()
+        val failures = result["failures"]
+        if (failures == null || !failures.isArray || failures.size() != 0) invalid()
+        val deleted = result["deleted"]?.takeIf { it.isIntegralNumber }?.asInt() ?: invalid()
+        if (deleted < 0 || result["total"]?.asInt() != deleted) invalid()
+        return deleted
+    }
+
     fun search(query: String, references: List<ElasticsearchSupportProgramReferenceRequest>, limit: Int): List<String> = guarded {
         require(query.isNotBlank())
         require(limit in 1..20)
@@ -197,4 +227,8 @@ class ElasticsearchSupportProgramClient(
     }
 
     private fun invalid(): Nothing = throw ElasticsearchClientException("Support program lexical index violated its contract")
+
+    private companion object {
+        val SOURCE_CODE = Regex("^[A-Z][A-Z0-9_]{0,63}$")
+    }
 }

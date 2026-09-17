@@ -73,6 +73,79 @@ class ElasticsearchSupportProgramClientTest {
     }
 
     @Test
+    fun prunesOnlyTheSourcePrefixAfterConfirmingEveryCurrentVersionIsVisible() {
+        expectRefreshAndCount(1)
+        server.expect(requestTo("http://es.test/govbiz-support-program-lexical-v2/_delete_by_query?refresh=true&conflicts=abort"))
+            .andExpect(method(HttpMethod.POST))
+            .andExpect(content().json("""{"query":{"bool":{
+                "filter":[{"prefix":{"id":"BIZINFO:"}}],
+                "must_not":[{"ids":{"values":["v1"]}}]}}}""", true))
+            .andRespond(withSuccess(deleted(812), MediaType.APPLICATION_JSON))
+
+        assertEquals(812, client.pruneSource("BIZINFO", listOf(reference)))
+        server.verify()
+    }
+
+    @Test
+    fun prunesEverySourceVersionWhenThePublishedSnapshotIsEmpty() {
+        server.expect(requestTo("http://es.test/govbiz-support-program-lexical-v2/_refresh")).andRespond(withSuccess(shards, MediaType.APPLICATION_JSON))
+        server.expect(requestTo("http://es.test/govbiz-support-program-lexical-v2/_count"))
+            .andExpect(content().json("""{"query":{"match_none":{}}}""", true))
+            .andRespond(withSuccess("""{"count":0,$shardsField}""", MediaType.APPLICATION_JSON))
+        server.expect(requestTo("http://es.test/govbiz-support-program-lexical-v2/_delete_by_query?refresh=true&conflicts=abort"))
+            .andExpect(content().json("""{"query":{"bool":{"filter":[{"prefix":{"id":"MSIT:"}}],"must_not":[]}}}""", true))
+            .andRespond(withSuccess(deleted(3), MediaType.APPLICATION_JSON))
+
+        assertEquals(3, client.pruneSource("MSIT", emptyList()))
+        server.verify()
+    }
+
+    @Test
+    fun neverDeletesWhenCurrentVersionsAreMissingOrTheResultIsPartial() {
+        // 현재 버전 일부가 보이지 않으면 삭제 요청을 보내지 않습니다.
+        expectRefreshAndCount(0)
+        assertThrows(ElasticsearchClientException::class.java) { client.pruneSource("BIZINFO", listOf(reference)) }
+        server.verify()
+
+        val partial = listOf(
+            deleted(5).replace("\"failures\":[]", "\"failures\":[{\"cause\":{}}]"),
+            deleted(5).replace("\"timed_out\":false", "\"timed_out\":true"),
+            deleted(5).replace("\"total\":5", "\"total\":6"),
+            deleted(5).replace("\"deleted\":5", "\"deleted\":\"5\""),
+            "{}",
+        )
+        for (body in partial) {
+            server.reset()
+            expectRefreshAndCount(1)
+            server.expect(anything()).andRespond(withSuccess(body, MediaType.APPLICATION_JSON))
+            assertThrows(ElasticsearchClientException::class.java) { client.pruneSource("BIZINFO", listOf(reference)) }
+            server.verify()
+        }
+    }
+
+    @Test
+    fun rejectsReferencesFromAnotherSourceOrUnsafeSourceCodesBeforeAnyRequest() {
+        for (sourceCode in listOf("MSIT", "BIZ", "bizinfo", "BIZINFO*", "*", "")) {
+            assertThrows(IllegalArgumentException::class.java) { client.pruneSource(sourceCode, listOf(reference)) }
+        }
+        server.verify()
+    }
+
+    private val shardsField = "\"_shards\":{\"total\":1,\"successful\":1,\"failed\":0}"
+    private val shards = "{$shardsField}"
+
+    private fun expectRefreshAndCount(count: Int) {
+        server.expect(requestTo("http://es.test/govbiz-support-program-lexical-v2/_refresh"))
+            .andExpect(method(HttpMethod.POST)).andRespond(withSuccess(shards, MediaType.APPLICATION_JSON))
+        server.expect(requestTo("http://es.test/govbiz-support-program-lexical-v2/_count"))
+            .andExpect(content().json("""{"query":{"ids":{"values":["v1"]}}}""", true))
+            .andRespond(withSuccess("""{"count":$count,$shardsField}""", MediaType.APPLICATION_JSON))
+    }
+
+    private fun deleted(count: Int) =
+        """{"took":12,"timed_out":false,"total":$count,"deleted":$count,"batches":1,"version_conflicts":0,"noops":0,"failures":[]}"""
+
+    @Test
     fun rejectsUnsafeConfiguration() {
         for (name in listOf("*", "a,b", "../all", "_all", "a/b", "")) {
             assertThrows(IllegalArgumentException::class.java) { ElasticsearchClientProperties(null, name, null, null, null) }

@@ -201,6 +201,12 @@ class SupportProgramRepository(
         return supportProgramMapper.findSyncStatus(sourceCode)?.toSyncStatus()
     }
 
+    /** 잠그지 않고 가장 최근에 시작된 동기화 세대를 읽습니다. 동기화를 시작한 적 없으면 null입니다. */
+    fun findLatestStartedGeneration(sourceCode: String): Long? {
+        requireSourceCode(sourceCode)
+        return supportProgramMapper.findLatestStartedGeneration(sourceCode)
+    }
+
     /** 저장된 동기화 상태와 상태 행 없이 기존 공고만 남아 있는 제공처의 미확인 상태를 반환합니다. */
     fun findSyncStatuses(): List<SupportProgramSyncStatus> =
         java.util.List.copyOf(supportProgramMapper.findSyncStatuses().map { it.toSyncStatus() })

@@ -34,6 +34,8 @@ interface SupportProgramMapper {
 
     fun lockLatestStartedGeneration(@Param("sourceCode") sourceCode: String): Long?
 
+    fun findLatestStartedGeneration(@Param("sourceCode") sourceCode: String): Long?
+
     fun updateLatestStartedGeneration(
         @Param("sourceCode") sourceCode: String,
         @Param("generation") generation: Long,
