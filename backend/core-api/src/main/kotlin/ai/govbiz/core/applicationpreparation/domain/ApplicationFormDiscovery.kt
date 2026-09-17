@@ -14,6 +14,7 @@ data class ApplicationFormDiscoveryDocument(
     val bytes: Long,
     val sha256: String,
     val blocks: List<ApplicationFormDiscoveryBlock>,
+    val sourceBytes: ByteArray? = null,
 )
 
 data class ApplicationFormDiscoveryInput(

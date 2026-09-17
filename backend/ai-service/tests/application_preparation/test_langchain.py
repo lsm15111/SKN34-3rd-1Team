@@ -13,6 +13,83 @@ from .test_draft import request_data as draft_request
 from .test_document import request_data as document_request, selection_data as document_selection
 
 
+def test_hwp_discovery_keeps_successful_prompt_separate_from_hwpx_columns(monkeypatch):
+    from unittest.mock import AsyncMock
+    from app.application_preparation.discovery_prompt import HWP_DISCOVERY_INSTRUCTIONS, DISCOVERY_INSTRUCTIONS
+    request = DiscoverFormsRequest.model_validate(discovery_request_data())
+    for document in request.documents:
+        document.format = "HWP"
+    agent = ApplicationPreparationAgent(model=None, run_timeout_seconds=1)
+    invoke = AsyncMock()
+    monkeypatch.setattr(agent, "_invoke", invoke)
+    asyncio.run(agent.discover(request))
+    assert invoke.await_args.args[1] == HWP_DISCOVERY_INSTRUCTIONS
+    assert invoke.await_args.args[3] == 5000
+    request.documents[0].format = "HWPX"
+    asyncio.run(agent.discover(request))
+    assert invoke.await_args.args[1] == DISCOVERY_INSTRUCTIONS
+    assert invoke.await_args.args[3] == 16000
+
+
+def test_discovery_receives_native_layout_but_never_sends_source_base64_to_model(monkeypatch):
+    import base64
+    import hashlib
+    from unittest.mock import AsyncMock
+    from app.application_preparation.service import ApplicationPreparationService
+    from app.application_preparation.models import FormDiscoverySelection
+    payload = discovery_request_data()
+    source = b"PK native source only inside the service"
+    payload["documents"][0].update(sourceBase64=base64.b64encode(source).decode(),
+                                  sourceSha256=hashlib.sha256(source).hexdigest())
+    request = DiscoverFormsRequest.model_validate(payload)
+    layout = {0: [{"targetId": "t1.r1.c0", "text": "", "structure": {"row": 1, "col": 0}}]}
+    prepare = AsyncMock(return_value=layout)
+    monkeypatch.setattr("app.application_preparation.hwpx_form_analysis.discovery_layouts", prepare)
+    async def invoke(_schema, _prompt, content, *_args, **_kwargs):
+        document = json.loads(content)["documents"][0]
+        assert document["nativeLayout"] == layout[0]
+        assert "sourceBase64" not in document and "sourceSha256" not in document
+        assert base64.b64encode(source).decode() not in content
+        return FormDiscoverySelection.model_validate(discovery_selection_data())
+    agent = ApplicationPreparationAgent(model=None, run_timeout_seconds=1)
+    monkeypatch.setattr(agent, "_invoke", invoke)
+    asyncio.run(ApplicationPreparationService(agent, "test-model").discover(request))
+    prepare.assert_awaited_once_with(request)
+
+
+def test_native_discovery_source_requires_matching_hash_and_hwpx_format():
+    import base64
+    from pydantic import ValidationError
+    payload = discovery_request_data()
+    payload["documents"][0].update(sourceBase64=base64.b64encode(b"PK test").decode(), sourceSha256="0" * 64)
+    with pytest.raises(ValidationError, match="hash mismatch"):
+        DiscoverFormsRequest.model_validate(payload)
+
+
+def test_hwpx_mapping_has_one_assignment_and_one_scope_decision_per_native_target():
+    import base64
+    from app.application_preparation.document_contract import DocumentMap, MapDocumentRequest, NativeTarget, digest
+    source = b"PK test source"
+    request = MapDocumentRequest(sourceBase64=base64.b64encode(source).decode(), sourceSha256=digest(source),
+        format="hwpx", scope="신청서", fields=[
+            {"id": "company:name", "label": "회사명", "guidance": "", "required": True},
+            {"id": "company:seal", "label": "날인", "guidance": "", "required": False}])
+    document = DocumentMap(sourceSha256=request.sourceSha256, format="hwpx", engineVersion="test",
+        targets=[NativeTarget(targetId=key, nativeLocator={}, kind="paragraph", currentText="")
+                 for key in ("p1", "p2", "p3")])
+    model = make_model({"assignments": {"company:name": {"targetId": "p1"}, "company:seal": {"targetId": None}},
+                        "scope": {"p1": True, "p2": False, "p3": True}})
+    result = asyncio.run(ApplicationPreparationAgent(model=model, run_timeout_seconds=3).map_document(request, document))
+    assert [(b.factId, b.targetId) for b in result.bindings] == [("company:name", "p1")]
+    assert result.unmappedFieldIds == ["company:seal"]
+    assert result.scopeTargetIds == ["p1", "p3"]
+    schema = json.loads(model.calls[0].content)["text"]["format"]["schema"]
+    scope = schema["$defs"]["NativeScope"]
+    assert set(scope["required"]) == {"p1", "p2", "p3"}
+    assert all(item["type"] == "boolean" for item in scope["properties"].values())
+    assert scope["additionalProperties"] is False
+
+
 CASES = [
     ("interpret", InterpretRequest, request_data, selection_data, 2500),
     ("discover", DiscoverFormsRequest, discovery_request_data, discovery_selection_data, 16000),
@@ -118,7 +195,7 @@ def test_document_analysis_uses_long_budget_and_preserves_timeout_reason(method,
     if method == "map_document":
         req = MapDocumentRequest(**req.model_dump(exclude={"facts", "answerRevision"}),
             fields=[{"id": "company:name", "label": "회사명", "guidance": "", "required": True}])
-        selection = {"bindings": [], "scopeTargetIds": [], "unmappedFieldIds": ["company:name"]}
+        selection = {"assignments": {"company:name": {"targetId": None}}, "scope": {"p1": False}}
     options = {"transport_timeout": True} if failure == "transport_timeout" else {"delay": 0.1}
     model = make_model(selection, **options)
     agent = ApplicationPreparationAgent(model=model, run_timeout_seconds=0.01,

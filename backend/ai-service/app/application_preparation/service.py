@@ -174,7 +174,14 @@ class ApplicationPreparationService:
         started = perf_counter()
         timeout_stage = "NONE"
         try:
-            output: FormDiscoverySelection = await self.agent.discover(request)
+            if any(document.sourceBase64 is not None for document in request.documents):
+                import asyncio
+                from app.application_preparation.hwpx_form_analysis import discovery_layouts
+                async with asyncio.timeout(self.agent.discovery_run_timeout_seconds):
+                    layouts = await discovery_layouts(request)
+                    output = await self.agent.discover(request, native_layouts=layouts)
+            else:
+                output = await self.agent.discover(request)
             validate_discovery(request, output)
             return {"contractVersion": DISCOVERY_CONTRACT_VERSION, "model": self.model_name,
                     "promptVersion": DISCOVERY_PROMPT_VERSION, **output.model_dump()}

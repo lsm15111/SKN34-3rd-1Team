@@ -61,6 +61,8 @@ import ai.govbiz.core.applicationpreparation.client.ai.ApplicationDocumentMcpCli
 import ai.govbiz.core.applicationpreparation.client.ai.dto.AiDocumentGenerationRequest
 import ai.govbiz.core.applicationpreparation.client.ai.dto.AiDocumentGenerationPayload
 import ai.govbiz.core.applicationpreparation.client.ai.dto.AiDocumentConfigurationPayload
+import ai.govbiz.core.applicationpreparation.client.ai.dto.AiDocumentMappingPayload
+import ai.govbiz.core.applicationpreparation.client.ai.dto.AiDocumentMappingRequest
 import ai.govbiz.core.applicationpreparation.service.exception.ApplicationDocumentException
 import ai.govbiz.core.applicationpreparation.domain.ApplicationFormManifest
 import ai.govbiz.core.applicationpreparation.domain.ApplicationFormDiscoveryConfiguration
@@ -697,11 +699,125 @@ class ApplicationPreparationApiIntegrationTest {
         mvc.perform(get("$BASE/$id/documents/$fileId/download").cookie(other)).andExpect(status().isNotFound())
         mvc.perform(get("$BASE/$id/documents/$fileId/download")).andExpect(status().isUnauthorized())
         save(2, "수정한 사업")
-        mvc.perform(get("$BASE/$id/documents").cookie(owner)).andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0))
+        mvc.perform(get("$BASE/$id/documents").cookie(owner)).andExpect(status().isOk())
+            .andExpect(jsonPath("$.length()").value(1)).andExpect(jsonPath("$[0].id").value(fileId))
         val revised = generate(3)
         org.junit.jupiter.api.Assertions.assertNotEquals(fileId, revised)
         val revisedBytes = mvc.perform(get("$BASE/$id/documents/$revised/download").cookie(owner)).andExpect(status().isOk()).andReturn().response.contentAsByteArray
         assertEquals("수정한 사업", documentEditor.inspect(revisedBytes, "HWPX").targets.single { it.id == target.id }.text)
+    }
+
+    @Test
+    fun generatesPartialDraftWithoutSendingUnmappedAnswersAndPreservesItsRevisionSnapshot() {
+        val original = requireNotNull(javaClass.getResourceAsStream("/combinationreview/general.hwpx")).readBytes()
+        val target = documentEditor.inspect(original, "HWPX").targets.first { it.text.isBlank() }
+        `when`(bizInfoAttachments.collect("BIZINFO", DISCOVERY_PROGRAM_ID)).thenReturn(SupportProgramAttachments("동적 지원사업", listOf(
+            SupportProgramAttachment("https://www.bizinfo.go.kr/file", "신청양식.hwpx", "HWPX", original),
+        ), emptyList()))
+        `when`(documentParser.parse(original, "HWPX")).thenReturn(listOf(SupportProgramDocumentBlock(DISCOVERY_LOCATOR, DISCOVERY_BLOCK_TEXT)))
+        val discovered = json.readValue(resource("discovery-contract-response.json"), AiApplicationFormDiscoveryPayload::class.java)
+        val firstField = discovered.forms.single().sections.single().fields.single().copy(required = true)
+        val consent = firstField.copy(fieldKey = "privacy-consent", label = "개인정보 동의", guidance = "동의 여부를 입력합니다.",
+            required = false, evidenceQuote = "지원 대상")
+        `when`(ai.discover(any(AiApplicationFormDiscoveryRequest::class.java) ?: fallbackDiscoveryRequest())).thenReturn(discovered.copy(forms = listOf(
+            discovered.forms.single().copy(sections = listOf(discovered.forms.single().sections.single().copy(fields = listOf(firstField, consent))))
+        )))
+        val mappingFallback = AiDocumentMappingRequest(
+            sourceBase64 = "", sourceSha256 = "", format = "hwpx", scope = "test", fields = emptyList())
+        `when`(documentMcp.map(any(AiDocumentMappingRequest::class.java) ?: mappingFallback)).thenAnswer { invocation ->
+            val request = invocation.getArgument<AiDocumentMappingRequest>(0)
+            val placement = ApplicationDocumentPlacement("business-plan:business-overview", target.id)
+            AiDocumentMappingPayload("application-document-mcp-v1", "b".repeat(64), request.sourceSha256,
+                "native-map-v2", "test-stub", listOf(placement), listOf(target.id), mapOf(
+                    "sourceSha256" to request.sourceSha256,
+                    "targets" to listOf(mapOf("targetId" to target.id, "editable" to true, "currentText" to "")),
+                    "unmappedFieldIds" to listOf("business-plan:privacy-consent")))
+        }
+        val generationFallback = AiDocumentGenerationRequest(sourceBase64 = "", sourceSha256 = "", format = "hwpx", answerRevision = 1, facts = emptyList(), scope = "test")
+        `when`(documentMcp.generate(any(AiDocumentGenerationRequest::class.java) ?: generationFallback)).thenAnswer { invocation ->
+            val request = invocation.getArgument<AiDocumentGenerationRequest>(0)
+            assertEquals(listOf("business-plan:business-overview"), request.facts.map { it.id })
+            assertEquals(listOf("business-plan:business-overview"), request.bindings.map { it.factId }.distinct())
+            val placement = listOf(ApplicationDocumentPlacement("business-plan:business-overview", target.id))
+            val bytes = documentEditor.fill(original, "HWPX", request.facts, placement)
+            val hash = java.security.MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+            AiDocumentGenerationPayload("application-document-mcp-v1", "b".repeat(64), request.sourceSha256, request.answerRevision,
+                java.util.Base64.getEncoder().encodeToString(bytes), hash, "c".repeat(64), "native-map-v2", "test-stub",
+                mapOf("verified" to 1, "unresolved" to 0), placement, emptyMap(), mapOf("answerRevision" to request.answerRevision))
+        }
+
+        val discoveryResponse = mvc.perform(post("$BASE/forms/discover").cookie(owner).header(HttpHeaders.ORIGIN, ORIGIN).contentType(MediaType.APPLICATION_JSON)
+            .content("""{"sourceCode":"BIZINFO","sourceProgramId":"$DISCOVERY_PROGRAM_ID"}""")).andExpect(status().isOk()).andReturn().response
+        val version = json.readTree(discoveryResponse.contentAsString).path("items").path(0).path("formVersionId").asString()
+        activateStored(version)
+        val created = mvc.perform(post(BASE).cookie(owner).header(HttpHeaders.ORIGIN, ORIGIN).contentType(MediaType.APPLICATION_JSON)
+            .content("""{"sourceCode":"BIZINFO","sourceProgramId":"$DISCOVERY_PROGRAM_ID","formVersionId":"$version","serviceField":"GENERAL"}"""))
+            .andExpect(status().isCreated()).andReturn().response
+        val id = json.readTree(created.contentAsString).path("id").asLong()
+        fun save(revision: Long, overview: String, consentValue: String) {
+            mvc.perform(put("$BASE/$id/sections/business-plan/inputs").cookie(owner).header(HttpHeaders.ORIGIN, ORIGIN).contentType(MediaType.APPLICATION_JSON)
+                .content(json.writeValueAsString(mapOf("expectedRevision" to revision, "facts" to listOf(
+                    mapOf("fieldKey" to "business-overview", "status" to "PROVIDED", "value" to overview, "sourceText" to overview),
+                    mapOf("fieldKey" to "privacy-consent", "status" to "PROVIDED", "value" to consentValue, "sourceText" to consentValue))))))
+                .andExpect(status().isOk())
+        }
+        save(1, "가상기업 홍보 계획", "동의함")
+        val generated = mvc.perform(post("$BASE/$id/documents").cookie(owner).header(HttpHeaders.ORIGIN, ORIGIN).contentType(MediaType.APPLICATION_JSON)
+            .content("""{"expectedRevision":2}""")).andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].filledAnswerCount").value(1))
+            .andExpect(jsonPath("$[0].unfilledAnswerCount").value(1))
+            .andExpect(jsonPath("$[0].unfilledAnswers[0].fieldId").value("business-plan:privacy-consent"))
+            .andExpect(jsonPath("$[0].unfilledAnswers[0].fieldLabel").value("사업 계획 / 개인정보 동의"))
+            .andExpect(jsonPath("$[0].unfilledAnswers[0].value").value("동의함"))
+            .andExpect(jsonPath("$[0].unfilledAnswers[0].reason").value("INPUT_LOCATION_NOT_FOUND"))
+            .andReturn().response
+        val fileId = json.readTree(generated.contentAsString).path(0).path("id").asLong()
+        save(2, "수정한 홍보 계획", "동의하지 않음")
+        mvc.perform(get("$BASE/$id/documents").cookie(owner)).andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].id").value(fileId))
+            .andExpect(jsonPath("$[0].inputRevision").value(2))
+            .andExpect(jsonPath("$[0].unfilledAnswers[0].value").value("동의함"))
+        mvc.perform(get("$BASE/$id/documents").cookie(other)).andExpect(status().isNotFound())
+    }
+
+    @Test
+    fun doesNotReturnTheOriginalWhenNoSavedAnswerHasAWritableLocation() {
+        val original = requireNotNull(javaClass.getResourceAsStream("/combinationreview/general.hwpx")).readBytes()
+        `when`(bizInfoAttachments.collect("BIZINFO", DISCOVERY_PROGRAM_ID)).thenReturn(SupportProgramAttachments("동적 지원사업", listOf(
+            SupportProgramAttachment("https://www.bizinfo.go.kr/file", "신청양식.hwpx", "HWPX", original),
+        ), emptyList()))
+        `when`(documentParser.parse(original, "HWPX")).thenReturn(listOf(SupportProgramDocumentBlock(DISCOVERY_LOCATOR, DISCOVERY_BLOCK_TEXT)))
+        val discovered = json.readValue(resource("discovery-contract-response.json"), AiApplicationFormDiscoveryPayload::class.java)
+        val field = discovered.forms.single().sections.single().fields.single().copy(required = false)
+        `when`(ai.discover(any(AiApplicationFormDiscoveryRequest::class.java) ?: fallbackDiscoveryRequest())).thenReturn(discovered.copy(forms = listOf(
+            discovered.forms.single().copy(sections = listOf(discovered.forms.single().sections.single().copy(fields = listOf(field))))
+        )))
+        val mappingFallback = AiDocumentMappingRequest(
+            sourceBase64 = "", sourceSha256 = "", format = "hwpx", scope = "test", fields = emptyList())
+        `when`(documentMcp.map(any(AiDocumentMappingRequest::class.java) ?: mappingFallback)).thenAnswer { invocation ->
+            val request = invocation.getArgument<AiDocumentMappingRequest>(0)
+            AiDocumentMappingPayload("application-document-mcp-v1", "b".repeat(64), request.sourceSha256,
+                "native-map-v2", "test-stub", emptyList(), emptyList(), mapOf(
+                    "sourceSha256" to request.sourceSha256, "targets" to emptyList<Any>(),
+                    "unmappedFieldIds" to listOf("business-plan:business-overview")))
+        }
+        val discoveryResponse = mvc.perform(post("$BASE/forms/discover").cookie(owner).header(HttpHeaders.ORIGIN, ORIGIN).contentType(MediaType.APPLICATION_JSON)
+            .content("""{"sourceCode":"BIZINFO","sourceProgramId":"$DISCOVERY_PROGRAM_ID"}""")).andExpect(status().isOk()).andReturn().response
+        val version = json.readTree(discoveryResponse.contentAsString).path("items").path(0).path("formVersionId").asString()
+        activateStored(version)
+        val created = mvc.perform(post(BASE).cookie(owner).header(HttpHeaders.ORIGIN, ORIGIN).contentType(MediaType.APPLICATION_JSON)
+            .content("""{"sourceCode":"BIZINFO","sourceProgramId":"$DISCOVERY_PROGRAM_ID","formVersionId":"$version","serviceField":"GENERAL"}"""))
+            .andExpect(status().isCreated()).andReturn().response
+        val id = json.readTree(created.contentAsString).path("id").asLong()
+        mvc.perform(put("$BASE/$id/sections/business-plan/inputs").cookie(owner).header(HttpHeaders.ORIGIN, ORIGIN).contentType(MediaType.APPLICATION_JSON)
+            .content("""{"expectedRevision":1,"facts":[{"fieldKey":"business-overview","status":"PROVIDED","value":"가상 답변","sourceText":"가상 답변"}]}"""))
+            .andExpect(status().isOk())
+        mvc.perform(post("$BASE/$id/documents").cookie(owner).header(HttpHeaders.ORIGIN, ORIGIN).contentType(MediaType.APPLICATION_JSON)
+            .content("""{"expectedRevision":2}""")).andExpect(status().isUnprocessableContent())
+            .andExpect(jsonPath("$.code").value("APPLICATION_DOCUMENT_NO_WRITABLE_INPUT"))
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM application_document_file WHERE preparation_id = ?", Int::class.java, id))
+        verify(documentMcp, org.mockito.Mockito.never()).generate(any(AiDocumentGenerationRequest::class.java) ?: AiDocumentGenerationRequest(
+            sourceBase64 = "", sourceSha256 = "", format = "hwpx", answerRevision = 1, facts = emptyList(), scope = "test"))
     }
 
     private fun create(session: Cookie, field: String = "TECHNICAL_SUPPORT"): Long {

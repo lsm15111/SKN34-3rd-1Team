@@ -26,6 +26,19 @@ const documentsSchema = z.array(z.object({
   fileName: z.string().min(1).max(500).regex(/^[^\\/]+\.(hwp|hwpx|pdf)$/i).refine((name) => [...name].every((character) => character.charCodeAt(0) >= 32)),
   mediaType: z.enum(['application/pdf', 'application/x-hwp', 'application/hwp+zip']),
   size: z.number().int().positive().max(32 * 1024 * 1024),
+  filledAnswerCount: z.number().int().nonnegative().max(200).nullable(),
+  unfilledAnswerCount: z.number().int().nonnegative().max(200).nullable(),
+  unfilledAnswers: z.array(z.object({
+    fieldId: z.string().min(1).max(129), fieldLabel: z.string().min(1).max(210), value: z.string().min(1).max(2000),
+    reason: z.enum(['INPUT_LOCATION_NOT_FOUND', 'AUTO_FILL_UNSUPPORTED']),
+  })).max(200),
+}).superRefine((file, context) => {
+  if ((file.filledAnswerCount === null) !== (file.unfilledAnswerCount === null)
+    || (file.unfilledAnswerCount !== null && file.unfilledAnswerCount !== file.unfilledAnswers.length)
+    || (file.filledAnswerCount === null && file.unfilledAnswers.length > 0)
+    || new Set(file.unfilledAnswers.map((answer) => answer.fieldId)).size !== file.unfilledAnswers.length) {
+    context.addIssue({ code: 'custom', message: '문서 답변 집계가 일치하지 않습니다.' })
+  }
 })).max(20)
 
 export class ApplicationPreparationRepositoryImpl implements ApplicationPreparationRepository {

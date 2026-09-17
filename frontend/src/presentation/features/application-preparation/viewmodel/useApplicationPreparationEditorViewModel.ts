@@ -80,6 +80,7 @@ export function useApplicationPreparationEditorViewModel(id: number | null, init
   const submittingGuard = useRef(false)
   const actionController = useRef<AbortController | null>(null)
   const [sectionMessages, setSectionMessages] = useState<Record<string, string>>({})
+  const [deletedAnswerKeys, setDeletedAnswerKeys] = useState<Set<string>>(() => new Set())
   const [busySection, setBusySection] = useState<{ key: string; action: 'save' } | null>(null)
 
   const selectedForm = useMemo(
@@ -306,23 +307,53 @@ export function useApplicationPreparationEditorViewModel(id: number | null, init
 
   const setSectionMessage = useCallback((sectionKey: string, message: string) => {
     setSectionMessages((current) => ({ ...current, [sectionKey]: message }))
+    setDeletedAnswerKeys((current) => {
+      if (!current.has(sectionKey)) return current
+      const next = new Set(current)
+      next.delete(sectionKey)
+      return next
+    })
+  }, [])
+
+  const deleteSectionAnswer = useCallback((answerKey: string) => {
+    setSectionMessages((current) => ({ ...current, [answerKey]: '' }))
+    setDeletedAnswerKeys((current) => new Set(current).add(answerKey))
   }, [])
 
   async function saveDocumentAnswers(section: ApplicationFormSection) {
     if (!preparation || busySection || actionController.current) return
-    const answers = section.fields.map((field) => ({ field, value: (sectionMessages[`${section.key}:${field.key}`] ?? '').trim() })).filter(({ value }) => value)
-    if (answers.length === 0) return
-    const invalid = answers.find(({ field, value }) => [...value].length > 2000 || (field.options?.length && value !== '미정' && !field.options.includes(value)))
-    if (invalid) {
-      setError(new Error(`${invalid.field.label}: 답변은 2,000자 이내로 입력하고 선택형 질문은 공식 선택지를 선택해 주세요.`))
+    const keys = section.fields.map((field) => `${section.key}:${field.key}`)
+    if (!keys.some((key) => Object.hasOwn(sectionMessages, key) || deletedAnswerKeys.has(key))) return
+    const clearedExisting = section.fields.find((field) => {
+      const key = `${section.key}:${field.key}`
+      return Object.hasOwn(sectionMessages, key) && !sectionMessages[key].trim() && !deletedAnswerKeys.has(key)
+        && section.facts.some((fact) => fact.fieldKey === field.key)
+    })
+    if (clearedExisting) {
+      setError(new Error(`${clearedExisting.label}: 기존 답변을 없애려면 답변 삭제를 눌러 주세요.`))
       return
     }
-    const merged = new Map<string, NewApplicationPreparationFact>(section.facts.map((fact) => [fact.fieldKey, {
-      fieldKey: fact.fieldKey, status: fact.status, value: fact.value, sourceText: fact.sourceText,
-    }]))
-    for (const { field, value } of answers) {
-      merged.set(field.key, { fieldKey: field.key, status: value === '미정' ? 'UNKNOWN' : 'PROVIDED',
-        value: value === '미정' ? null : value, sourceText: `${field.label}: ${value}` })
+    const facts = section.fields.map((field): NewApplicationPreparationFact | null => {
+      const key = `${section.key}:${field.key}`
+      const existing = section.facts.find((fact) => fact.fieldKey === field.key)
+      if (deletedAnswerKeys.has(key)) return null
+      if (!Object.hasOwn(sectionMessages, key)) return existing ? {
+        fieldKey: existing.fieldKey, status: existing.status, value: existing.value, sourceText: existing.sourceText,
+      } : null
+      const value = sectionMessages[key].trim()
+      if (!value) return null
+      return { fieldKey: field.key, status: value === '미정' ? 'UNKNOWN' : 'PROVIDED',
+        value: value === '미정' ? null : value, sourceText: `${field.label}: ${value}` }
+    }).filter((fact): fact is NewApplicationPreparationFact => fact !== null)
+    const invalid = facts.find((fact) => {
+      const field = section.fields.find((candidate) => candidate.key === fact.fieldKey)!
+      const value = fact.status === 'UNKNOWN' ? '미정' : fact.value!
+      return [...value].length > 2000 || Boolean(field.options?.length && value !== '미정' && !field.options.includes(value))
+    })
+    if (invalid) {
+      const field = section.fields.find((candidate) => candidate.key === invalid.fieldKey)!
+      setError(new Error(`${field.label}: 답변은 2,000자 이내로 입력하고 선택형 질문은 공식 선택지를 선택해 주세요.`))
+      return
     }
     const controller = new AbortController()
     actionController.current = controller
@@ -330,13 +361,18 @@ export function useApplicationPreparationEditorViewModel(id: number | null, init
     setError(null)
     try {
       const updated = await useCase.replaceInputs(preparation.id, section.key, {
-        expectedRevision: preparation.inputRevision, facts: [...merged.values()],
+        expectedRevision: preparation.inputRevision, facts,
       }, controller.signal)
       if (controller.signal.aborted || actionController.current !== controller) return
       setPreparation(updated)
       setSectionMessages((current) => {
         const remaining = { ...current }
-        for (const { field } of answers) delete remaining[`${section.key}:${field.key}`]
+        for (const key of keys) delete remaining[key]
+        return remaining
+      })
+      setDeletedAnswerKeys((current) => {
+        const remaining = new Set(current)
+        for (const key of keys) remaining.delete(key)
         return remaining
       })
     } catch (caught) {
@@ -383,8 +419,10 @@ export function useApplicationPreparationEditorViewModel(id: number | null, init
     load,
     create,
     sectionMessages,
+    deletedAnswerKeys,
     busySection,
     setSectionMessage,
+    deleteSectionAnswer,
     saveDocumentAnswers,
   }
 }

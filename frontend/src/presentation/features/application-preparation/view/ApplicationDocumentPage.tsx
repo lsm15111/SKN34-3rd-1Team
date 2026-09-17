@@ -34,6 +34,7 @@ function DocumentResults({ id }: { id: number }) {
   const unanswered = preparation?.form.sections.flatMap((section) => section.fields
     .filter((field) => !section.facts.some((fact) => fact.fieldKey === field.key && fact.status === 'PROVIDED'))
     .map((field) => `${section.title} · ${field.label}`)) ?? []
+  const reasonLabel = (reason: ApplicationDocument['unfilledAnswers'][number]['reason']) => reason === 'AUTO_FILL_UNSUPPORTED' ? '자동 기입 미지원' : '입력 위치 확인 불가'
 
   useEffect(() => {
     const controller = new AbortController()
@@ -50,8 +51,7 @@ function DocumentResults({ id }: { id: number }) {
           if (controller.signal.aborted) abort()
         })
         const documents = await useCase.documents(id, controller.signal)
-        if (documents.length > 0) {
-          if (documents.some((file) => file.inputRevision !== revision)) throw new Error('답변이 변경되었습니다. 답변 입력에서 최신 내용을 확인해 주세요.')
+        if (documents.some((file) => file.inputRevision === revision)) {
           return documents
         }
       }
@@ -68,9 +68,10 @@ function DocumentResults({ id }: { id: number }) {
         if (requestedRevision.current !== null) {
           const revision = Number(requestedRevision.current)
           if (!Number.isSafeInteger(revision) || revision !== detail.inputRevision) throw new Error('답변이 변경되었습니다. 답변 입력으로 돌아가 최신 내용을 확인한 뒤 다시 생성해 주세요.')
-          if (documents.length === 0) {
+          if (!documents.some((file) => file.inputRevision === revision)) {
             try {
-              documents = await useCase.generateDocuments(id, revision, controller.signal)
+              const generated = await useCase.generateDocuments(id, revision, controller.signal)
+              documents = [...generated, ...documents.filter((file) => !generated.some((created) => created.id === file.id))]
             } catch (caught) {
               if (controller.signal.aborted) throw caught
               if (caught instanceof ApplicationPreparationError && caught.code === 'APPLICATION_PREPARATION_RUN_CONFLICT') {
@@ -124,11 +125,16 @@ function DocumentResults({ id }: { id: number }) {
       {error && preparation && <Link className={s.button} to={`${appPaths.applicationPreparationNew}?${new URLSearchParams({ sourceCode: preparation.form.sourceCode, sourceProgramId: preparation.form.sourceProgramId })}`}>기존 답변을 보관하고 입력칸별 양식 확인</Link>}
       {!busy && !error && files.length === 0 && <p className={s.notice}>현재 답변으로 생성된 문서가 없습니다. 답변 입력에서 초안 생성하기를 눌러 주세요.</p>}
       {!busy && files.map((file, index) => <section className={s.card} key={file.id} aria-label={`신청문서 ${index + 1}`}>
-        <h2 className={s.cardTitle}>신청문서 {index + 1}</h2>
+        <h2 className={s.cardTitle}>{file.unfilledAnswerCount && file.unfilledAnswerCount > 0 ? '일부 항목 미기입 초안' : `신청문서 ${index + 1}`}</h2>
         <p className="break-all font-semibold">{file.fileName}</p>
         <p className={s.muted}>원본과 같은 {file.fileName.split('.').pop()?.toUpperCase()} 형식 · 답변 버전 {file.inputRevision} · {Math.ceil(file.size / 1024)} KB</p>
         {preparation && <><p className={s.label}>문서에 포함된 작성 항목</p><ul className={s.fieldList}>{preparation.form.sections.map((section) => <li key={section.key}>{section.title}</li>)}</ul></>}
         <button type="button" className={s.primary} disabled={downloading !== null} onClick={() => { void download(file) }}>{downloading === file.id ? '다운로드 중…' : `신청문서 ${index + 1} 다운로드`}</button>
+        {file.filledAnswerCount !== null && file.unfilledAnswerCount !== null && <p className={s.muted}>{file.filledAnswerCount}개 기입 / {file.unfilledAnswerCount}개 미기입</p>}
+        {file.unfilledAnswers.length > 0 && <div className={s.warning} aria-label="자동 기입하지 못한 답변">
+          <p className={s.label}>자동 기입하지 못한 답변</p>
+          <ul>{file.unfilledAnswers.map((answer) => <li key={answer.fieldId}><strong>{answer.fieldLabel}</strong>: {answer.value} — {reasonLabel(answer.reason)}</li>)}</ul>
+        </div>}
         <p className={s.muted}>문서를 다운로드해 내용을 확인하세요. 내려받은 파일에서 직접 수정하거나, 답변 입력으로 돌아가 정보를 고친 뒤 다시 생성할 수 있습니다.</p>
       </section>)}
       {!busy && files.length > 0 && unanswered.length > 0 && <section className={s.warning} aria-label="답변이 없어 기입하지 않은 항목">

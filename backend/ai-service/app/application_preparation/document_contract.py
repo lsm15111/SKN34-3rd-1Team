@@ -12,12 +12,12 @@ from app.application_preparation.models import Contract
 from app.application_preparation.document import DocumentBox, DocumentFact, DocumentTarget, DocumentPlacement
 
 CONTRACT = "application-document-mcp-v1"
-MAP_VERSION = "native-map-v5-atomic-fields"
+MAP_VERSION = "native-map-v6-hangeul-ffdetr"
 PLAN_VERSION = "confirmed-facts-bound-v5-native-pdf"
 ENGINES = {
     "hwp": "kr.dogfoot/hwplib@1.1.11+govbiz-ranges-v1",
     "hwpx": "pblsketch/Hangeul-mcp@b6fef153714e0cc9ce566df0da4082fc57c4fda4+govbiz-ranges-v4-body-positions",
-    "pdf": "AryanBV/pdf-edit-mcp@d4527e62b59433ad02f31a0511db218a2eeec1d3+govbiz-deletion-proof-v4+printed-regions-v1+pdfbox-v6",
+    "pdf": "AryanBV/pdf-edit-mcp@d4527e62b59433ad02f31a0511db218a2eeec1d3+govbiz-deletion-proof-v4+FFDetr@56f4e4235e28dcb2953513dc020bb191a2f54cfe+pdfbox-v6",
 }
 KORDOC_VERSION = "chrisryugj/kordoc@f715573df1712d415604ac949603a00e387cd3d7+pdfjs-dist@4.10.38"
 PIPELINE_VERSION = hashlib.sha256(json.dumps([CONTRACT, MAP_VERSION, PLAN_VERSION, ENGINES, KORDOC_VERSION], sort_keys=True).encode()).hexdigest()
@@ -151,7 +151,28 @@ class MappingSelection(Contract):
 
 def mapping_label_key(text: str) -> str:
     text = re.sub(r"^\s*[①-⑳]?\s*", "", text)
-    return "".join(c for c in unicodedata.normalize("NFKC", text).casefold() if c.isalnum())
+    key = "".join(c for c in unicodedata.normalize("NFKC", text).casefold() if c.isalnum())
+    # Official forms use both spellings for the same year/month/day column.
+    return key.replace("연월일", "년월일")
+
+
+def mapping_label_matches(label: str, target: NativeTarget, guidance: str = "") -> bool:
+    field = mapping_label_key(label.partition(" / ")[2] or label)
+    labels = [mapping_label_key(value) for value in target.nativeLocator.get("fieldLabels", [])]
+    if not labels:
+        return True
+    years = set(re.findall(r"(?:19|20)\d{2}", field))
+    if years:
+        native_years = set(re.findall(r"(?:19|20)\d{2}", " ".join(labels)))
+        if native_years and not years <= native_years:
+            return False
+        row_labels = [mapping_label_key(value) for value in target.nativeLocator.get("rowLabels", [])]
+        row_evidence = field
+        if re.fullmatch(r"(?:19|20)\d{2}(?:년|년도)?", field):
+            row_evidence += mapping_label_key(guidance)
+        if native_years and row_labels and not any(len(value) >= 2 and value in row_evidence for value in row_labels):
+            return False
+    return any(field == value or len(value) >= 2 and (field in value or value in field) for value in labels)
 
 
 def validate_mapping(request: MapDocumentRequest, document: DocumentMap, selection: MappingSelection):
@@ -181,10 +202,11 @@ def validate_mapping(request: MapDocumentRequest, document: DocumentMap, selecti
             raise DocumentError("MAPPING_FAILED", reason="REPEATED_ROW_NOT_SELECTED")
         box = binding.box
         field = next(f for f in request.fields if f.id == binding.factId)
-        field_label = mapping_label_key(field.label.partition(" / ")[2] or field.label)
-        native_labels = target.nativeLocator.get("fieldLabels", [])
-        if native_labels and not any(len(mapping_label_key(label)) >= 2 and
-                (field_label in mapping_label_key(label) or mapping_label_key(label) in field_label) for label in native_labels):
+        candidates = {candidate.targetId for candidate in document.targets if candidate.editable
+                      and candidate.nativeLocator.get("fieldLabels") and mapping_label_matches(field.label, candidate, field.guidance)}
+        if candidates and binding.targetId not in candidates:
+            raise DocumentError("MAPPING_FAILED", reason="FIELD_LABEL_MISMATCH")
+        if not mapping_label_matches(field.label, target, field.guidance):
             raise DocumentError("MAPPING_FAILED", reason="FIELD_LABEL_MISMATCH")
         if (box is not None) != (target.kind == "PDF_PAGE"):
             raise DocumentError("MAPPING_FAILED", reason="MAPPING_BOX_KIND_MISMATCH")

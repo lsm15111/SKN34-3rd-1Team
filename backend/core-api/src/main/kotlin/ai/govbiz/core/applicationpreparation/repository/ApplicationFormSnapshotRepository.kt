@@ -61,6 +61,7 @@ class ApplicationFormSnapshotRepository(
         promptVersion: String,
     ): List<ApplicationFormManifest> =
         mapper.findByProgram(sourceCode, sourceProgramId, sourceFingerprint, parserVersion, extractionModel, promptVersion)
+            .sortedBy { row -> row.formVersionId }
             .map { row -> row.toManifest() }
 
     private fun ApplicationFormSnapshotDbRow.toManifest(): ApplicationFormManifest =

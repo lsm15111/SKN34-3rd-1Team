@@ -4,6 +4,7 @@ import ai.govbiz.core.account.domain.Account
 import ai.govbiz.core.applicationpreparation.service.ApplicationDocumentService
 import ai.govbiz.core.applicationpreparation.domain.ApplicationDocumentFile
 import ai.govbiz.core.applicationpreparation.controller.dto.ApplicationDocumentResponse
+import ai.govbiz.core.applicationpreparation.controller.dto.ApplicationDocumentUnfilledAnswerResponse
 import ai.govbiz.core.applicationpreparation.controller.dto.GenerateApplicationDocumentsRequest
 import jakarta.validation.Valid
 import jakarta.validation.constraints.Min
@@ -35,6 +36,8 @@ class ApplicationDocumentController(private val service: ApplicationDocumentServ
     }
 
     private fun response(files: List<ApplicationDocumentFile>) = ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(files.map {
-        ApplicationDocumentResponse(it.id, it.inputRevision, it.fileName, it.mediaType, it.bytes.size)
+        ApplicationDocumentResponse(it.id, it.inputRevision, it.fileName, it.mediaType, it.bytes.size,
+            it.filledAnswerCount, it.filledAnswerCount?.let { _ -> it.unfilledAnswers.size },
+            it.unfilledAnswers.map { answer -> ApplicationDocumentUnfilledAnswerResponse(answer.fieldId, answer.fieldLabel, answer.value, answer.reason) })
     })
 }

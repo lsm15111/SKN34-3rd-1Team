@@ -115,7 +115,22 @@ export type ApplicationContentVersion = {
   confirmedAt: string | null
 }
 
-export type ApplicationDocument = { id: number; inputRevision: number; fileName: string; mediaType: string; size: number }
+export type ApplicationDocumentUnfilledAnswer = {
+  fieldId: string
+  fieldLabel: string
+  value: string
+  reason: 'INPUT_LOCATION_NOT_FOUND' | 'AUTO_FILL_UNSUPPORTED'
+}
+export type ApplicationDocument = {
+  id: number
+  inputRevision: number
+  fileName: string
+  mediaType: string
+  size: number
+  filledAnswerCount: number | null
+  unfilledAnswerCount: number | null
+  unfilledAnswers: ApplicationDocumentUnfilledAnswer[]
+}
 export type GenerateApplicationDraft = { expectedRevision: number; expectedVersionId: number | null; requestKey: string }
 export type ConfirmApplicationContent = { expectedRevision: number; expectedVersionId: number }
 export type SaveApplicationContent = ConfirmApplicationContent & { content: string }

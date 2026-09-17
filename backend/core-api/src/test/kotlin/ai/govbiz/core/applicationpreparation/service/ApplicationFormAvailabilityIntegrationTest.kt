@@ -116,6 +116,34 @@ class ApplicationFormAvailabilityIntegrationTest {
         assertThrows(ApplicationFormDiscoveryException::class.java) { discovery.discoverQueued("BIZINFO", id) {} }
         verify(ai, never()).discover(any(AiApplicationFormDiscoveryRequest::class.java) ?: AiApplicationFormDiscoveryRequest("application-form-discovery-v1", "BIZINFO", id, program.title, emptyList()))
     }
+
+    @Test fun cachedFormsWithLargeDocumentMapsRemainReadableAtDefaultSortBuffer() {
+        configureFiles(two=true)
+        `when`(ai.discover(any(AiApplicationFormDiscoveryRequest::class.java) ?: AiApplicationFormDiscoveryRequest("application-form-discovery-v1", "BIZINFO", id, program.title, emptyList()))).thenReturn(payload(true))
+        availability.register("BIZINFO", id, "a".repeat(64))
+        val first = discovery.discoverQueued("BIZINFO", id) {}
+        val largeMap = mapOf("targets" to (0 until 300).map { index ->
+            mapOf("targetId" to "cell-$index", "currentText" to "가상 표 문맥 & 한글\n".repeat(250))
+        })
+        first.forms.forEach { form ->
+            snapshots.attachDocumentMap(form.formVersionId, ApplicationDocumentMapSnapshot(
+                "application-document-mcp-v1", "large-map-test", form.attachmentSha256,
+                "test-map", "test-engine", emptyList(), emptyList(), largeMap))
+        }
+        val row = jdbc.queryForMap("SELECT source_fingerprint, parser_version, extraction_model, extraction_prompt_version FROM application_form_snapshot WHERE form_version_id=?", first.forms.first().formVersionId)
+        TransactionTemplate(transactions).executeWithoutResult {
+            val oldBuffer = jdbc.queryForObject("SELECT @@SESSION.sort_buffer_size", Long::class.java)!!
+            try {
+                jdbc.execute("SET SESSION sort_buffer_size = 262144")
+                val actual = snapshots.findByProgram("BIZINFO", id, row["source_fingerprint"] as String,
+                    row["parser_version"] as String, row["extraction_model"] as String, row["extraction_prompt_version"] as String)
+                assertEquals(first.forms.map { it.formVersionId }.sorted(), actual.map { it.formVersionId })
+                assertTrue(actual.all { it.documentMapSnapshot?.documentMap == largeMap })
+            } finally {
+                jdbc.execute("SET SESSION sort_buffer_size = $oldBuffer")
+            }
+        }
+    }
     @Test fun multipleSnapshotsBecomeAvailableAndUnchangedInputsDoNotCallAiAgain() {
         configureFiles(two=true)
         `when`(ai.discover(any(AiApplicationFormDiscoveryRequest::class.java) ?: AiApplicationFormDiscoveryRequest("application-form-discovery-v1", "BIZINFO", id, program.title, emptyList()))).thenReturn(payload(true))

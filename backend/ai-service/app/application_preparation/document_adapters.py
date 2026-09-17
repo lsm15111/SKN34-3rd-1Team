@@ -1,6 +1,6 @@
 """Concrete integrations for the selected file editors (no format fallbacks)."""
+import asyncio
 import base64
-import re
 from collections import defaultdict
 from pathlib import Path
 import shutil
@@ -14,6 +14,11 @@ from app.application_preparation.document_contract import (
     NativeTarget, WritePlan, digest, edited_text,
 )
 from app.application_preparation.document_mcp import document_session
+from app.application_preparation.hwpx_form_analysis import analyze_cells
+from app.application_preparation.pdf_form_detection import checked_regions, MODEL_SHA256
+
+# One short-lived detector per AI worker; do not retain model memory between jobs.
+_pdf_inspection_lock = asyncio.Semaphore(1)
 
 
 def read_output(path: Path, root: Path) -> bytes:
@@ -39,64 +44,22 @@ def validate_hwpx(path: Path):
                 ElementTree.fromstring(data)
 
 
-def hwpx_table_contexts(path: Path) -> dict:
-    ns = {"hp": "http://www.hancom.co.kr/hwpml/2011/paragraph"}
-    text = lambda node: "".join(t.text or "" for t in node.findall('.//hp:t', ns)).strip()
-    result, table_number = {}, 0
-    with zipfile.ZipFile(path) as archive:
-        sections = sorted((name for name in archive.namelist() if re.fullmatch(r'Contents/section\d+\.xml', name)), key=lambda n:int(re.search(r'\d+', n).group()))
-        for section in sections:
-            root = ElementTree.fromstring(archive.read(section))
-            preceding = []
-            for paragraph in root:
-                tables = paragraph.findall('.//hp:tbl', ns)
-                if not tables:
-                    value = text(paragraph)
-                    if value: preceding.append(value[:1000])
-                for table in tables:
-                    table_number += 1
-                    cells = []
-                    for cell in table.findall('./hp:tr/hp:tc', ns):
-                        address, span = cell.find('hp:cellAddr', ns), cell.find('hp:cellSpan', ns)
-                        if address is None or span is None: raise DocumentError("UNSUPPORTED", reason="HWPX_CELL_ADDRESS_MISSING")
-                        cells.append({"row":int(address.get('rowAddr')), "col":int(address.get('colAddr')),
-                            "rows":int(span.get('rowSpan')), "cols":int(span.get('colSpan')), "text":text(cell)})
-                    rows = {row:[c for c in cells if c['row']==row] for row in {c['row'] for c in cells}}
-                    header_rows = {row for row,items in rows.items() if len(items)>1 and all(c['text'] and len(c['text'])<=100 and any(ch.isalpha() for ch in c['text']) for c in items)}
-                    header_cells = [c for c in cells if c['row'] in header_rows]
-                    column_names = sorted({c['text'] for c in header_cells if c['cols'] == 1})
-                    for cell in cells:
-                        left = [c for c in cells if c['row'] <= cell['row'] < c['row']+c['rows'] and c['col']+c['cols'] <= cell['col'] and any(ch.isalpha() for ch in c['text'])]
-                        row_label = max(left,key=lambda c:c['col'])['text'] if left else ''
-                        above = [c for c in header_cells if c['row']+c['rows'] <= cell['row'] and c['col'] <= cell['col'] < c['col']+c['cols']]
-                        column = max(above,key=lambda c:(c['row'],-c['cols'])) if above else None
-                        column_label = column['text'] if column else ''
-                        field_label = column_label if column and column['col']==cell['col'] and column['cols']==cell['cols'] else row_label or column_label
-                        first = max((c['row']+c['rows'] for c in above), default=cell['row'])
-                        groups = [c['text'] for c in left if c['rows']>1]
-                        result[f"t{table_number}.r{cell['row']}.c{cell['col']}"] = {
-                            "section":section, "tableHeadings":preceding[-3:]+groups, "columnLabels":column_names,
-                            "fieldLabels":[field_label] if field_label else [],
-                            "bindingEligible":cell['row'] not in header_rows and (not above or cell['row'] == first or (field_label == row_label and any(c['rows']==1 for c in left)))}
-    return result
-
-
 class HwpxDocumentAdapter:
-    async def inspect(self, path: Path) -> DocumentMap:
+    async def inspect(self, path: Path, fields=(), *, analyze=True) -> DocumentMap:
         validate_hwpx(path)
         async with document_session("hwpx", path.parent) as session:
             result = await session.call("inspect_editable_regions", {"path": str(path), "compact": False})
+            contexts = await analyze_cells(session, path, fields) if analyze else {}
         if result["source_sha256"] != digest(path.read_bytes()):
             raise DocumentError("SOURCE_CHANGED")
         targets = []
-        contexts = hwpx_table_contexts(path)
         for item in [*result["regions"], *result["unsupported_controls"]]:
             locator = {key: item.get(key) for key in ("target", "kind", "section", "table", "row", "col", "paragraph_count")}
-            if item["kind"] == "cell":
+            if item["kind"] == "cell" and analyze:
                 source_context = contexts.get(item["target"])
-                if source_context is None or source_context["section"] != item["section"]:
+                if source_context is None or "".join(source_context["sourceCellText"].split()) != "".join(item["text"].split()):
                     raise DocumentError("SOURCE_CHANGED", reason="HWPX_TABLE_LAYOUT_MISMATCH")
-                locator.update(source_context)
+                locator.update({key: value for key, value in source_context.items() if key != "sourceCellText"})
             context = str({k: v for k, v in locator.items() if v is not None})
             targets.append(NativeTarget(targetId=item["target"], nativeLocator=locator, kind=item["kind"],
                                         currentText=item["text"], context=context[:1000], editable=item["editable"],
@@ -110,7 +73,7 @@ class HwpxDocumentAdapter:
         return DocumentMap(sourceSha256=result["source_sha256"], format="hwpx", engineVersion=ENGINES["hwpx"], targets=targets)
 
     async def apply(self, path: Path, document: DocumentMap, plan: WritePlan, facts: dict[str, str]) -> tuple[bytes, dict]:
-        fresh = await self.inspect(path)
+        fresh = await self.inspect(path, analyze=False)
         targets = {t.targetId: t for t in fresh.targets}
         grouped = defaultdict(list)
         for operation in plan.operations:
@@ -131,6 +94,15 @@ class HwpxDocumentAdapter:
                 edit.update(target=children[0].targetId, kind="paragraph", expected_text=children[0].currentText)
         output = path.parent / "completed.hwpx"
         async with document_session("hwpx", path.parent) as session:
+            # This tool estimates cell width; it is not a Hancom page renderer.
+            fit_values = {}
+            for edit in edits:
+                cell = targets[edit["target"]].nativeLocator.get("parent", edit["target"])
+                if cell.startswith("t"):
+                    fit_values[cell] = edit["value"]
+            fit = await session.call("analyze_formfit", {"path": str(path), "values": fit_values})
+            if any(warning.get("overflow") for warning in fit["warnings"]):
+                raise DocumentError("OVERFLOW", reason="HWPX_CELL_WIDTH_EXCEEDED")
             preview = await session.call("preview_addressed_edits", {"path": str(path), "edits": edits})
             counts = preview["counts"]
             if counts["requested"] != len(edits) or counts["resolved"] != len(edits) or counts["unresolved"] != 0 or preview["unresolved"]:
@@ -150,11 +122,15 @@ class HwpxDocumentAdapter:
         if digest(path.read_bytes()) != document.sourceSha256:
             raise DocumentError("SOURCE_CHANGED")
         return data, {"requested": len(edits), "resolved": len(edits), "applied": len(edits), "verified": len(expected), "unresolved": 0,
-                      "xml": "PASSED", "render": "NOT_RUN", "hancom": "NOT_RUN"}
+                      "xml": "PASSED", "fitChecked": fit["checked"], "fitPolicy": "ESTIMATE_ONLY", "render": "NOT_RUN", "hancom": "NOT_RUN"}
 
 
 class PdfDocumentAdapter:
     async def inspect(self, path: Path, request: GenerateDocumentRequest) -> DocumentMap:
+        async with _pdf_inspection_lock:
+            return await self._inspect(path, request)
+
+    async def _inspect(self, path: Path, request: GenerateDocumentRequest) -> DocumentMap:
         if not path.read_bytes().startswith(b"%PDF-") or not request.pageImages:
             raise DocumentError("UNSUPPORTED")
         fields = {field.targetId: field for field in request.pdfFields}
@@ -174,6 +150,17 @@ class PdfDocumentAdapter:
             geometry = await session.call("govbiz_pdf_text_regions", {"pdf_path": str(path)})
             if geometry["page_count"] != text["page_count"] or len(geometry["pages"]) != text["page_count"]:
                 raise DocumentError("VALIDATION_FAILED", reason="PDF_GEOMETRY_PAGE_MISMATCH")
+            detections = None
+            if not fields:
+                image_paths = []
+                for page, encoded in enumerate(request.pageImages):
+                    image_path = path.parent / f"detection-{page}.png"
+                    image_path.write_bytes(base64.b64decode(encoded, validate=True))
+                    image_paths.append(str(image_path))
+                detections = await session.call("govbiz_pdf_detect_inputs", {"image_paths": image_paths})
+                if (detections["modelSha256"] != MODEL_SHA256 or detections["page_count"] != text["page_count"]
+                        or [page["page"] for page in detections["pages"]] != list(range(text["page_count"]))):
+                    raise DocumentError("VALIDATION_FAILED", reason="PDF_DETECTION_SOURCE_MISMATCH")
             for page, item in enumerate(geometry["pages"]):
                 if item["page"] != page:
                     raise DocumentError("VALIDATION_FAILED", reason="PDF_GEOMETRY_PAGE_MISMATCH")
@@ -183,10 +170,11 @@ class PdfDocumentAdapter:
                         target.editable = False
                         target.unsupportedReason = "PAGE_IS_READ_ONLY"
                 if not fields:
-                    for region in item.get("blankRegions", []):
+                    for region in checked_regions(detections["pages"][page]["detections"], item["regions"], item.get("blankRegions", [])):
                         targets.append(NativeTarget(targetId=f"pdf-blank:{page}:{region['id']}", kind="PDF_INPUT", currentText="",
-                            label=" / ".join(region["labels"])[:1000], context=f"Measured empty region on PDF page {page+1}",
-                            nativeLocator={"page": page, "pageTarget": f"page-{page}", "box": region["box"], "fieldLabels": region["labels"]}))
+                            label=" / ".join(region["labels"])[:1000], context=f"FFDetr input on PDF page {page+1}; no printed-word overlap",
+                            nativeLocator={"page": page, "pageTarget": f"page-{page}", "box": region["box"], "fieldLabels": region["labels"],
+                                           "detectorConfidence": region["confidence"], "detectorSha256": MODEL_SHA256}))
             # Do not use pdf_inspect: upstream swallows individual page failures.
             for page in range(text["page_count"]):
                 layout = await session.call("pdf_get_text_layout", {"pdf_path": str(path), "page": page})

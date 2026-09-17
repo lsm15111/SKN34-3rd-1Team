@@ -19,7 +19,8 @@ it('waits for sequential document analysis but still bounds a stalled generation
 })
 
 it('requests and downloads the native document with credentials and validates binary content', async () => {
-  const file = { id: 8, inputRevision: 3, fileName: '신청서.hwpx', mediaType: 'application/hwp+zip', size: 4 }
+  const file = { id: 8, inputRevision: 3, fileName: '신청서.hwpx', mediaType: 'application/hwp+zip', size: 4,
+    filledAnswerCount: 1, unfilledAnswerCount: 0, unfilledAnswers: [] }
   const fetcher = vi.fn().mockResolvedValueOnce(Response.json([file]))
     .mockResolvedValueOnce(new Response(new Uint8Array([80, 75, 3, 4]), { headers: { 'Content-Type': file.mediaType } }))
     .mockResolvedValueOnce(new Response('<html>login</html>', { headers: { 'Content-Type': 'text/html' } }))
@@ -37,7 +38,8 @@ it('requests and downloads the native document with credentials and validates bi
 
 it('rejects generation results from another revision or without files', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json([])).mockResolvedValueOnce(Response.json([
-    { id: 8, inputRevision: 2, fileName: '신청서.pdf', mediaType: 'application/pdf', size: 4 },
+    { id: 8, inputRevision: 2, fileName: '신청서.pdf', mediaType: 'application/pdf', size: 4,
+      filledAnswerCount: 1, unfilledAnswerCount: 0, unfilledAnswers: [] },
   ])))
   const repository = new ApplicationPreparationRepositoryImpl()
   await expect(repository.generateDocuments(1, 3)).rejects.toThrow('응답 형식')

@@ -14,9 +14,18 @@ data class ApplicationDocumentWritePlan(
     val operations: List<ApplicationDocumentEditOperation>, val unresolvedTargets: List<String>, val scopeTargetIds: List<String>,
 )
 data class ApplicationDocumentFact(val id: String, val label: String, val value: String)
+data class ApplicationDocumentUnfilledAnswer(val fieldId: String, val fieldLabel: String, val value: String, val reason: String)
 data class ApplicationDocumentPlacement(val factId: String, val targetId: String, val box: ApplicationDocumentBox? = null)
 data class ApplicationDocumentInspection(val targets: List<ApplicationDocumentTarget>, val pageImages: List<String> = emptyList(), val pdfFields: List<Map<String, Any?>> = emptyList())
-data class ApplicationDocumentFile(val id: Long, val inputRevision: Long, val fileName: String, val mediaType: String, val bytes: ByteArray)
+data class ApplicationDocumentFile(
+    val id: Long,
+    val inputRevision: Long,
+    val fileName: String,
+    val mediaType: String,
+    val bytes: ByteArray,
+    val filledAnswerCount: Int? = null,
+    val unfilledAnswers: List<ApplicationDocumentUnfilledAnswer> = emptyList(),
+)
 
 /** Shared official-form address binding; contains no user answers. */
 data class ApplicationDocumentMapSnapshot(

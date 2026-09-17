@@ -84,7 +84,8 @@ function deferred<T>() {
   return { promise, resolve, reject }
 }
 
-const documentFile = { id: 81, inputRevision: 3, fileName: '신청서_초안_v3.hwpx', mediaType: 'application/hwp+zip', size: 400 }
+const documentFile = { id: 81, inputRevision: 3, fileName: '신청서_초안_v3.hwpx', mediaType: 'application/hwp+zip', size: 400,
+  filledAnswerCount: 2, unfilledAnswerCount: 0, unfilledAnswers: [] }
 
 it.each(['APPLICATION_PREPARATION_RUN_CONFLICT'])('waits for the existing document after %s without repeating generation', async (code) => {
   vi.useFakeTimers()
@@ -169,8 +170,7 @@ it('moves to a separate results page, generates a native file and returns to sav
   expect(screen.queryByLabelText('작성본 내용')).toBeNull()
   expect(repository.generateDocuments).toHaveBeenCalledWith(12, 3, expect.any(AbortSignal))
   fireEvent.click(screen.getByRole('link', { name: '이전으로 · 답변 수정' }))
-  await screen.findByLabelText('답변 입력')
-  expect(screen.getByText('새봄테크')).toBeTruthy()
+  expect((await screen.findByLabelText('답변 입력') as HTMLTextAreaElement).value).toBe('새봄테크')
 })
 
 it('blocks generation for missing answers or unsaved answers in any section', async () => {
@@ -189,6 +189,18 @@ it('reuses a stored native document on refresh without another generation call',
   mount('/app/application-preparations/12/documents?generate=3')
   await screen.findByRole('button', { name: '신청문서 1 다운로드' })
   expect(repository.generateDocuments).not.toHaveBeenCalled()
+})
+
+it('shows the immutable partial-draft answer summary beside the download', async () => {
+  repository.get.mockResolvedValue(readyPreparation())
+  repository.documents.mockResolvedValue([{ ...documentFile, filledAnswerCount: 1, unfilledAnswerCount: 1, unfilledAnswers: [{
+    fieldId: 'company-overview:consent', fieldLabel: '기업 개요 / 개인정보 동의', value: '동의함', reason: 'INPUT_LOCATION_NOT_FOUND',
+  }] }])
+  mount('/app/application-preparations/12/documents')
+  expect(await screen.findByRole('heading', { name: '일부 항목 미기입 초안' })).toBeTruthy()
+  expect(screen.getByText('1개 기입 / 1개 미기입')).toBeTruthy()
+  expect(screen.getByLabelText('자동 기입하지 못한 답변').textContent).toContain('기업 개요 / 개인정보 동의: 동의함 — 입력 위치 확인 불가')
+  expect(screen.getByRole('button', { name: '신청문서 1 다운로드' })).toBeTruthy()
 })
 
 it('regenerates the document with the revised answers after returning to the input page', async () => {
@@ -641,6 +653,42 @@ describe('application preparation creation and detail', () => {
     expect(screen.queryByText(/공식 양식 위치:/)).toBeNull()
     expect(repository.create).not.toHaveBeenCalled()
     expect(repository.interpret).not.toHaveBeenCalled()
+  })
+
+  it('shows every saved answer in its input instead of retaining it invisibly', async () => {
+    const ready = readyPreparation()
+    ready.form.sections[0].facts[0].value = '기존 저장 업체명'
+    ready.form.sections[0].facts[0].sourceText = '업체명: 기존 저장 업체명'
+    repository.get.mockResolvedValue(ready)
+    mount('/app/application-preparations/12')
+
+    expect((await screen.findByLabelText('답변 입력') as HTMLTextAreaElement).value).toBe('기존 저장 업체명')
+    expect(screen.getByRole('button', { name: '저장된 답변 삭제' })).toBeTruthy()
+    expect((screen.getByRole('button', { name: '문서 답변 저장' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('deletes a saved answer only through the explicit delete action and saves the visible section state', async () => {
+    const ready = readyPreparation()
+    repository.get.mockResolvedValue(ready)
+    const updated = structuredClone(ready)
+    updated.inputRevision = 4
+    updated.form.sections[0].facts = []
+    repository.replaceInputs.mockResolvedValue(updated)
+    mount('/app/application-preparations/12')
+    const input = await screen.findByLabelText('답변 입력') as HTMLTextAreaElement
+
+    fireEvent.change(input, { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: '문서 답변 저장' }))
+    expect((await screen.findByRole('alert')).textContent).toContain('기존 답변을 없애려면 답변 삭제')
+    expect(repository.replaceInputs).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: '저장된 답변 삭제' }))
+    expect(screen.getByText('문서 답변 저장을 누르면 기존 답변이 삭제됩니다.')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '문서 답변 저장' }))
+    await waitFor(() => expect(repository.replaceInputs).toHaveBeenCalledWith(12, 'company-overview', {
+      expectedRevision: 3, facts: [],
+    }, expect.any(AbortSignal)))
+    expect((screen.getByLabelText('답변 입력') as HTMLTextAreaElement).value).toBe('')
   })
 
   it('saves multiple question answers once without AI and retains another document draft', async () => {

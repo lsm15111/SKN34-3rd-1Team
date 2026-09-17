@@ -115,7 +115,8 @@ UNKNOWN은 같은 검토의 새 실행도 차단합니다. [한도·만료·재�
 
 신청 문서 작성 도우미는 `ai.govbiz.core.applicationpreparation`에 구현합니다. V15는 로그인 계정이
 소유한 신청 준비 건의 공고·양식 버전·분야·입력 revision을 저장합니다. V28은 문서 입력과 분리된 진행 단계·revision·변경 시각을 추가합니다. V18 이후 사용자가 선택한 네 제공처 공고의
-공식 PDF/HWP/HWPX에서 발견한 신청 문서와 문항을 파일 hash·파서·모델·프롬프트 버전이 고정된 양식 스냅샷으로 저장합니다.
+공식 PDF/HWP/HWPX에서 발견한 신청 문서와 문항을 파일 hash·파서·모델·프롬프트 버전이 고정된 양식 스냅샷으로 저장합니다. 큰 문서 지도 JSON이 포함된 양식 조회는 DB에서 정렬하지 않고 Repository에서 ID 순서를 유지하므로 MySQL 전역 정렬 버퍼 증설을 요구하지 않습니다.
+HWPX discovery 요청에는 원본 `sourceBase64`·`sourceSha256`을 내부 AI 계약으로 전달합니다. AI가 실제 표 구조를 읽은 뒤 문항을 추출하며 바이너리는 OpenAI로 전달하거나 양식 JSON에 추가 저장하지 않습니다. 새 필드를 받는 AI를 먼저 배포한 뒤 Core를 배포합니다.
 기존 혁신바우처 manifest는 검수 기준과 기존 준비 건 복원을 위해 유지합니다.
 
 로컬 데모 적재는 V35의 신청 준비와 V37의 중복 검토 nullable `demo_seed_key`로 목업과 일반 사용자 작업을 구분합니다.
@@ -862,6 +863,6 @@ Discovery 전용 timeout은 model 210초 < AI run 240초 < Core read 270초 < Wo
 
 ## 신청 문서 MCP 파이프라인
 
-질문·입력칸 대응에서 선택 문항의 미지원 위치는 `documentMap.unmappedFieldIds`로 받으며, 공개 양식 필드의 `documentWritable=false`로 UI에 전달한다. 필수 미매핑 항목은 여전히 거절한다. 입력한 값에 binding이 없으면 `APPLICATION_DOCUMENT_UNMAPPED_INPUT`, 여러 표 열을 한 질문으로 묶은 이전 양식은 `APPLICATION_DOCUMENT_FORM_REANALYSIS_REQUIRED`를 보존해 반환한다. 기존 답변을 바꾸지 않고 `/forms/discovery-jobs`로 다시 분석한 새 양식에서 작성을 시작한다. Core의 원문·빈칸·값 검증은 유지한다.
+질문·입력칸 대응에서 선택 문항의 미지원 위치는 `documentMap.unmappedFieldIds`로 받으며, 공개 양식 필드의 `documentWritable=false`로 UI에 전달한다. 필수 미매핑 항목은 여전히 양식 검증에서 거절한다. 생성 시 저장된 답변은 binding 유무로 분리하고, binding이 있는 답변만 AI 문서 계획과 편집기로 전달한다. 미기입 답변의 식별자·표시명·당시 값·사유와 기입/미기입 답변 수는 생성 파일의 `placements_json.answerSummary`에 저장하므로 이후 답변 수정과 무관하게 목록 재조회에서 같은 값을 반환한다. 과거 파일에 이 정보가 없으면 현재 답변으로 추정하지 않는다. 자동 기입 가능한 답변이 하나도 없으면 `APPLICATION_DOCUMENT_NO_WRITABLE_INPUT`으로 원본 반환 없이 중단한다. 여러 표 열을 한 질문으로 묶은 이전 양식은 `APPLICATION_DOCUMENT_FORM_REANALYSIS_REQUIRED`를 유지한다. Core의 원문·소유권·revision·빈칸·값·결과 검증은 유지한다.
 
-생성 경로는 Core의 공식 첨부·소유권·revision 관리와 AI Service의 형식별 MCP 실행을 연결한다. HWP는 Core hwplib의 구조 검사·범위 편집·재열기, HWPX는 Hangeul 파일 모드, PDF는 MCP 정리 후 PDFBox AcroForm 처리이다. AI는 HWP의 hwpTargets를 받아 지도와 계획만 반환하며 Core가 원본·plan hash·revision·bindings/scope를 독립 검증한다. HWP에 Windows·한컴 한글·브리지 설정이 필요하지 않다. 과거 직접 HWPX 편집 경로는 현재 생성에서 사용하지 않는다. 새 fingerprint로 과거 생성 결과와 구분하고 다운로드 이력을 보존한다. 구현 범위와 미지원 구조·검증 상태는 [MCP 구조](../../docs/application-document-mcp-architecture.md), [설치](../../docs/application-document-mcp-setup.md), [검증 기록](../../docs/application-document-mcp-validation.md)를 확인한다.
+생성 경로는 Core의 공식 첨부·소유권·revision 관리와 AI Service의 형식별 MCP 실행을 연결한다. HWP는 Core hwplib의 구조 검사·범위 편집·재열기, HWPX는 Hangeul 파일 모드, PDF는 MCP 정리 후 PDFBox AcroForm 처리이다. AI는 HWP의 hwpTargets를 받아 지도와 계획만 반환하며 Core가 원본·plan hash·revision·bindings/scope를 독립 검증한다. HWP에 Windows·한컴 한글·브리지 설정이 필요하지 않다. 과거 직접 HWPX 편집 경로는 현재 생성에서 사용하지 않는다. 부분 초안 정책 식별자를 포함한 새 fingerprint로 과거 생성 결과와 구분하고 다운로드 이력을 보존한다. 구현 범위와 미지원 구조·검증 상태는 [MCP 구조](../../docs/application-document-mcp-architecture.md), [설치](../../docs/application-document-mcp-setup.md), [검증 기록](../../docs/application-document-mcp-validation.md)를 확인한다.

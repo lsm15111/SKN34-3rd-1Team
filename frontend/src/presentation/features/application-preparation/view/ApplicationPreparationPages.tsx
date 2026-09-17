@@ -82,7 +82,16 @@ function SectionInputEditor({ section, vm, isLastSection }: {
   const options = field?.options ?? []
   const missingOptions = options.length === 0 && /택\s*1|하나.{0,10}선택|중.{0,10}선택/.test(`${field?.label} ${field?.guidance}`)
   const messageKey = field ? `${section.key}:${field.key}` : section.key
-  const answeredCount = section.fields.filter((value) => vm.sectionMessages[`${section.key}:${value.key}`]?.trim() || section.facts.some((fact) => fact.fieldKey === value.key)).length
+  const valueFor = (candidate: ApplicationFormSection['fields'][number]) => {
+    const key = `${section.key}:${candidate.key}`
+    if (vm.deletedAnswerKeys.has(key)) return ''
+    if (Object.hasOwn(vm.sectionMessages, key)) return vm.sectionMessages[key]
+    const fact = section.facts.find((saved) => saved.fieldKey === candidate.key)
+    return fact?.status === 'UNKNOWN' ? '미정' : fact?.value ?? ''
+  }
+  const currentValue = field ? valueFor(field) : ''
+  const savedFact = section.facts.find((fact) => fact.fieldKey === field?.key)
+  const answeredCount = section.fields.filter((candidate) => valueFor(candidate).trim()).length
   const busy = vm.busySection?.key === section.key
   const status = savedSectionStatus(section)
   const labels = new Map(section.fields.map((field) => [field.key, field.label]))
@@ -110,32 +119,38 @@ function SectionInputEditor({ section, vm, isLastSection }: {
     {options.length > 0 ? <fieldset className="space-y-2" disabled={vm.busySection !== null || field?.documentWritable === false}>
       <legend className={s.label}>공식 선택지 중 하나를 선택하세요</legend>
       {options.map((option) => <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 p-3 text-sm has-[:checked]:border-emerald-700 has-[:checked]:bg-emerald-50" key={option}>
-        <input type="radio" name={`choice-${messageKey}`} value={option} checked={vm.sectionMessages[messageKey] === option} onChange={() => vm.setSectionMessage(messageKey, option)} />
+        <input type="radio" name={`choice-${messageKey}`} value={option} checked={currentValue === option} onChange={() => vm.setSectionMessage(messageKey, option)} />
         {option}
       </label>)}
       <label className="flex items-center gap-3 p-3 text-sm">
-        <input type="radio" name={`choice-${messageKey}`} value="미정" checked={vm.sectionMessages[messageKey] === '미정'} onChange={() => vm.setSectionMessage(messageKey, '미정')} />아직 미정
+        <input type="radio" name={`choice-${messageKey}`} value="미정" checked={currentValue === '미정'} onChange={() => vm.setSectionMessage(messageKey, '미정')} />아직 미정
       </label>
     </fieldset> : <textarea
       className={s.textarea}
       disabled={vm.busySection !== null || field?.documentWritable === false}
       id={`section-answer-${section.key}`}
       maxLength={2000}
-      value={vm.sectionMessages[messageKey] ?? ''}
+      value={currentValue}
       onChange={(event) => vm.setSectionMessage(messageKey, event.target.value)}
       placeholder="확인된 사실만 적어 주세요. 모르는 값은 미정이라고 밝혀 주세요."
     />}
+    {field?.documentWritable !== false && (currentValue || savedFact) && <button className={s.button} type="button" disabled={vm.busySection !== null}
+      onClick={() => vm.deleteSectionAnswer(messageKey)}>{savedFact ? '저장된 답변 삭제' : '입력 내용 지우기'}</button>}
+    {vm.deletedAnswerKeys.has(messageKey) && <p className={s.warning}>문서 답변 저장을 누르면 기존 답변이 삭제됩니다.</p>}
     {missingOptions && <p className={s.warning}>공식 선택지를 확인하지 못했습니다. 아래 공식 공고에서 첨부 양식의 선택지를 확인한 뒤 입력해 주세요. <a className="underline" href={vm.preparation!.form.sourceUrl} target="_blank" rel="noreferrer">공식 공고 열기</a></p>}
     <div className="flex items-center justify-between gap-3" aria-label="입력 질문 이동">
       <button className={s.button} type="button" disabled={questionIndex === 0} onClick={() => setQuestionIndex((index) => index - 1)}>이전 질문</button>
       <button className={s.primary} type="button" disabled={questionIndex >= section.fields.length - 1} onClick={() => setQuestionIndex((index) => index + 1)}>다음 질문</button>
     </div>
-    <p className={s.muted}>답변은 질문을 이동해도 유지됩니다. 모르는 내용은 미정이라고 적거나 건너뛰세요. 입력을 마치면 문서 답변 저장을 눌러주세요.</p>
+    <p className={s.muted}>저장된 답변은 입력칸에 표시됩니다. 값을 수정하거나 답변 삭제를 선택한 뒤 문서 답변 저장을 눌러주세요.</p>
     {isLastSection && <p className={s.notice}>마지막 항목입니다. 목록에서 저장 전 답변이나 아직 확인하지 않은 항목을 살펴보세요.</p>}
     <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-      <p className="text-sm text-emerald-950">이 문서에 입력한 답변을 한 번에 저장합니다. 입력한 내용 그대로 저장됩니다.</p>
+      <p className="text-sm text-emerald-950">화면에 보이는 이 항목의 전체 답변 상태를 저장합니다. 표시된 기존 답변은 수정하거나 명시적으로 삭제할 수 있습니다.</p>
       <p className="mt-2 mb-3 text-sm text-emerald-950">저장 전 답변은 이 화면에서 항목을 이동할 때 유지됩니다. 화면을 나가기 전에는 문서 답변 저장을 눌러주세요.</p>
-      <button className={s.primary} type="button" disabled={vm.busySection !== null || !section.fields.some((value) => vm.sectionMessages[`${section.key}:${value.key}`]?.trim())} onClick={() => { void vm.saveDocumentAnswers(section) }}>
+      <button className={s.primary} type="button" disabled={vm.busySection !== null || !section.fields.some((value) => {
+        const key = `${section.key}:${value.key}`
+        return Object.hasOwn(vm.sectionMessages, key) || vm.deletedAnswerKeys.has(key)
+      })} onClick={() => { void vm.saveDocumentAnswers(section) }}>
         {busy && vm.busySection?.action === 'save' ? '문서 답변 저장 중…' : '문서 답변 저장'}
       </button>
       {section.facts.length > 0 && <p className="mt-2 text-sm text-emerald-800" role="status">저장된 답변 {section.facts.length}개</p>}
@@ -146,7 +161,7 @@ function SectionInputEditor({ section, vm, isLastSection }: {
 function DocumentGenerationAction({ vm }: { vm: ReturnType<typeof useApplicationPreparationEditorViewModel> }) {
   const navigate = useNavigate()
   const preparation = vm.preparation!
-  const pending = Object.values(vm.sectionMessages).some((value) => value.trim())
+  const pending = Object.keys(vm.sectionMessages).length > 0 || vm.deletedAnswerKeys.size > 0
   const incomplete = preparation.form.sections.every((section) => section.facts.length === 0) || preparation.form.sections.some((section) => section.fields.some((field) => field.required && !section.facts.some((fact) => fact.fieldKey === field.key)))
   return <section className={s.sectionItem} aria-label="신청 문서 생성">
     <h3 className="text-lg font-bold">신청 문서 초안 생성</h3>
@@ -180,7 +195,10 @@ function SectionWritingWorkspace({ vm }: { vm: ReturnType<typeof useApplicationP
       <nav aria-label="신청 문서 작성 항목 목록" className="min-w-0 rounded-xl bg-slate-50 p-2 lg:sticky lg:top-4">
         <ol className="flex max-h-64 flex-col gap-2 overflow-y-auto lg:max-h-[65vh]">
           {sections.map((section, index) => {
-            const pending = Boolean(section.fields.some((field) => vm.sectionMessages[`${section.key}:${field.key}`]?.trim()))
+            const pending = section.fields.some((field) => {
+              const key = `${section.key}:${field.key}`
+              return Object.hasOwn(vm.sectionMessages, key) || vm.deletedAnswerKeys.has(key)
+            })
             const status = pending ? { label: '저장 전 답변', className: s.inProgress } : savedSectionStatus(section)
             return <li key={section.key}>
               <button type="button" aria-current={index === activeIndex ? 'step' : undefined}

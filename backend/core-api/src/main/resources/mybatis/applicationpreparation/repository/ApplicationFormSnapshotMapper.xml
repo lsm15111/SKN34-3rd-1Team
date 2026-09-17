@@ -45,7 +45,7 @@
           AND parser_version = #{parserVersion}
           AND extraction_model = #{extractionModel}
           AND extraction_prompt_version = #{extractionPromptVersion}
-        ORDER BY form_version_id
+        <!-- Keep the large document-map JSON out of MySQL filesort. The repository orders the returned rows by ID. -->
     </select>
     <update id="attachDocumentMap">
         UPDATE application_form_snapshot

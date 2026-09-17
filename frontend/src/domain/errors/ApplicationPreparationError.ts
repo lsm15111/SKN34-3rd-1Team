@@ -13,6 +13,7 @@ export class ApplicationPreparationError extends Error {
 function messageFor(code: string, status: number): string {
   if (code === 'APPLICATION_DOCUMENT_FORM_REANALYSIS_REQUIRED') return '여러 입력칸이 한 질문으로 묶인 이전 양식입니다. 기존 답변을 보관한 채 입력칸별로 다시 분석해 새 작성을 시작해 주세요.'
   if (code === 'APPLICATION_DOCUMENT_UNMAPPED_INPUT') return '입력한 답변 중 자동 기입할 수 없는 항목이 있습니다. 해당 항목은 원본에서 직접 작성해야 합니다.'
+  if (code === 'APPLICATION_DOCUMENT_NO_WRITABLE_INPUT') return '자동 기입할 수 있는 답변이 없어 초안을 생성하지 않았습니다. 저장된 답변을 확인하며 원본 문서에서 직접 작성해 주세요.'
   if (status === 401) return '로그인이 만료되었습니다. 다시 로그인해 주세요.'
   if (code === 'RUN_OUTCOME_UNKNOWN') return '분석 결과를 확정할 수 없어 자동 재실행을 중단했습니다. 관리자 확인이 필요합니다.'
   if (code === 'QUEUE_EXPIRED') return '분석 대기 시간이 초과되었습니다. 공고를 다시 선택해 새 작업을 요청할 수 있습니다.'

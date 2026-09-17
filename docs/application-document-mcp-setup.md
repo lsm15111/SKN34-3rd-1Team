@@ -8,10 +8,14 @@ HWP는 Core API 컨테이너의 `kr.dogfoot:hwplib:1.1.11`로 읽고 수정한�
 |---|---|---|
 | HWP | Core JVM | hwplib 1.1.11 |
 | HWPX | AI의 격리 Python 환경 | Hangeul-mcp 0.6.0 + 구간 편집 확장 |
-| PDF | AI MCP → Core JVM | pdf-edit-mcp 0.2.0 / engine 0.2.0 → PDFBox |
+| PDF | AI MCP → Core JVM | FFDetr 입력칸 탐지 + pdf-edit-mcp 0.2.0 / engine 0.2.0 → PDFBox |
 | HWPX/PDF 읽기 보조 | AI Node 프로세스 | 고정 kordoc checkout |
 
 MCP 도구의 정확한 commit·의존성은 `backend/ai-service/document-tools/versions.json` 및 남은 형식별 `.lock`에 기록한다. AI는 MCP SDK 2.1.0, 편집 도구는 격리된 SDK 1.27.2 환경을 사용한다. AI 이미지는 Python 3.12를 사용한다.
+
+FFDetr는 별도 API 키 없이 CPU에서 실행한다. 기존 OpenAI·내부 인증 토큰은 계속 필요하다. Docker 빌드 시 Hugging Face의 `jbarrow/FFDetr` revision `56f4e4235e28dcb2953513dc020bb191a2f54cfe`의 가중치(134,960,879바이트)를 다운로드하고 SHA-256 `f852e1bac18c8f435b82270fc8ff8e2ca4a2cd8869c411fa8f473f16e69585ef`를 확인한다. 실행 중에는 다운로드하지 않는다. `pdf.lock`은 Python 3.12/Linux x86_64 CPU 런타임을 기준으로 생성한다. FFDetr/PyTorch 의존성은 PDF 도구 가상환경에만 설치한다.
+
+저장소 운영 Compose의 AI `mem_limit`은 1g이며 개발 Compose에는 해당 제한이 없다. FFDetr 단독 CPU 평가의 최대 RSS 약 758MiB는 AI 컨테이너 전체·동시 업무의 필요 메모리가 아니다. 운영 메모리 제한과 worker 수는 실제 배포 환경에서 확인해야 한다. 이번 구현은 운영 메모리 제한을 임의로 늘리지 않는다.
 
 kordoc의 PDF 읽기에 필요한 `pdfjs-dist@4.10.38`은 `document-tools/kordoc-pdf/package-lock.json`으로 별도 고정한다. upstream 잠금 파일에서는 개발 의존성으로 표시되어 production prune 시 제거되므로 Docker 빌드가 별도로 설치하고 import를 확인한다. PDF 스모크는 기본 PDF 도구와 kordoc 보조 읽기를 모두 실행한다.
 
@@ -25,7 +29,7 @@ Core의 첫 문서 생성은 위치 매핑과 생성을 순서대로 호출하�
 
 ## 로컬 Docker
 
-PDF는 기존 입력 필드 또는 원본의 실제 표 선·인쇄 글자로 확인한 빈 입력 영역(`PDF_INPUT`)을 선택한다. 모델은 좌표를 만들지 않으며 서버가 선택된 영역의 좌표를 Core PDFBox에 전달한다. 입력 영역을 확인할 수 없는 선택 문항은 원문 직접 작성으로 표시하고, 필수 문항 또는 답변이 있는 문항을 조용히 누락하지 않는다. 매핑의 라벨·영역 검증 실패는 근거를 전달해 최대 한 번 수정 요청하며, 계속 실패하면 오류를 반환한다. 매핑 HTTP 전체 제한 240초와 최대 2회 모델 호출은 유지한다. `govbiz_pdf_text_regions`는 기존 pdfminer 의존성으로 CropBox·회전 적용 좌표를 제공한다. 원문은 읽기 전용으로 보존하며 작성 계획은 제공된 답변 ID만 사용한다. Core가 제공한 HWP 표·필드 문맥은 축약하지 않는다.
+PDF는 기존 입력 필드 또는 FFDetr 탐지 결과를 원문 글자·표 선과 대조한 입력 영역(`PDF_INPUT`)을 선택한다. 모델은 좌표를 만들지 않으며 서버가 선택된 영역의 좌표를 Core PDFBox에 전달한다. 입력 영역을 확인할 수 없는 선택 문항은 원문 직접 작성으로 표시하고, 필수 문항 또는 답변이 있는 문항을 조용히 누락하지 않는다. 매핑의 라벨·영역 검증 실패는 근거를 전달해 최대 한 번 수정 요청하며, 계속 실패하면 오류를 반환한다. 매핑 HTTP 전체 제한 240초와 최대 2회 모델 호출은 유지한다. `govbiz_pdf_text_regions`는 기존 pdfminer 의존성으로 CropBox·회전 적용 좌표를 제공한다. 원문은 읽기 전용으로 보존하며 작성 계획은 제공된 답변 ID만 사용한다. Core가 제공한 HWP 표·필드 문맥은 축약하지 않는다.
 
 1. 루트 `.env`에 `DOCUMENT_INTERNAL_TOKEN`을 설정한다. 무작위 32자 이상 비밀값을 Core와 AI가 함께 사용한다. 생성 예: `python -c "import secrets; print(secrets.token_hex(32))"`.
 2. `docker compose --env-file .env -f infrastructure/compose.yaml up -d --build core-api ai-service web`으로 새 코드를 적용한다. 기존 DB 볼륨은 삭제하지 않는다.

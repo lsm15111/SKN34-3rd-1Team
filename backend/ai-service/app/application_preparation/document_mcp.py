@@ -14,8 +14,9 @@ from app.application_preparation.document_contract import DocumentError
 
 logger = logging.getLogger(__name__)
 ALLOWED = {
-    "hwpx": frozenset({"inspect_editable_regions", "preview_addressed_edits", "apply_addressed_edits", "verify_targets", "govbiz_verify_hwpx_edits"}),
-    "pdf": frozenset({"pdf_get_text", "pdf_get_text_layout", "pdf_detect_paragraphs", "pdf_find_text", "pdf_replace_single", "pdf_extract_bbox_text", "govbiz_verify_pdf_deletion", "govbiz_pdf_text_regions"}),
+    "hwpx": frozenset({"inspect_editable_regions", "analyze_form", "get_table_map", "find_cell_by_label", "analyze_formfit",
+                       "preview_addressed_edits", "apply_addressed_edits", "verify_targets", "govbiz_verify_hwpx_edits"}),
+    "pdf": frozenset({"pdf_get_text", "pdf_get_text_layout", "pdf_detect_paragraphs", "pdf_find_text", "pdf_replace_single", "pdf_extract_bbox_text", "govbiz_verify_pdf_deletion", "govbiz_pdf_text_regions", "govbiz_pdf_detect_inputs"}),
     "kordoc": frozenset({"parse_document"}),
 }
 

@@ -123,6 +123,22 @@ class DiscoveryDocument(Contract):
     fileName: str = Field(min_length=1, max_length=300)
     format: Literal["PDF", "HWP", "HWPX"]
     blocks: list[DiscoveryBlock] = Field(min_length=1, max_length=256)
+    sourceBase64: str | None = Field(default=None, min_length=1, max_length=44_739_244)
+    sourceSha256: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+
+    @model_validator(mode="after")
+    def native_source_matches(self) -> Self:
+        import base64
+        import hashlib
+        if (self.sourceBase64 is None) != (self.sourceSha256 is None):
+            raise ValueError("source bytes and hash must be supplied together")
+        if self.sourceBase64 is not None:
+            data = base64.b64decode(self.sourceBase64, validate=True)
+            if self.format != "HWPX" or not data.startswith(b"PK") or not 0 < len(data) <= 32 * 1024 * 1024:
+                raise ValueError("unsupported native discovery source")
+            if hashlib.sha256(data).hexdigest() != self.sourceSha256:
+                raise ValueError("discovery source hash mismatch")
+        return self
 
 
 class DiscoverFormsRequest(Contract):
@@ -134,6 +150,8 @@ class DiscoverFormsRequest(Contract):
 
     @model_validator(mode="after")
     def unique_documents_and_blocks(self) -> Self:
+        if sum(len(document.sourceBase64 or "") for document in self.documents) > 44_739_244:
+            raise ValueError("native discovery source total limit")
         if self.sourceCode == "BIZINFO":
             if re.fullmatch(r"PBLN_[0-9]{1,32}", self.sourceProgramId) is None:
                 raise ValueError("invalid BIZINFO source program id")

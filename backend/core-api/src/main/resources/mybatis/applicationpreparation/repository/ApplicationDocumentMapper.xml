@@ -21,6 +21,9 @@
     <select id="findRevision" resultMap="file">
         <include refid="owned"/> AND f.input_revision = #{revision} AND f.generator_version = #{generatorVersion} AND f.generation_fingerprint = ''
     </select>
+    <select id="listOwned" resultMap="file">
+        <include refid="owned"/> ORDER BY f.id DESC LIMIT #{limit}
+    </select>
     <select id="findFingerprint" resultMap="file">
         <include refid="owned"/> AND f.input_revision = #{revision} AND f.generator_version = 6 AND f.generation_fingerprint = #{fingerprint}
     </select>

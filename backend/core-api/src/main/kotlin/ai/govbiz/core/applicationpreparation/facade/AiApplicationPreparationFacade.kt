@@ -82,6 +82,8 @@ class AiApplicationPreparationFacade(private val client: AiApplicationPreparatio
                     document.fileName,
                     document.format,
                     document.blocks.map { block -> AiApplicationFormDiscoveryBlockRequest(block.blockId, block.locator, block.text) },
+                    document.sourceBytes?.let { java.util.Base64.getEncoder().encodeToString(it) },
+                    document.sha256.takeIf { document.sourceBytes != null },
                 )
             },
         )

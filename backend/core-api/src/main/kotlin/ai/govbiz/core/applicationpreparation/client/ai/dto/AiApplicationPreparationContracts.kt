@@ -59,6 +59,10 @@ data class AiApplicationFormDiscoveryDocumentRequest(
     val fileName: String,
     val format: String,
     val blocks: List<AiApplicationFormDiscoveryBlockRequest>,
+    @get:com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    val sourceBase64: String? = null,
+    @get:com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    val sourceSha256: String? = null,
 )
 
 data class AiApplicationFormDiscoveryBlockRequest(val blockId: String, val locator: String, val text: String)

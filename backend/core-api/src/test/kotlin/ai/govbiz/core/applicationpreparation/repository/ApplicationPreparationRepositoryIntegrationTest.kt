@@ -10,6 +10,7 @@ import ai.govbiz.core.applicationpreparation.domain.NewApplicationPreparation
 import ai.govbiz.core.applicationpreparation.domain.ApplicationFactStatus
 import ai.govbiz.core.applicationpreparation.domain.ApplicationInputReplaceResult
 import ai.govbiz.core.applicationpreparation.domain.NewConfirmedApplicationFact
+import ai.govbiz.core.applicationpreparation.domain.ApplicationDocumentUnfilledAnswer
 import java.time.LocalDateTime
 import java.util.UUID
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -221,6 +222,23 @@ class ApplicationPreparationRepositoryIntegrationTest {
         }
         assertEquals(2, jdbc.queryForObject("SELECT COUNT(*) FROM application_document_file WHERE preparation_id = ?", Int::class.java, preparation.id))
         assertEquals("회사 & 연구소", jdbc.queryForObject("SELECT JSON_UNQUOTE(JSON_EXTRACT(placements_json, '$.mcp.targets[0]')) FROM application_document_file WHERE id = ?", String::class.java, first.id))
+    }
+
+    @Test
+    fun preservesTheGeneratedRevisionUnfilledAnswerSnapshotAndDoesNotInferLegacyMetadata() {
+        val preparation = repository.create(ownerId, draft())
+        val omitted = ApplicationDocumentUnfilledAnswer("company:consent", "기업 개요 / 개인정보 동의", "동의함", "INPUT_LOCATION_NOT_FOUND")
+        val file = documents.save(ownerId, preparation.id, 1, "부분초안.pdf", "application/pdf", byteArrayOf(1), "a".repeat(64), emptyList(),
+            fingerprint = "4".repeat(64), filledAnswerCount = 1, unfilledAnswers = listOf(omitted))
+        val restored = documents.findOwned(ownerId, preparation.id, file.id)!!
+        assertEquals(1, restored.filledAnswerCount)
+        assertEquals(listOf(omitted), restored.unfilledAnswers)
+        assertEquals(listOf(file.id), documents.listOwned(ownerId, preparation.id).map { it.id })
+        assertEquals(emptyList<Long>(), documents.listOwned(otherId, preparation.id).map { it.id })
+
+        val legacy = documents.save(ownerId, preparation.id, 1, "이전.pdf", "application/pdf", byteArrayOf(2), "a".repeat(64), emptyList())
+        assertNull(documents.findOwned(ownerId, preparation.id, legacy.id)!!.filledAnswerCount)
+        assertEquals(emptyList<ApplicationDocumentUnfilledAnswer>(), documents.findOwned(ownerId, preparation.id, legacy.id)!!.unfilledAnswers)
     }
 
     @Test

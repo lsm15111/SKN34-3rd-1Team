@@ -25,8 +25,10 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY document-tools /opt/document-tools
+ADD --checksum=sha256:f852e1bac18c8f435b82270fc8ff8e2ca4a2cd8869c411fa8f473f16e69585ef https://huggingface.co/jbarrow/FFDetr/resolve/56f4e4235e28dcb2953513dc020bb191a2f54cfe/FFDetr.pth /opt/document-tools/ffdetr/FFDetr.pth
+RUN chmod 644 /opt/document-tools/ffdetr/FFDetr.pth
 RUN uv venv /opt/document-tools/hwpx && uv pip sync --python /opt/document-tools/hwpx/bin/python /opt/document-tools/hwpx.lock && \
-    uv venv /opt/document-tools/pdf && uv pip sync --python /opt/document-tools/pdf/bin/python /opt/document-tools/pdf.lock
+    uv venv /opt/document-tools/pdf && uv pip sync --python /opt/document-tools/pdf/bin/python --index-strategy unsafe-best-match /opt/document-tools/pdf.lock
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --locked --no-dev --no-install-project

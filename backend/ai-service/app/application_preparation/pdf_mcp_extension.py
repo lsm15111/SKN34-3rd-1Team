@@ -273,6 +273,18 @@ def main():
         return original_info(font, name)
 
     locator._build_font_info = font_info
+    def detect_form_inputs(image_paths: list[str]) -> dict:
+        import contextlib
+        import os
+        import sys
+        from pdf_form_detection import detect_inputs
+        os.environ["HF_HUB_OFFLINE"] = "1"
+        os.environ["TRANSFORMERS_OFFLINE"] = "1"
+        # Third-party model status messages must not corrupt the stdio MCP stream.
+        with contextlib.redirect_stdout(sys.stderr):
+            return detect_inputs(image_paths)
+
+    mcp.tool(name="govbiz_pdf_detect_inputs")(detect_form_inputs)
     mcp.tool(name="govbiz_pdf_text_regions")(read_pdf_text_regions)
     mcp.tool(name="govbiz_verify_pdf_deletion")(verify_whole_text_object_deletion)
     serve()

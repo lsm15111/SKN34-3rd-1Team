@@ -6,7 +6,7 @@ from langchain_openai import ChatOpenAI
 from langsmith import tracing_context
 from openai import APITimeoutError
 
-from app.application_preparation.discovery_prompt import DISCOVERY_INSTRUCTIONS
+from app.application_preparation.discovery_prompt import DISCOVERY_INSTRUCTIONS, HWP_DISCOVERY_INSTRUCTIONS
 from app.application_preparation.models import (
     DiscoverFormsRequest,
     FormDiscoverySelection,
@@ -67,7 +67,7 @@ class ApplicationPreparationAgent:
                 or result["raw"].response_metadata.get("status") != "completed"
                 or not isinstance(result["parsed"], selection_type)):
             raise ValueError("invalid application preparation output")
-        return selection_type.model_validate(result["parsed"].model_dump())
+        return selection_type.model_validate(result["parsed"].model_dump(by_alias=True))
 
     async def place_document(
         self,
@@ -160,7 +160,8 @@ class ApplicationPreparationAgent:
         from typing import Annotated
         from pydantic import Field, create_model
         from app.application_preparation.document import DocumentPlacement, DocumentBox
-        from app.application_preparation.document_contract import DocumentError, MappingSelection
+        from app.application_preparation.document_contract import DocumentError, MappingSelection, mapping_label_matches
+        from app.application_preparation.models import Contract
         from app.application_preparation.document_pipeline import MAPPING_INSTRUCTIONS
         # A cell and its paragraphs describe the same text. Offer the leaf
         # addresses only, while retaining read-only labels as visual context.
@@ -172,10 +173,33 @@ class ApplicationPreparationAgent:
         native_id = Annotated[str, Field(pattern="^(?:" + "|".join(re.escape(key) for key in ids) + ")$")]
         scope_ids = [t.targetId for t in targets if t.editable]
         scope_id = Annotated[str, Field(pattern="^(?:" + "|".join(re.escape(key) for key in scope_ids) + ")$")]
-        binding_type = create_model("NativeMappingBinding", __base__=DocumentPlacement, targetId=(native_id, ...), box=(type(None), ...))
+        field_candidates = {field.id: [target.targetId for target in targets
+            if target.targetId in ids and target.nativeLocator.get("fieldLabels") and mapping_label_matches(field.label, target, field.guidance)]
+            for field in request.fields}
+        field_ids = [field.id for field in request.fields]
+        field_id = Annotated[str, Field(pattern="^(?:" + "|".join(re.escape(key) for key in field_ids) + ")$")]
+        binding_type = create_model("NativeMappingBinding", __base__=DocumentPlacement,
+            factId=(field_id, ...), targetId=(native_id, ...), box=(type(None), ...))
         selection_type = create_model("NativeMappingSelection", __base__=MappingSelection,
             bindings=(list[binding_type], Field(max_length=600)),
+            unmappedFieldIds=(list[field_id], Field(max_length=200,
+                description="Each supplied field ID must occur in bindings OR here, never both. No descriptions or target IDs.")),
             scopeTargetIds=(list[scope_id], Field(max_length=3000)))
+        if request.format == "hwpx":
+            assignment_fields = {}
+            value_types = {}
+            for index, field in enumerate(request.fields):
+                choices = tuple(field_candidates[field.id] or ids)
+                if choices not in value_types:
+                    choice_id = Annotated[str, Field(pattern="^(?:" + "|".join(re.escape(key) for key in choices) + ")$")]
+                    value_types[choices] = create_model(f"FieldTarget{len(value_types)}", __base__=Contract, targetId=(choice_id | None, ...))
+                value_type = value_types[choices]
+                assignment_fields[f"field_{index}"] = (value_type, Field(alias=field.id))
+            assignments_type = create_model("QuestionAssignments", __base__=Contract, **assignment_fields)
+            scope_type = create_model("NativeScope", __base__=Contract,
+                **{f"target_{index}": (bool, Field(alias=target_id)) for index, target_id in enumerate(scope_ids)})
+            selection_type = create_model("HwpxMappingSelection", __base__=Contract,
+                assignments=(assignments_type, ...), scope=(scope_type, ...))
         mapping_document = document.model_dump(exclude={"targets", "auxiliaryText"})
         # Core's HWP context contains table/field evidence not repeated in its locator.
         excluded = set() if request.format == "hwp" else {"context"}
@@ -186,7 +210,8 @@ class ApplicationPreparationAgent:
                 # Upstream paragraph estimates are not suitable for locating blank inputs.
                 target["nativeLocator"] = {"page": locator["page"], "geometryVerified": False}
         content = [{"type": "text", "text": json.dumps({"scope": request.scope,
-            "fields": [f.model_dump() for f in request.fields], "documentMap": mapping_document}, ensure_ascii=False)}]
+            "fields": [f.model_dump() for f in request.fields], "fieldCandidates": field_candidates,
+            "documentMap": mapping_document}, ensure_ascii=False)}]
         if rejected_output is not None:
             by_id = {t.targetId: t for t in document.targets}
             overlaps = [{"fieldId": b.factId, "targetId": b.targetId, "printedWords": [
@@ -195,14 +220,32 @@ class ApplicationPreparationAgent:
                 for b in rejected_output.bindings if b.box is not None and b.targetId in by_id]
             content.append({"type": "text", "text": json.dumps({"repair": {
                 "reason": rejection_reason, "rejectedSelection": rejected_output.model_dump(),
+                "labelConflicts": [{"fieldId": binding.factId, "targetId": binding.targetId,
+                    "candidateTargetIds": field_candidates.get(binding.factId, [])}
+                    for binding in rejected_output.bindings if binding.targetId in by_id and
+                    (field_candidates.get(binding.factId) and binding.targetId not in field_candidates[binding.factId]
+                     or any(field.id == binding.factId and not mapping_label_matches(field.label, by_id[binding.targetId], field.guidance) for field in request.fields))],
                 "printedWordIntersections": overlaps,
-                "instruction": "Correct the complete mapping once using only supplied native input targets. Match the actual table/row/column fieldLabels to each question. Never use a table's first column for a whole-table question, invent coordinates or targets, or cover printed words. If no safe matching native field exists, report unmappedFieldIds."
+                "targetConflicts": [{"targetId": target_id, "fieldIds": [binding.factId for binding in rejected_output.bindings if binding.targetId == target_id]}
+                    for target_id in sorted({binding.targetId for binding in rejected_output.bindings})
+                    if len([binding for binding in rejected_output.bindings if binding.targetId == target_id]) > 1],
+                "instruction": "Correct the complete mapping once using only supplied field IDs and native input targets. Every field ID must be bound OR unmapped, never both; omit no fields. Match table/row/column evidence and Hangeul formFields/labelSearch to each question. Ambiguous label searches require table context. Never use a table's first column for a whole-table question, invent coordinates or targets, or cover printed words."
             }}, ensure_ascii=False)})
         content.extend({"type": "image_url", "image_url": {"url": f"data:image/png;base64,{page}", "detail": "high"}} for page in request.pageImages)
-        result = await self._invoke(selection_type, MAPPING_INSTRUCTIONS, content, 16000, "Document mapping timed out", document=True)
-        selection = MappingSelection.model_validate(result.model_dump())
+        output_instructions = ("\nReturn assignments keyed by every supplied question ID. Each property's targetId is ONE native input ID; use null only when unbound. Each question addresses one input slot; never copy its value into several repeated rows. Never assign a physical target to two different questions. In scope, mark each supplied target ID true only if it belongs to the selected form, including its examples; otherwise false. This keyed object replaces scopeTargetIds and cannot repeat a target. The rejectedSelection, if present, is diagnostic data in normalized server format; return the assignments and scope schema instead."
+                               if request.format == "hwpx" else "\nReturn bindings with factId equal to the supplied question ID, and list only unbound question IDs in unmappedFieldIds.")
+        result = await self._invoke(selection_type, MAPPING_INSTRUCTIONS + output_instructions, content, 16000, "Document mapping timed out", document=True)
+        if request.format == "hwpx":
+            assignments = result.model_dump(by_alias=True)["assignments"]
+            selection = MappingSelection(bindings=[DocumentPlacement(factId=field_id, targetId=target_id, box=None)
+                for field_id, assignment in assignments.items() if (target_id := assignment["targetId"]) is not None],
+                unmappedFieldIds=[field_id for field_id, assignment in assignments.items() if assignment["targetId"] is None],
+                scopeTargetIds=[target_id for target_id, included in result.model_dump(by_alias=True)["scope"].items() if included])
+        else:
+            selection = MappingSelection.model_validate(result.model_dump())
         # Scope has set semantics; repeated identical IDs do not expand it.
         selection.scopeTargetIds = list(dict.fromkeys(selection.scopeTargetIds))
+        selection.unmappedFieldIds = list(dict.fromkeys(selection.unmappedFieldIds))
         return selection
 
     async def interpret(self, request: InterpretRequest) -> InterpretationSelection:
@@ -211,8 +254,14 @@ class ApplicationPreparationAgent:
             2500, "Application preparation agent timed out",
         )
 
-    async def discover(self, request: DiscoverFormsRequest) -> FormDiscoverySelection:
+    async def discover(self, request: DiscoverFormsRequest, *, native_layouts=None) -> FormDiscoverySelection:
+        hwp_only = all(document.format == "HWP" for document in request.documents)
+        content = request.model_dump(exclude={"documents": {"__all__": {"sourceBase64", "sourceSha256"}}})
+        for document in content["documents"]:
+            if native_layouts and document["documentIndex"] in native_layouts:
+                document["nativeLayout"] = native_layouts[document["documentIndex"]]
         return await self._invoke(
-            FormDiscoverySelection, DISCOVERY_INSTRUCTIONS, json.dumps(request.model_dump(), ensure_ascii=False),
-            16000, "Application form discovery agent timed out", discovery=True,
+            FormDiscoverySelection, HWP_DISCOVERY_INSTRUCTIONS if hwp_only else DISCOVERY_INSTRUCTIONS,
+            json.dumps(content, ensure_ascii=False),
+            5000 if hwp_only else 16000, "Application form discovery agent timed out", discovery=True,
         )

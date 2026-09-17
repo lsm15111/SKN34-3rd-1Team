@@ -255,8 +255,13 @@ class ApplicationFormDiscoveryContractIntegrationTest {
                 val requestJson = runCatching { json.readTree(request) }.getOrNull()
                 val sourceProgramId = requestJson?.path("sourceProgramId")?.asString()
                 if (sourceProgramId == DISCOVERY_PROGRAM_ID) {
-                    val expected = resource("discovery-contract-request.json")
-                    if (request.size > 200_000 || requestJson != json.readTree(expected)) {
+                    val expected = json.readTree(resource("discovery-contract-request.json"))
+                    val document = requestJson!!.path("documents").path(0)
+                    val source = java.util.Base64.getDecoder().decode(document.path("sourceBase64").asString())
+                    val hash = java.security.MessageDigest.getInstance("SHA-256").digest(source).joinToString("") { "%02x".format(it) }
+                    (expected.path("documents").path(0) as tools.jackson.databind.node.ObjectNode)
+                        .put("sourceBase64", document.path("sourceBase64").asString()).put("sourceSha256", hash)
+                    if (request.size > 200_000 || requestJson != expected || source.size < 4 || source[0] != 0x50.toByte() || source[1] != 0x4b.toByte()) {
                         aiContractFailure.set("request did not match the shared discovery contract")
                         respond(exchange, "{}", 500)
                     } else {

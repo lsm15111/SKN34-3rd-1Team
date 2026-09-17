@@ -180,6 +180,7 @@ class ApplicationFormDiscoveryService(
                     blocks.mapIndexed { blockIndex, block ->
                         ApplicationFormDiscoveryBlock("D$documentIndex-B$blockIndex", block.locator, block.text)
                     },
+                    sourceBytes = file.bytes.takeIf { file.format == "HWPX" },
                 )
             }
             if (documents.isEmpty()) throw ApplicationFormDiscoveryException(excludedReason)
