@@ -6,7 +6,7 @@ import { assistantStyles as styles } from './Assistant.styles'
 import { useAssistantViewModel } from './useAssistantViewModel'
 
 /**
- * 모든 화면 오른쪽 아래에 떠 있는 GovBiz 도우미입니다. 런처(56px 원)와 열렸을 때의 패널로 이루어지며,
+ * 모든 화면 오른쪽 아래에 떠 있는 GovBiz 가이드입니다. 런처(56px 원)와 열렸을 때의 패널로 이루어지며,
  * 로그인·회원가입처럼 도우미가 필요 없는 화면에서는 그리지 않습니다.
  */
 export function AssistantWidget() {
@@ -28,6 +28,7 @@ export function AssistantWidget() {
           aria-expanded={vm.isOpen}
           aria-haspopup="dialog"
           onClick={vm.toggle}
+          onKeyDown={(event) => { if (event.key === 'Escape' && vm.isOpen) vm.close() }}
         >
           {vm.isOpen ? (
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

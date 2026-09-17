@@ -29,6 +29,9 @@ const companyAccount: Account = {
   company: { companyName: '넥스트웨이브 주식회사', businessNumber: '2148812034' },
 }
 
+/** 검색 화면(`/`, `/app/chat`)에서 메뉴 맨 앞에 붙는 도움말 질문입니다. */
+const searchPageQuestions = ['search-confirm-card', 'search-score-meaning'].map((id) => findHelpEntry(id)!.question)
+
 function isoDaysFromNow(days: number): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000 + days * 86_400_000).toISOString().slice(0, 10)
 }
@@ -47,7 +50,7 @@ afterEach(() => {
   vi.unstubAllEnvs()
 })
 
-describe('GovBiz 도우미 위젯', () => {
+describe('GovBiz 가이드 위젯', () => {
   it('비로그인 검색 화면에서 런처가 뜨고, 열면 인사와 주제 목록을 보여 준 뒤 주제 → 질문 → 도움말 답으로 타고 들어간다', () => {
     renderApp('/', null)
 
@@ -66,10 +69,10 @@ describe('GovBiz 도우미 위젯', () => {
     expect(within(panel).getByText(assistantMessages.greetingAsk)).toBeTruthy()
     expect(screen.getByRole('button', { name: assistantMessages.closeLauncher }).getAttribute('aria-expanded')).toBe('true')
 
-    // 어느 화면에서 열어도 같은 주제 목록이 먼저 나옵니다.
+    // 검색 화면의 도움말 질문 두 개가 먼저, 이어서 주제 목록이 나옵니다.
     const replies = within(panel).getByRole('group', { name: '빠른 답변' })
     expect(within(replies).getAllByRole('button').map((button) => button.textContent)).toEqual([
-      ...assistantHelpTopics.map((topic) => topic.label), assistantMessages.quickLoginBenefits, assistantMessages.quickContact,
+      ...searchPageQuestions, ...assistantHelpTopics.map((topic) => topic.label), assistantMessages.quickLoginBenefits, assistantMessages.quickContact,
     ])
 
     const topic = assistantHelpTopics[0]!
@@ -90,7 +93,10 @@ describe('GovBiz 도우미 위젯', () => {
     expect(within(log).getByRole('link', { name: first.action!.label }).getAttribute('href')).toBe('/')
     expect(within(panel).getByRole('button', { name: assistantMessages.otherQuestion })).toBeTruthy()
 
-    fireEvent.keyDown(document, { key: 'Escape' })
+    // 패널 밖에서 누른 Esc는 가이드를 닫지 않고, 패널 안에서 누르면 닫습니다.
+    fireEvent.keyDown(document.body, { key: 'Escape' })
+    expect(screen.getByRole('dialog', { name: assistantMessages.name })).toBeTruthy()
+    fireEvent.keyDown(within(panel).getByRole('textbox', { name: assistantMessages.placeholder }), { key: 'Escape' })
     expect(screen.queryByRole('dialog', { name: assistantMessages.name })).toBeNull()
     // 대화는 세션에 남아 다시 열면 그대로입니다.
     expect(window.sessionStorage.getItem(assistantConversationStorageKey)).toContain(first.question)
@@ -208,7 +214,7 @@ function freeAnswer(overrides: Partial<AssistantAnswer>): AssistantAnswer {
   return { intent: 'OUT_OF_SCOPE', answer: null, citations: [], clarificationQuestion: null, searchQuery: null, accountTopic: null, navigation: null, cards: [], ...overrides }
 }
 
-describe('도우미 자유 질문', () => {
+describe('가이드 자유 질문', () => {
   it('AI 스위치가 꺼져 있으면(기본값) 자유 입력을 모델에 보내지 않고 주제 알약으로 돌려보낸다', () => {
     vi.stubEnv('VITE_ASSISTANT_AI_ENABLED', '')
     const ask = vi.spyOn(appContainer.resolve('askAssistantUseCase'), 'execute')
@@ -224,7 +230,7 @@ describe('도우미 자유 질문', () => {
     expect(ask).not.toHaveBeenCalled()
     const replies = within(panel).getByRole('group', { name: '빠른 답변' })
     expect(within(replies).getAllByRole('button').map((button) => button.textContent)).toEqual([
-      ...assistantHelpTopics.map((topic) => topic.label), assistantMessages.quickLoginBenefits, assistantMessages.quickContact,
+      ...searchPageQuestions, ...assistantHelpTopics.map((topic) => topic.label), assistantMessages.quickLoginBenefits, assistantMessages.quickContact,
     ])
   })
 
@@ -251,7 +257,7 @@ describe('도우미 자유 질문', () => {
     expect(await within(log).findByText('어떤 화면이 궁금하세요?')).toBeTruthy()
     const replies = within(panel).getByRole('group', { name: '빠른 답변' })
     expect(within(replies).getAllByRole('button').map((button) => button.textContent)).toEqual([
-      ...assistantHelpTopics.map((topic) => topic.label), assistantMessages.quickLoginBenefits, assistantMessages.quickContact,
+      ...searchPageQuestions, ...assistantHelpTopics.map((topic) => topic.label), assistantMessages.quickLoginBenefits, assistantMessages.quickContact,
     ])
   })
 

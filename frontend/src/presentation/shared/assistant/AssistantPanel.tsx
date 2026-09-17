@@ -8,8 +8,8 @@ import { useFloatingPopover } from '../workspace/useFloatingPopover'
 import type { AssistantViewModel } from './useAssistantViewModel'
 
 /**
- * 도우미 패널입니다. 머리(아바타·이름·상태·메뉴·닫기), 대화 영역, 빠른 답변, 입력창 순서이고 머리와 입력창은 고정,
- * 대화 영역만 스크롤합니다. 비모달이라 배경은 그대로 조작할 수 있고 Esc로 닫습니다.
+ * 가이드 패널입니다. 머리(아바타·이름·상태·메뉴·닫기), 대화 영역, 빠른 답변, 입력창 순서이고 머리와 입력창은 고정,
+ * 대화 영역만 스크롤합니다. 비모달이라 배경은 그대로 조작할 수 있고, 포커스가 패널 안에 있을 때 Esc로 닫습니다.
  */
 export function AssistantPanel({ vm, launcherRef }: { vm: AssistantViewModel; launcherRef: React.RefObject<HTMLButtonElement | null> }) {
   const logRef = useRef<HTMLDivElement>(null)
@@ -33,19 +33,18 @@ export function AssistantPanel({ vm, launcherRef }: { vm: AssistantViewModel; la
     if (log) log.scrollTop = log.scrollHeight
   }, [lastMessageId, vm.isTyping, vm.quickReplies])
 
-  useEffect(() => {
-    function onKeyDown(event: globalThis.KeyboardEvent) {
-      if (event.key !== 'Escape') return
-      if (isMenuOpen) { setIsMenuOpen(false); return }
-      vm.close()
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [isMenuOpen, vm])
+  // Esc는 포커스가 패널 안에 있을 때만 받습니다. 패널은 비모달이라, 다른 모달에서 누른 Esc가 가이드까지 닫으면 안 됩니다.
+  function onPanelKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key !== 'Escape') return
+    event.stopPropagation()
+    if (isMenuOpen) { setIsMenuOpen(false); return }
+    vm.close()
+  }
 
   function submit(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault()
-    if (draft.trim() === '') return
+    // 답을 기다리는 동안 Enter로 다시 보내지 않고, 쓰던 문장은 입력창에 그대로 둡니다.
+    if (draft.trim() === '' || vm.isTyping) return
     vm.submitText(draft)
     setDraft('')
   }
@@ -70,6 +69,7 @@ export function AssistantPanel({ vm, launcherRef }: { vm: AssistantViewModel; la
       role="dialog"
       aria-modal="false"
       aria-label={assistantMessages.name}
+      onKeyDown={onPanelKeyDown}
     >
       <header className={styles.header}>
         <button className={styles.headerBack} type="button" aria-label={assistantMessages.back} onClick={vm.close}>‹</button>
@@ -101,7 +101,7 @@ export function AssistantPanel({ vm, launcherRef }: { vm: AssistantViewModel; la
       </header>
 
       <div className={styles.log} ref={logRef} role="log" aria-live="polite" aria-label="대화">
-        <p className={styles.dateSeparator}>{assistantMessages.today}</p>
+        <p className={styles.dateSeparator}>{vm.dateLabel}</p>
         {groupMessages(vm.messages).map((group) => (
           group.role === 'user' ? (
             <div className={`${styles.group} ${styles.groupMe}`} key={group.key}>

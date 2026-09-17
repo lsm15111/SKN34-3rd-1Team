@@ -2,7 +2,7 @@ import type { AssistantAnswer, AssistantCard as AssistantAnswerCard } from '../.
 import type { PartnerProposal } from '../../../domain/entities/PartnerProposal'
 import type { SavedSupportProgram } from '../../../domain/entities/SavedSupportProgram'
 import { loginPathFor, signupPathFor } from '../auth/returnPath'
-import { findHelpEntry, helpActionHref } from '../help/helpContent'
+import { findHelpEntry, helpActionHref, helpEntriesForRoute } from '../help/helpContent'
 import type { HelpEntry } from '../help/helpTypes'
 import { appPaths, isAppPath, publicPaths, supportProgramQuestionPath } from '../routes/appPaths'
 import type { AssistantCardTagTone } from './Assistant.styles'
@@ -21,7 +21,7 @@ export type AssistantQuickReply = {
   text?: string
 }
 
-/** 도움말 항목을 묶는 주제입니다. 어느 화면에서 열어도 같은 주제 목록이 먼저 나오고, 주제 → 질문 → 답 순서로 타고 들어갑니다. */
+/** 도움말 항목을 묶는 주제입니다. 화면별 질문 뒤에 같은 주제 목록이 나오고, 주제 → 질문 → 답 순서로 타고 들어갑니다. */
 export type AssistantHelpTopic = { id: string; label: string; entryIds: readonly string[] }
 
 export const assistantHelpTopics: readonly AssistantHelpTopic[] = [
@@ -65,6 +65,8 @@ export type AssistantMessage =
       tone: 'normal' | 'warn'
       /** 이 답변 뒤에 붙일 빠른 답변입니다. 비어 있으면 화면 추천으로 돌아갑니다. */
       followUps: AssistantQuickReply[]
+      /** 처음 열 때의 인사입니다. 자유 질문의 최근 대화에 싣지 않습니다. */
+      greeting?: boolean
     }
 
 export type AssistantSession = {
@@ -99,15 +101,35 @@ function botMessage(
     source: options.source ?? null,
     tone: options.tone ?? 'normal',
     followUps: options.followUps ?? [],
+    ...(options.greeting === true ? { greeting: true } : {}),
   }
 }
 
 /** 처음 열 때의 인사 두 마디입니다. */
 export function greetingMessages(): AssistantMessage[] {
   return [
-    botMessage([assistantMessages.greetingIntro, assistantMessages.greetingScope]),
-    botMessage([assistantMessages.greetingAsk]),
+    botMessage([assistantMessages.greetingIntro, assistantMessages.greetingScope], { greeting: true }),
+    botMessage([assistantMessages.greetingAsk], { greeting: true }),
   ]
+}
+
+/** 대화를 시작한 날이 서울 기준 오늘이면 "오늘", 아니면 "9월 16일"처럼 적습니다. 복원한 대화의 구분선에 씁니다. */
+export function conversationDateLabel(startedAt: string, now: Date): string {
+  const started = new Date(startedAt)
+  if (Number.isNaN(started.getTime())) return assistantMessages.today
+  if (startOfSeoulDay(started) === startOfSeoulDay(now)) return assistantMessages.today
+  const seoul = new Date(started.getTime() + 9 * 60 * 60 * 1000)
+  return `${seoul.getUTCMonth() + 1}월 ${seoul.getUTCDate()}일`
+}
+
+/**
+ * 답변의 이동 버튼입니다. 비로그인에게 로그인이 필요한 화면(`/app` 아래)으로 가는 버튼은 로그인 뒤 그 화면으로 돌아오는
+ * "로그인하고 …" 버튼으로 바꿔, 누르면 영문 모를 로그인 화면으로 튕기는 일이 없게 합니다.
+ */
+function destinationButton(label: string, to: string, pathname: string, session: AssistantSession): AssistantCardButton {
+  const href = helpActionHref(to, isAppPath(pathname))
+  if (session.isAuthenticated || !isAppPath(href)) return { label, to: href }
+  return { label: assistantMessages.loginAndOpen(label), to: loginPathFor(href) }
 }
 
 function helpQuickReply(entry: HelpEntry): AssistantQuickReply {
@@ -116,11 +138,18 @@ function helpQuickReply(entry: HelpEntry): AssistantQuickReply {
 
 export const contactQuickReply: AssistantQuickReply = { id: 'contact', label: assistantMessages.quickContact, kind: 'contact' }
 
+/** 지금 화면에 맞춰 메뉴 맨 앞에 두는 질문 수입니다. */
+export const pageQuestionLimit = 2
+
 /**
- * 처음 열었을 때와 "다른 주제"를 눌렀을 때의 빠른 답변입니다. 화면과 무관하게 도움말 주제 전부와 회원의 상태 질문을 둡니다.
- * 비로그인이면 상태 질문 대신 로그인 안내 하나를 둡니다. 카카오톡 채널이 설정돼 있으면 담당자 문의를 마지막에 둡니다.
+ * 처음 열었을 때와 "다른 주제"를 눌렀을 때의 빠른 답변입니다. 지금 보고 있는 화면의 도움말 질문을 먼저 두고,
+ * 이어서 도움말 주제 전부와 회원의 상태 질문을 둡니다. 비로그인이면 상태 질문 대신 로그인 안내 하나를 둡니다.
+ * 카카오톡 채널이 설정돼 있으면 담당자 문의를 마지막에 둡니다.
  */
-export function quickRepliesFor(session: AssistantSession): AssistantQuickReply[] {
+export function quickRepliesFor(session: AssistantSession, pathname: string): AssistantQuickReply[] {
+  const page = helpEntriesForRoute(pathname, pageQuestionLimit)
+    .filter((entry) => entry.routes.length > 0)
+    .map(helpQuickReply)
   const topics = assistantHelpTopics.map<AssistantQuickReply>((topic) => ({ id: `topic:${topic.id}`, label: topic.label, kind: 'topic', topicId: topic.id }))
   const status: AssistantQuickReply[] = session.isAuthenticated
     ? [
@@ -129,7 +158,12 @@ export function quickRepliesFor(session: AssistantSession): AssistantQuickReply[
       ]
     : [{ id: 'status:login-benefits', label: assistantMessages.quickLoginBenefits, kind: 'login-benefits' }]
   const contact = session.contactUrl === null ? [] : [contactQuickReply]
-  return [...topics, ...status, ...contact]
+  return [...page, ...topics, ...status, ...contact]
+}
+
+/** 메뉴(주제 목록)를 보여 주는 중인지입니다. 화면을 옮기면 메뉴만 새 화면 기준으로 바꾸고 답변 뒤 알약은 그대로 둡니다. */
+export function isMenuReplies(replies: readonly AssistantQuickReply[]): boolean {
+  return replies.some((reply) => reply.kind === 'topic')
 }
 
 export const otherQuestionReply: AssistantQuickReply = { id: 'other', label: assistantMessages.otherQuestion, kind: 'other' }
@@ -143,16 +177,29 @@ export function topicAnswer(topic: AssistantHelpTopic): AssistantMessage {
   return botMessage([assistantMessages.topicAsk(topic.label)], { followUps: [...questions, otherQuestionReply] })
 }
 
-/** 도움말 항목으로 답합니다. 결론 → 본문 첫 문단 → 지금 안 되는 것 → 행동 버튼. 준비 중·예시 항목은 그 사실을 함께 말합니다. */
-export function helpAnswer(entry: HelpEntry, pathname: string): AssistantMessage {
-  const inApp = isAppPath(pathname)
+/** 항목 대상(회원·기업)을 지금 사용자가 충족하지 못하면 그 사실을 한 문장으로 알려 줍니다. */
+function audienceNotice(entry: HelpEntry, session: AssistantSession): string | null {
+  if (entry.audience === 'public') return null
+  if (!session.isAuthenticated) return assistantMessages.helpNeedsLogin
+  if (entry.audience === 'company' && !session.hasCompany) return assistantMessages.helpNeedsCompany
+  return null
+}
+
+/**
+ * 도움말 항목으로 답합니다. 결론 → 본문 첫 문단 → 지금 안 되는 것 → 대상 안내 → 행동 버튼. 준비 중·예시 항목은 그 사실을 함께 말합니다.
+ * 비로그인에게 로그인 화면으로 가는 버튼은 "로그인하고 …"로, 기업 미등록 회원에게 기업 전용 기능은 기업 등록 버튼을 먼저 줍니다.
+ */
+export function helpAnswer(entry: HelpEntry, pathname: string, session: AssistantSession): AssistantMessage {
   const paragraphs = [entry.summary, ...entry.body.slice(0, 1)]
   if (entry.limitation !== null) paragraphs.push(entry.limitation)
   if (entry.status === 'planned') paragraphs.push(assistantMessages.helpPlanned)
   if (entry.status === 'demo') paragraphs.push(assistantMessages.helpDemo)
-  const buttons: AssistantCardButton[] = entry.action === null
-    ? []
-    : [{ label: entry.action.label, to: helpActionHref(entry.action.to, inApp) }]
+  const notice = audienceNotice(entry, session)
+  if (notice !== null) paragraphs.push(notice)
+  const buttons: AssistantCardButton[] = [
+    ...(notice === assistantMessages.helpNeedsCompany ? [{ label: assistantMessages.registerCompany, to: appPaths.profile }] : []),
+    ...(entry.action === null ? [] : [destinationButton(entry.action.label, entry.action.to, pathname, session)]),
+  ]
   const followUps = entry.related
     .map((id) => findHelpEntry(id))
     .filter((related): related is HelpEntry => related !== undefined)
@@ -210,7 +257,7 @@ export function freeTextAnswer(answer: AssistantAnswer, context: AssistantFreeTe
   const inApp = isAppPath(context.pathname)
   const navigation: AssistantCardButton | null = answer.navigation === null
     ? null
-    : { label: answer.navigation.label, to: helpActionHref(answer.navigation.to, inApp) }
+    : destinationButton(answer.navigation.label, answer.navigation.to, context.pathname, context.session)
   const cardOf = (buttons: AssistantCardButton[], rows: AssistantCardRow[] = []): AssistantCard | null =>
     (buttons.length > 0 || rows.length > 0 ? { rows, buttons } : null)
   const agentRows = agentCardRows(answer.cards, inApp)
@@ -221,7 +268,7 @@ export function freeTextAnswer(answer: AssistantAnswer, context: AssistantFreeTe
 
   switch (answer.intent) {
     case 'UNCLEAR':
-      return botMessage([answer.clarificationQuestion ?? assistantMessages.greetingAsk], { followUps: quickRepliesFor(context.session) })
+      return botMessage([answer.clarificationQuestion ?? assistantMessages.greetingAsk], { followUps: quickRepliesFor(context.session, context.pathname) })
     case 'PRODUCT_HELP': {
       const cited = answer.citations.map((id) => findHelpEntry(id)).filter((entry): entry is HelpEntry => entry !== undefined)
       const first = cited[0]
@@ -232,7 +279,7 @@ export function freeTextAnswer(answer: AssistantAnswer, context: AssistantFreeTe
         .map(helpQuickReply)
       // 첫 인용 항목의 행동 버튼은 원본 도움말 그대로(질의 포함) 씁니다. 인용이 없을 때만 Core가 고른 경로를 씁니다.
       const helpButton: AssistantCardButton | null = first?.action
-        ? { label: first.action.label, to: helpActionHref(first.action.to, inApp) }
+        ? destinationButton(first.action.label, first.action.to, context.pathname, context.session)
         : navigation
       return botMessage([answer.answer ?? ''], {
         card: cardOf(helpButton === null ? [] : [helpButton]),
