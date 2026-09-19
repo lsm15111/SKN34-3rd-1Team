@@ -208,8 +208,10 @@ AssistantMessageController (공유 요청 한도 + 로그인 회원은 주소당
     Core 도움말 카탈로그(assistant/help-catalog.json) 첨부, 로그인 회원이면 계정 묶음 HMAC 토큰(5분) 발급
   → AiAssistantClient → AI Service POST /internal/v1/assistant/answers
       → AssistantAgent (Agents SDK 에이전트 하나, OPENAI_ASSISTANT_MODEL 기본 gpt-5.6-luna/low)
-          → 로그인 회원만 보이는 읽기 도구(최대 3회): get_my_company_profile · search_partner_recruitments · list_saved_programs
-              → Core GET /internal/v1/assistant/tools/{company-profile|recruitments|saved-programs} (공유 비밀 + 계정 토큰)
+          → 로그인 회원만 보이는 읽기 도구 8종(질문당 최대 3회): get_my_company_profile · search_partner_recruitments ·
+            list_saved_programs · find_programs · list_application_preparations · list_combination_reviews ·
+            get_daily_report_status · get_proposals_summary
+              → Core GET /internal/v1/assistant/tools/* (공유 비밀 + 계정 토큰)
       → AssistantService: 인용은 요청 카탈로그 안, 카드는 이번 실행의 도구 결과 안(제목·경로는 도구 결과로 다시 만듦),
         자료를 읽지 않은 회원 자료 답은 버림
   → Core 재검증(의도별 필드·카탈로그 인용·카드 경로·이동 허용 목록) → 템플릿 답·로그인 안내
@@ -218,10 +220,13 @@ AssistantMessageController (공유 요청 한도 + 로그인 회원은 주소당
 
 답의 근거인 도움말은 Core 카탈로그가 원본입니다. 브라우저는 질문·최근 대화·화면 경로만 보내며 도움말 본문을 보내도 쓰지 않습니다.
 카탈로그는 프런트 `helpContent.ts`의 챗봇 항목과 같아야 하고, 프런트 계약 테스트(`helpCatalogContract.test.ts`)가 두 파일을 맞춥니다.
-의도는 여덟 가지입니다. 사용법(`PRODUCT_HELP`)은 카탈로그 인용으로 답하고, 검색(`SEARCH`)·원문 질문(`PROGRAM_QUESTION`)은 실행하지 않고
-기존 화면으로 이동 버튼만 붙입니다. 회원 자료 의도(`ACCOUNT_STATE`·`PARTNER_MATCH`·`SAVED_PROGRAMS_QUESTION`)는 로그인 회원이면 도구로 읽은
+의도는 여덟 가지입니다. 사용법(`PRODUCT_HELP`)은 카탈로그 인용으로 답하고, 원문 질문(`PROGRAM_QUESTION`)은 실행하지 않고 기존 화면으로
+이동 버튼만 붙입니다. 도구 의도(`ACCOUNT_STATE`·`PARTNER_MATCH`·`SAVED_PROGRAMS_QUESTION`·`SEARCH`)는 로그인 회원이면 도구로 읽은
 자료로 답과 카드를 만들고, 비로그인이거나 공유 비밀(`ASSISTANT_TOOLS_TOKEN`, 32자 이상)이 없으면 도구가 보이지 않아 Core가 로그인 안내나
-템플릿 답(관심 공고 마감·받은 제안·기업 등록)을 붙입니다. 관심 공고 묶음 질문은 목록(제목·기관·마감·상태)만 읽고, 원문이 필요한 내용은
+템플릿 답(관심 공고 마감·받은 제안·기업 등록)을 붙입니다. 검색은 카탈로그(DB) 조회라 AI 점수화 없이 모집 중인 공고 5건까지만 보고,
+검색 실행 자체는 어느 경우에도 검색어를 미리 채운 검색 화면 버튼으로 넘깁니다. 상태 질문(`ACCOUNT_STATE`)의 영역은 관심 공고·받은 제안·
+기업 프로필에 더해 신청 준비 진행 단계·중복 검토 실행 상태·리포트 수신 설정까지 여섯 가지이고, 카드는 모집글·공고·신청 준비·중복 검토
+네 종류입니다. 관심 공고 묶음 질문은 목록(제목·기관·마감·상태)만 읽고, 원문이 필요한 내용은
 해당 공고의 원문 질문으로 안내합니다. 도구 실패·카드 조작·계약 위반은 답을 지어내지 않고 오류(503·502)로 끝냅니다.
 브라우저는 대화 본문 대신 대화를 시작할 때 만든 UUID(`conversationId`)만 보냅니다. Core의 `AssistantConversationRepository`가 Redis 목록 하나에
 서버가 확정한 질문(개인 정보를 가린 문장)과 보여 준 답만 최근 6개까지 보관하고(키는 계정·대화 id 해시, 마지막 질문 뒤 회원 24시간·비로그인 1시간),

@@ -51,3 +51,62 @@ data class AssistantSavedProgramSummary(
     val status: String,
     val documentId: String?,
 )
+
+/**
+ * 신청 준비 건 요약입니다. `progressRevision`은 진행 단계 변경 카드가 낙관적 잠금에 쓰는 값이라 함께 담습니다.
+ * `programTitle`은 현재 공고 목록에서 찾은 제목이며, 공고가 내려갔으면 null입니다.
+ */
+data class AssistantApplicationPreparationSummary(
+    val id: Long,
+    val sourceCode: String,
+    val sourceProgramId: String,
+    val programTitle: String?,
+    val progressStage: String,
+    val progressRevision: Long,
+    val updatedAt: LocalDate,
+)
+
+/** 중복 검토 요약입니다. 최근 실행의 상태와 날짜만 담고 판정 내용·근거는 담지 않습니다. */
+data class AssistantCombinationReviewSummary(
+    val id: Long,
+    val title: String,
+    val inputRevision: Long,
+    val programTitles: List<String>,
+    /** 아직 한 번도 실행하지 않았으면 null입니다. */
+    val latestRunStatus: String?,
+    val latestRunId: Long?,
+    val latestRunDate: LocalDate?,
+    val updatedAt: LocalDate,
+)
+
+/** 리포트 구독 상태입니다. 수신 이메일 주소는 담지 않습니다. */
+data class AssistantDailyReportStatus(
+    val enabled: Boolean,
+    val emailConfirmed: Boolean,
+    val supportPurpose: String,
+    val serviceEnabled: Boolean,
+    val sendHour: Int,
+    val latestReportDate: LocalDate?,
+)
+
+/** 제안함 요약입니다. 상대 기업 이름·연락처·본문은 담지 않습니다. */
+data class AssistantProposalSummary(
+    val hasCompany: Boolean,
+    val receivedPending: Int,
+    val sentPending: Int,
+    /** 받은 제안 중 가장 빨리 만료되는 날입니다. */
+    val earliestExpiryDate: LocalDate?,
+)
+
+/** 공개 공고 검색 결과 한 건입니다. AI 점수화 없이 키워드·지역·모집 상태로만 고릅니다. */
+data class AssistantProgramSearchResult(
+    val sourceCode: String,
+    val sourceProgramId: String,
+    val title: String,
+    val organization: String,
+    val applicationEndDate: LocalDate?,
+    val status: String,
+    val regions: List<String>,
+    /** 이미 관심 공고함에 담은 공고인지입니다. 담기·빼기 카드가 이 값으로 갈립니다. */
+    val saved: Boolean,
+)

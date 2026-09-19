@@ -1,9 +1,15 @@
 package ai.govbiz.core.assistant.controller
 
+import ai.govbiz.core.assistant.controller.dto.AssistantApplicationPreparationResponse
+import ai.govbiz.core.assistant.controller.dto.AssistantCombinationReviewResponse
 import ai.govbiz.core.assistant.controller.dto.AssistantCompanyProfileResponse
+import ai.govbiz.core.assistant.controller.dto.AssistantDailyReportStatusResponse
+import ai.govbiz.core.assistant.controller.dto.AssistantProgramSearchResponse
+import ai.govbiz.core.assistant.controller.dto.AssistantProposalSummaryResponse
 import ai.govbiz.core.assistant.controller.dto.AssistantRecruitmentResponse
 import ai.govbiz.core.assistant.controller.dto.AssistantSavedProgramResponse
 import ai.govbiz.core.assistant.service.AssistantToolService
+import ai.govbiz.core.assistant.service.AssistantWorkToolService
 import jakarta.validation.constraints.Min
 import jakarta.validation.constraints.Pattern
 import jakarta.validation.constraints.Size
@@ -20,7 +26,10 @@ import org.springframework.web.bind.annotation.RestController
  */
 @RestController
 @RequestMapping("/internal/v1/assistant/tools")
-class AssistantToolController(private val service: AssistantToolService) {
+class AssistantToolController(
+    private val service: AssistantToolService,
+    private val workService: AssistantWorkToolService,
+) {
     @GetMapping("/company-profile")
     fun companyProfile(@RequestParam @Min(1) accountId: Long): ResponseEntity<AssistantCompanyProfileResponse> =
         noStore(AssistantCompanyProfileResponse.from(service.companyProfile(accountId)))
@@ -37,6 +46,31 @@ class AssistantToolController(private val service: AssistantToolService) {
     @GetMapping("/saved-programs")
     fun savedPrograms(@RequestParam @Min(1) accountId: Long): ResponseEntity<List<AssistantSavedProgramResponse>> =
         noStore(service.savedPrograms(accountId).map(AssistantSavedProgramResponse::from))
+
+    /** 공개 공고를 키워드·지역으로 찾습니다. AI 점수화가 없는 카탈로그 조회라 비용이 들지 않습니다. */
+    @GetMapping("/programs")
+    fun programs(
+        @RequestParam @Min(1) accountId: Long,
+        @RequestParam(required = false) @Size(max = 100) keyword: String?,
+        @RequestParam(required = false) @Size(max = 50) region: String?,
+    ): ResponseEntity<List<AssistantProgramSearchResponse>> =
+        noStore(service.findPrograms(accountId, keyword, region).map(AssistantProgramSearchResponse::from))
+
+    @GetMapping("/application-preparations")
+    fun applicationPreparations(@RequestParam @Min(1) accountId: Long): ResponseEntity<List<AssistantApplicationPreparationResponse>> =
+        noStore(workService.applicationPreparations(accountId).map(AssistantApplicationPreparationResponse::from))
+
+    @GetMapping("/combination-reviews")
+    fun combinationReviews(@RequestParam @Min(1) accountId: Long): ResponseEntity<List<AssistantCombinationReviewResponse>> =
+        noStore(workService.combinationReviews(accountId).map(AssistantCombinationReviewResponse::from))
+
+    @GetMapping("/daily-report")
+    fun dailyReport(@RequestParam @Min(1) accountId: Long): ResponseEntity<AssistantDailyReportStatusResponse> =
+        noStore(AssistantDailyReportStatusResponse.from(workService.dailyReportStatus(accountId)))
+
+    @GetMapping("/proposals")
+    fun proposals(@RequestParam @Min(1) accountId: Long): ResponseEntity<AssistantProposalSummaryResponse> =
+        noStore(AssistantProposalSummaryResponse.from(workService.proposalSummary(accountId)))
 
     private fun <T : Any> noStore(body: T): ResponseEntity<T> = ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(body)
 }

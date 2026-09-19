@@ -49,7 +49,10 @@ async def test_member_partner_match_reads_profile_then_recruitments_and_rebuilds
     ]
     assert dict(core_tools.requests[1].url.params) == {"accountId": "7", "seekingRole": "PARTICIPANT"}
     # 회원이면 도구 세 개가 보이고, 모델 입력에는 계정 번호·토큰이 없습니다.
-    assert tool_names(model.first_call) == ["get_my_company_profile", "search_partner_recruitments", "list_saved_programs"]
+    assert tool_names(model.first_call) == [
+        "get_my_company_profile", "search_partner_recruitments", "list_saved_programs", "find_programs",
+        "list_application_preparations", "list_combination_reviews", "get_daily_report_status", "get_proposals_summary",
+    ]
     first_input = json.loads(model.first_call.input[0]["content"])
     assert "principal" not in first_input
     # 매 질문 같은 카탈로그를 질문 앞에 두어 프롬프트 캐시 접두사를 넓힙니다.
@@ -95,13 +98,46 @@ async def test_partner_match_for_members_without_a_company_is_left_to_core(membe
 
 
 @pytest.mark.anyio
-async def test_received_proposals_answer_is_left_to_core_even_after_tools(member_request_data, core_tools):
+async def test_work_status_answers_come_from_the_matching_job_tool(member_request_data, core_tools):
+    member_request_data["message"] = "신청 준비 어디까지 했지?"
     model = ScriptedModel([
-        [function_call("get_my_company_profile", {}, call_id="call_1")],
-        final(intent="ACCOUNT_STATE", accountTopic="RECEIVED_PROPOSALS", answer="받은 제안 5건이에요.", navigation="PROPOSALS"),
+        [function_call("list_application_preparations", {}, call_id="call_1")],
+        final(intent="ACCOUNT_STATE", accountTopic="APPLICATION_PREPARATIONS", answer="준비 중 1건, 신청 완료 1건입니다.",
+              navigation="APPLICATION_PREPARATIONS",
+              cards=[{"kind": "PREPARATION", "id": "31", "reason": "아직 준비 중인 건입니다."}]),
     ])
     response = await AssistantService(agent_for(model, core_tools)).answer(AssistantAnswerRequest.model_validate(member_request_data))
-    assert response.answer is None and response.navigation is None
+
+    assert response.account_topic == "APPLICATION_PREPARATIONS"
+    assert [(card.kind, card.id, card.to) for card in response.cards] == [("PREPARATION", "31", "/app/application-preparations/31")]
+    assert response.navigation is not None and response.navigation.to == "/app/application-preparations"
+    assert [request.url.path for request in core_tools.requests] == ["/internal/v1/assistant/tools/application-preparations"]
+
+
+@pytest.mark.anyio
+async def test_search_answers_with_found_programs_and_keeps_the_search_query(member_request_data, core_tools):
+    member_request_data["message"] = "서울 창업 지원금 찾아줘"
+    model = ScriptedModel([
+        [function_call("find_programs", {"keyword": "창업 지원금", "region": "서울"}, call_id="call_1")],
+        final(intent="SEARCH", searchQuery="서울 창업 지원금", answer="모집 중인 창업 지원사업 두 건을 찾았습니다.", navigation="CHAT",
+              cards=[{"kind": "PROGRAM", "id": "KSTARTUP:174520", "reason": "10월 10일까지 모집 중입니다."}]),
+    ])
+    response = await AssistantService(agent_for(model, core_tools)).answer(AssistantAnswerRequest.model_validate(member_request_data))
+
+    assert response.intent == "SEARCH" and response.search_query == "서울 창업 지원금"
+    assert [(card.kind, card.id) for card in response.cards] == [("PROGRAM", "KSTARTUP:174520")]
+    assert dict(core_tools.requests[0].url.params) == {"accountId": "7", "keyword": "창업 지원금", "region": "서울"}
+
+
+@pytest.mark.anyio
+async def test_guest_search_keeps_the_query_and_drops_the_agent_answer(request_data, core_tools):
+    request_data["message"] = "창업 지원금 찾아줘"
+    model = ScriptedModel([final(intent="SEARCH", searchQuery="창업 지원금", answer="두 건을 찾았습니다.", navigation="CHAT")])
+    response = await AssistantService(agent_for(model, core_tools)).answer(AssistantAnswerRequest.model_validate(request_data))
+
+    # 비로그인은 도구가 없으므로 근거 없는 답과 이동 버튼을 버리고 Core가 검색 화면을 안내합니다.
+    assert response.search_query == "창업 지원금" and response.answer is None and response.navigation is None
+    assert core_tools.requests == []
 
 
 @pytest.mark.anyio

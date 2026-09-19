@@ -100,6 +100,37 @@ describe('freeTextAnswer 이동 버튼', () => {
     expect(program.card?.buttons).toEqual([{ label: assistantMessages.loginAndOpen('관심 공고함 열기'), to: `/login?next=${encodeURIComponent('/app/saved-programs')}` }])
   })
 
+  it('검색 답에는 가이드가 찾은 공고 카드와 검색어를 미리 채우는 버튼이 함께 붙는다', () => {
+    const answer = bot(freeTextAnswer(
+      {
+        ...base, intent: 'SEARCH', answer: '모집 중인 공고 두 건을 찾았습니다.', searchQuery: '서울 창업 지원금',
+        navigation: { label: '검색 화면에서 찾기', to: '/app/chat' },
+        cards: [{ kind: 'PROGRAM', id: 'KSTARTUP:174520', title: '예비창업패키지', subtitle: '창업진흥원 · 2026-10-10', reason: '10월 10일까지 모집합니다.', to: '/app/support-programs/detail?sourceCode=KSTARTUP&sourceProgramId=174520' }],
+      },
+      { pathname: '/app/chat', search: '', session: member, returnTo: '/app/chat' },
+    ))
+    expect(answer.card?.rows.map((row) => row.title)).toEqual(['예비창업패키지'])
+    expect(answer.card?.buttons).toEqual([{ label: '검색 화면에서 찾기', to: '/app/chat', searchQuery: '서울 창업 지원금' }])
+    expect(answer.source).toBe(assistantMessages.searchSource)
+  })
+
+  it('신청 준비·중복 검토 카드는 종류 태그와 상세 경로를 그대로 쓴다', () => {
+    const answer = bot(freeTextAnswer(
+      {
+        ...base, intent: 'ACCOUNT_STATE', answer: '준비 중 1건입니다.', accountTopic: 'APPLICATION_PREPARATIONS',
+        navigation: { label: '신청 준비 열기', to: '/app/application-preparations' },
+        cards: [
+          { kind: 'PREPARATION', id: '31', title: '서울 AI 실증 지원사업', subtitle: '준비 중 · 2026-09-16', reason: '아직 준비 중입니다.', to: '/app/application-preparations/31' },
+          { kind: 'REVIEW', id: '41', title: '혁신바우처와 R&D', subtitle: '검토 완료 · 2026-09-15', reason: '최근 실행이 끝났습니다.', to: '/app/combination-reviews/41' },
+        ],
+      },
+      { pathname: '/app/saved-programs', search: '', session: member, returnTo: '/app/saved-programs' },
+    ))
+    expect(answer.card?.rows.map((row) => row.tag?.label)).toEqual([assistantMessages.cardPreparation, assistantMessages.cardReview])
+    expect(answer.card?.rows.map((row) => row.to)).toEqual(['/app/application-preparations/31', '/app/combination-reviews/41'])
+    expect(answer.source).toBe(assistantMessages.aiToolSource(assistantMessages.preparationsSource))
+  })
+
   it('불명확한 질문 뒤 메뉴도 지금 화면 기준이다', () => {
     const answer = bot(freeTextAnswer(
       { ...base, intent: 'UNCLEAR', answer: null, clarificationQuestion: '무엇이 궁금하세요?', navigation: null },

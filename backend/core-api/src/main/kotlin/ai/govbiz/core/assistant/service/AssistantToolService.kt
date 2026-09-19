@@ -3,13 +3,18 @@ package ai.govbiz.core.assistant.service
 import ai.govbiz.core.account.repository.CompanyPartnerProfileRepository
 import ai.govbiz.core.account.repository.CompanyRepository
 import ai.govbiz.core.assistant.domain.AssistantCompanyProfile
+import ai.govbiz.core.assistant.domain.AssistantProgramSearchResult
 import ai.govbiz.core.assistant.domain.AssistantRecruitmentSummary
 import ai.govbiz.core.assistant.domain.AssistantSavedProgramSummary
 import ai.govbiz.core.partner.domain.PartnerRecruitmentQuery
 import ai.govbiz.core.partner.domain.PartnerRecruitmentSort
 import ai.govbiz.core.partner.domain.PartnerRecruitmentStatus
 import ai.govbiz.core.partner.domain.PartnerRole
+import ai.govbiz.core.supportprogram.domain.SupportProgramCatalogSort
+import ai.govbiz.core.supportprogram.domain.SupportProgramStatus
 import ai.govbiz.core.supportprogram.repository.SupportProgramRepository
+import ai.govbiz.core.supportprogram.service.catalog.SupportProgramCatalogService
+import ai.govbiz.core.supportprogram.service.catalog.exception.SupportProgramCatalogFilterException
 import ai.govbiz.core.supportprogram.service.saved.SavedSupportProgramService
 import org.springframework.stereotype.Service
 
@@ -24,6 +29,7 @@ class AssistantToolService(
     private val recruitmentService: ai.govbiz.core.partner.service.PartnerRecruitmentService,
     private val savedSupportProgramService: SavedSupportProgramService,
     private val supportProgramRepository: SupportProgramRepository,
+    private val catalogService: SupportProgramCatalogService,
 ) {
     fun companyProfile(accountId: Long): AssistantCompanyProfile {
         val company = companyRepository.findByAccountId(accountId) ?: return AssistantCompanyProfile.NOT_REGISTERED
@@ -103,6 +109,42 @@ class AssistantToolService(
             )
         }
 
+    /**
+     * 공개 공고를 키워드·지역으로 찾습니다. 카탈로그(DB) 검색이라 AI 점수화·임베딩을 쓰지 않습니다.
+     * 이미 담은 공고인지 함께 표시해, 가이드가 담기 카드와 빼기 카드를 잘못 고르지 않게 합니다.
+     */
+    fun findPrograms(accountId: Long, keyword: String?, region: String?): List<AssistantProgramSearchResult> {
+        val normalizedKeyword = keyword?.trim()?.take(KEYWORD_MAX).orEmpty()
+        val normalizedRegion = region?.trim()?.take(REGION_MAX).orEmpty()
+        if (normalizedKeyword.isEmpty() && normalizedRegion.isEmpty()) return emptyList()
+        val found = try {
+            catalogService.browse(
+                rawKeyword = normalizedKeyword,
+                rawRegion = normalizedRegion,
+                status = SupportProgramStatus.OPEN,
+                sort = SupportProgramCatalogSort.DEADLINE,
+                page = 1,
+                pageSize = PROGRAM_SEARCH_MAX,
+            )
+        } catch (_: SupportProgramCatalogFilterException) {
+            // 모르는 지역 이름 같은 조건은 조건을 무시한 결과로 답하지 않고 빈 목록으로 둡니다.
+            return emptyList()
+        }
+        val saved = savedSupportProgramService.list(accountId).map { it.program.sourceCode to it.program.id }.toSet()
+        return found.programs.map { program ->
+            AssistantProgramSearchResult(
+                sourceCode = program.sourceCode,
+                sourceProgramId = program.id,
+                title = program.title,
+                organization = program.organization,
+                applicationEndDate = program.applicationEndDate,
+                status = program.status.name,
+                regions = program.regions.take(REGION_LIST_MAX),
+                saved = (program.sourceCode to program.id) in saved,
+            )
+        }
+    }
+
     /** 개인정보를 가린 뒤 자릅니다. 잘린 본문은 끝에 줄임표를 붙여 모델이 문장이 끝난 것으로 오해하지 않게 합니다. */
     private fun clip(text: String, max: Int): String {
         val masked = AssistantPiiMasker.mask(text.trim())
@@ -115,5 +157,8 @@ class AssistantToolService(
         const val BODY_MAX = 600
         const val INTRODUCTION_MAX = 300
         const val REGION_MAX = 50
+        const val KEYWORD_MAX = 100
+        const val PROGRAM_SEARCH_MAX = 5
+        const val REGION_LIST_MAX = 5
     }
 }

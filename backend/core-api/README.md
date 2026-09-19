@@ -368,7 +368,7 @@ Core는 보내기 전에 사업자등록번호·전화·이메일·주민등록�
 의도별 필드 조합·인용 id·스키마 버전이 어긋나면 답을 고치지 않고 502 `AI_SERVICE_INVALID_RESPONSE`로 끝냅니다.
 이동 버튼의 경로는 Core 상수(`/app/chat`·`/app/saved-programs`·`/app/proposals`·`/app/profile`·`/app/partners`)와 요청에 실린 도움말 행동 경로만 씁니다.
 
-가이드 답변의 근거 도움말은 `assistant/help-catalog.json`(`AssistantHelpCatalog`)이 원본이며 프런트 `helpContent.ts`의 챗봇 항목과 같아야 합니다. `AiAssistantClient.answer` 한 번으로 AI Service `/internal/v1/assistant/answers`(`govbiz-assistant-v2`)를 부르고, 로그인 회원이면서 `ASSISTANT_TOOLS_TOKEN`(32자 이상)이 있으면 `AssistantToolTokenService`가 발급한 계정 묶음 토큰을 `principal`로 싣습니다. AI Service의 도구는 `AssistantToolController`(`GET /internal/v1/assistant/tools/*`, 공유 비밀 + 토큰)를 되부릅니다. 응답의 인용·카드 경로·이동 버튼은 `AssistantMessageService`가 카탈로그·허용 목록으로 다시 검증하고, 로그인 회원 질문에는 주소당 추가 한도(`ASSISTANT_AGENT_PER_CLIENT_PER_MINUTE`, 기본 3)를 겁니다.
+가이드 답변의 근거 도움말은 `assistant/help-catalog.json`(`AssistantHelpCatalog`)이 원본이며 프런트 `helpContent.ts`의 챗봇 항목과 같아야 합니다. `AiAssistantClient.answer` 한 번으로 AI Service `/internal/v1/assistant/answers`(`govbiz-assistant-v2`)를 부르고, 로그인 회원이면서 `ASSISTANT_TOOLS_TOKEN`(32자 이상)이 있으면 `AssistantToolTokenService`가 발급한 계정 묶음 토큰을 `principal`로 싣습니다. AI Service의 도구는 `AssistantToolController`(`GET /internal/v1/assistant/tools/*`, 공유 비밀 + 토큰)를 되부릅니다. 도구가 읽는 자료는 `AssistantToolService`(기업 프로필·모집글·관심 공고·공고 검색)와 `AssistantWorkToolService`(신청 준비·중복 검토·리포트·제안함)가 각 기능의 기존 Service로만 만들고, 쓰기 엔드포인트는 두지 않습니다. 응답의 인용·카드 경로·이동 버튼은 `AssistantMessageService`가 카탈로그·허용 목록으로 다시 검증하고, 로그인 회원 질문에는 주소당 추가 한도(`ASSISTANT_AGENT_PER_CLIENT_PER_MINUTE`, 기본 3)를 겁니다.
 
 ### 후속 대화 조건 해석
 

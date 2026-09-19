@@ -26,6 +26,10 @@ def test_each_intent_accepts_its_own_fields(data):
 @pytest.mark.parametrize(("data", "expected"), [
     # 모델이 의도와 무관한 필드를 함께 채우면 비웁니다.
     (model_output(intent="SEARCH", searchQuery="창업 지원", answer="찾아볼게요.", citations=["search-score-meaning"]),
+     model_output(intent="SEARCH", searchQuery="창업 지원", answer="찾아볼게요.")),
+    # 검색은 공고를 찾아 답할 수 있지만, 답이 없으면 카드와 이동 버튼도 붙일 곳이 없습니다.
+    (model_output(intent="SEARCH", searchQuery="창업 지원", navigation="CHAT",
+                  cards=[{"kind": "PROGRAM", "id": "KSTARTUP:174520", "reason": "답 없는 카드"}]),
      model_output(intent="SEARCH", searchQuery="창업 지원")),
     (model_output(intent="PROGRAM_QUESTION", accountTopic="SAVED_PROGRAMS", cards=[{"kind": "PROGRAM", "id": "BIZINFO:1", "reason": "이유"}], navigation="CHAT"),
      model_output(intent="PROGRAM_QUESTION")),

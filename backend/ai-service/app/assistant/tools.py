@@ -11,7 +11,9 @@ import httpx
 from agents import Agent, RunContextWrapper, function_tool
 
 from app.assistant.errors import ToolCallError
-from app.assistant.models import PROGRAM_DETAIL_ROUTE, RECRUITMENT_DETAIL_ROUTE, AssistantPrincipal
+from app.assistant.models import (
+    PREPARATION_DETAIL_ROUTE, PROGRAM_DETAIL_ROUTE, RECRUITMENT_DETAIL_ROUTE, REVIEW_DETAIL_ROUTE, AssistantPrincipal,
+)
 
 
 SECRET_HEADER = "X-Internal-Token"
@@ -25,7 +27,18 @@ MAX_NESTING = 4
 IDENTIFIER_KEYS = frozenset({
     "sourceCode", "sourceProgramId", "documentId", "status", "ownRole", "seekingRole",
     "recruitmentDeadline", "programApplicationEndDate", "applicationEndDate",
+    "progressStage", "latestRunStatus", "latestRunDate", "updatedAt", "latestReportDate", "earliestExpiryDate",
 })
+
+# 카드 부제에 쓰는 표시 이름입니다. 모델이 만든 문장이 아니라 도구 결과의 코드값을 여기서 옮깁니다.
+PROGRESS_STAGE_NAMES = {
+    "PREPARING": "준비 중", "APPLIED": "신청 완료", "DOCUMENT_REVIEW": "서류 심사",
+    "PRESENTATION_REVIEW": "발표 심사", "SELECTED": "선정", "REJECTED": "미선정",
+}
+RUN_STATUS_NAMES = {
+    "QUEUED": "실행 대기", "RUNNING": "실행 중", "SUCCEEDED": "검토 완료",
+    "FAILED": "실행 실패", "INTERRUPTED": "실행 중단", "UNKNOWN": "상태 미확인",
+}
 
 _EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 _RESIDENT_NUMBER = re.compile(r"(?<![0-9])[0-9]{6}-?[1-4][0-9]{6}(?![0-9])")
@@ -140,33 +153,124 @@ async def list_saved_programs(context: RunContextWrapper[GuideRunContext]) -> st
     return await _call(context, "list_saved_programs", "/saved-programs")
 
 
-GUIDE_TOOLS = [get_my_company_profile, search_partner_recruitments, list_saved_programs]
+@function_tool(is_enabled=_member_only, failure_error_function=None)
+async def find_programs(
+    context: RunContextWrapper[GuideRunContext],
+    keyword: str | None = None,
+    region: str | None = None,
+) -> str:
+    """모집 중인 공개 지원사업을 마감 임박순으로 최대 5건 찾는다. 점수·선정 가능성은 나오지 않는다.
+
+    Args:
+        keyword: 사업 이름·분야를 담은 짧은 검색어(예: 창업 자금, 수출 바우처). 지역만 물었으면 비운다.
+        region: 지역 이름(예: 서울, 경기). 사용자가 이번 말에서 지역을 말했을 때만 넣는다.
+    """
+    params = {"keyword": (keyword or "")[:100], "region": (region or "")[:50]}
+    return await _call(context, "find_programs", "/programs", params)
+
+
+@function_tool(is_enabled=_member_only, failure_error_function=None)
+async def list_application_preparations(context: RunContextWrapper[GuideRunContext]) -> str:
+    """내 신청 문서 준비 건(공고 제목·진행 단계·최근 수정일)을 최대 10건 읽는다. 작성한 내용은 없다."""
+    return await _call(context, "list_application_preparations", "/application-preparations")
+
+
+@function_tool(is_enabled=_member_only, failure_error_function=None)
+async def list_combination_reviews(context: RunContextWrapper[GuideRunContext]) -> str:
+    """내 중복 검토 건(제목·대상 공고·최근 실행 상태와 날짜)을 최대 5건 읽는다. 검토 판정 내용은 없다."""
+    return await _call(context, "list_combination_reviews", "/combination-reviews")
+
+
+@function_tool(is_enabled=_member_only, failure_error_function=None)
+async def get_daily_report_status(context: RunContextWrapper[GuideRunContext]) -> str:
+    """내 리포트 구독 상태(수신 설정·메일 인증·발송 시각·최근 리포트 날짜)를 읽는다. 리포트 내용은 없다."""
+    return await _call(context, "get_daily_report_status", "/daily-report")
+
+
+@function_tool(is_enabled=_member_only, failure_error_function=None)
+async def get_proposals_summary(context: RunContextWrapper[GuideRunContext]) -> str:
+    """내 제안함의 대기 중인 받은·보낸 제안 수와 가장 가까운 만료일을 읽는다. 상대 기업 정보는 없다."""
+    return await _call(context, "get_proposals_summary", "/proposals")
+
+
+GUIDE_TOOLS = [
+    get_my_company_profile, search_partner_recruitments, list_saved_programs, find_programs,
+    list_application_preparations, list_combination_reviews, get_daily_report_status, get_proposals_summary,
+]
 
 
 def card_catalog(results: list[ToolResult]) -> dict[tuple[str, str], dict[str, Any]]:
     """도구 결과에서 카드가 될 수 있는 항목입니다. 제목·부제·경로는 모델이 아니라 여기서 정합니다."""
     catalog: dict[tuple[str, str], dict[str, Any]] = {}
     for result in results:
-        if not isinstance(result.data, list):
+        build = _CARD_BUILDERS.get(result.name)
+        if build is None or not isinstance(result.data, list):
             continue
         for item in result.data:
             if not isinstance(item, dict):
                 continue
-            if result.name == "search_partner_recruitments" and isinstance(item.get("id"), int) and not isinstance(item.get("id"), bool):
-                identifier = str(item["id"])
-                catalog[("RECRUITMENT", identifier)] = {
-                    "kind": "RECRUITMENT", "id": identifier, "title": _short(item.get("title")),
-                    "subtitle": _subtitle(item.get("companyName"), item.get("region"), item.get("recruitmentDeadline")),
-                    "to": f"{RECRUITMENT_DETAIL_ROUTE}?{urlencode({'recruitmentId': identifier})}",
-                }
-            elif result.name == "list_saved_programs" and isinstance(item.get("sourceCode"), str) and isinstance(item.get("sourceProgramId"), str):
-                identifier = f"{item['sourceCode']}:{item['sourceProgramId']}"
-                catalog[("PROGRAM", identifier)] = {
-                    "kind": "PROGRAM", "id": identifier, "title": _short(item.get("title")),
-                    "subtitle": _subtitle(item.get("organization"), None, item.get("applicationEndDate")),
-                    "to": f"{PROGRAM_DETAIL_ROUTE}?{urlencode({'sourceCode': item['sourceCode'], 'sourceProgramId': item['sourceProgramId']})}",
-                }
+            card = build(item)
+            if card is not None:
+                catalog[(card["kind"], card["id"])] = card
     return catalog
+
+
+def _recruitment_card(item: dict[str, Any]) -> dict[str, Any] | None:
+    identifier = _number_id(item.get("id"))
+    if identifier is None:
+        return None
+    return {
+        "kind": "RECRUITMENT", "id": identifier, "title": _short(item.get("title")),
+        "subtitle": _subtitle(item.get("companyName"), item.get("region"), item.get("recruitmentDeadline")),
+        "to": f"{RECRUITMENT_DETAIL_ROUTE}?{urlencode({'recruitmentId': identifier})}",
+    }
+
+
+def _program_card(item: dict[str, Any]) -> dict[str, Any] | None:
+    source_code, source_program_id = item.get("sourceCode"), item.get("sourceProgramId")
+    if not isinstance(source_code, str) or not isinstance(source_program_id, str):
+        return None
+    return {
+        "kind": "PROGRAM", "id": f"{source_code}:{source_program_id}", "title": _short(item.get("title")),
+        "subtitle": _subtitle(item.get("organization"), item.get("applicationEndDate")),
+        "to": f"{PROGRAM_DETAIL_ROUTE}?{urlencode({'sourceCode': source_code, 'sourceProgramId': source_program_id})}",
+    }
+
+
+def _preparation_card(item: dict[str, Any]) -> dict[str, Any] | None:
+    identifier = _number_id(item.get("id"))
+    if identifier is None:
+        return None
+    return {
+        "kind": "PREPARATION", "id": identifier, "title": _short(item.get("programTitle")),
+        "subtitle": _subtitle(PROGRESS_STAGE_NAMES.get(str(item.get("progressStage"))), item.get("updatedAt")),
+        "to": f"{PREPARATION_DETAIL_ROUTE}/{identifier}",
+    }
+
+
+def _review_card(item: dict[str, Any]) -> dict[str, Any] | None:
+    identifier = _number_id(item.get("id"))
+    if identifier is None:
+        return None
+    return {
+        "kind": "REVIEW", "id": identifier, "title": _short(item.get("title")),
+        "subtitle": _subtitle(RUN_STATUS_NAMES.get(str(item.get("latestRunStatus")), "실행 전"), item.get("latestRunDate")),
+        "to": f"{REVIEW_DETAIL_ROUTE}/{identifier}",
+    }
+
+
+_CARD_BUILDERS = {
+    "search_partner_recruitments": _recruitment_card,
+    "list_saved_programs": _program_card,
+    "find_programs": _program_card,
+    "list_application_preparations": _preparation_card,
+    "list_combination_reviews": _review_card,
+}
+
+
+def _number_id(value: Any) -> str | None:
+    """Core가 준 양수 식별자만 카드 id가 됩니다. bool은 int의 하위형이라 따로 막습니다."""
+    return str(value) if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
 
 
 def sanitize(value: Any, depth: int = 0) -> Any:

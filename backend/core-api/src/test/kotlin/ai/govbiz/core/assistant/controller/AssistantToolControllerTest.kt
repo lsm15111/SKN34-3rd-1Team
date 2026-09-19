@@ -2,10 +2,16 @@ package ai.govbiz.core.assistant.controller
 
 import ai.govbiz.core._common.exception.ApiExceptionHandler
 import ai.govbiz.core.assistant.config.AssistantAgentProperties
+import ai.govbiz.core.assistant.domain.AssistantApplicationPreparationSummary
+import ai.govbiz.core.assistant.domain.AssistantCombinationReviewSummary
 import ai.govbiz.core.assistant.domain.AssistantCompanyProfile
+import ai.govbiz.core.assistant.domain.AssistantDailyReportStatus
+import ai.govbiz.core.assistant.domain.AssistantProgramSearchResult
+import ai.govbiz.core.assistant.domain.AssistantProposalSummary
 import ai.govbiz.core.assistant.domain.AssistantRecruitmentSummary
 import ai.govbiz.core.assistant.domain.AssistantSavedProgramSummary
 import ai.govbiz.core.assistant.service.AssistantToolService
+import ai.govbiz.core.assistant.service.AssistantWorkToolService
 import ai.govbiz.core.assistant.service.AssistantToolTokenService
 import ai.govbiz.core.assistant.web.AssistantToolAuthInterceptor
 import java.time.Clock
@@ -29,6 +35,7 @@ import tools.jackson.module.kotlin.KotlinModule
 
 class AssistantToolControllerTest {
     private val service = Mockito.mock(AssistantToolService::class.java)
+    private val workService = Mockito.mock(AssistantWorkToolService::class.java)
     private val secret = "assistant-tools-secret-for-tests-0123456789"
     private val clock = Clock.fixed(Instant.parse("2026-09-14T09:00:00Z"), ZoneOffset.UTC)
     private val enabled = AssistantAgentProperties(toolsSecret = secret)
@@ -41,7 +48,7 @@ class AssistantToolControllerTest {
     fun closeValidator() = validator.close()
 
     private fun mvc(properties: AssistantAgentProperties = enabled): MockMvc =
-        MockMvcBuilders.standaloneSetup(AssistantToolController(service))
+        MockMvcBuilders.standaloneSetup(AssistantToolController(service, workService))
             .addInterceptors(AssistantToolAuthInterceptor(properties, AssistantToolTokenService(properties, clock)))
             .setControllerAdvice(ApiExceptionHandler()).setValidator(validator)
             .setMessageConverters(JacksonJsonHttpMessageConverter(mapper)).build()
@@ -154,5 +161,63 @@ class AssistantToolControllerTest {
             .andExpect(status().isServiceUnavailable)
             .andExpect(jsonPath("$.code").value("ASSISTANT_TOOLS_DISABLED"))
         Mockito.verifyNoInteractions(service)
+    }
+
+    @Test
+    fun programsSearchPassesKeywordAndRegionAndMarksSavedPrograms() {
+        `when`(service.findPrograms(7L, "창업 지원", "서울")).thenReturn(
+            listOf(AssistantProgramSearchResult("KSTARTUP", "174520", "예비창업패키지", "창업진흥원", LocalDate.of(2026, 10, 10), "OPEN", listOf("서울"), false)),
+        )
+
+        mvc().perform(authorized("programs", params = arrayOf("keyword" to "창업 지원", "region" to "서울")))
+            .andExpect(status().isOk)
+            .andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(jsonPath("$[0].sourceProgramId").value("174520"))
+            .andExpect(jsonPath("$[0].applicationEndDate").value("2026-10-10"))
+            .andExpect(jsonPath("$[0].saved").value(false))
+    }
+
+    @Test
+    fun applicationPreparationsCarryTheProgressStageAndRevision() {
+        `when`(workService.applicationPreparations(7L)).thenReturn(
+            listOf(AssistantApplicationPreparationSummary(31L, "BIZINFO", "PBLN_000000000000001", "서울 AI 실증 지원사업", "PREPARING", 2L, LocalDate.of(2026, 9, 16))),
+        )
+
+        mvc().perform(authorized("application-preparations"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$[0].id").value(31))
+            .andExpect(jsonPath("$[0].progressStage").value("PREPARING"))
+            .andExpect(jsonPath("$[0].progressRevision").value(2))
+            .andExpect(jsonPath("$[0].updatedAt").value("2026-09-16"))
+    }
+
+    @Test
+    fun combinationReviewsCarryTheLatestRunStatusOnly() {
+        `when`(workService.combinationReviews(7L)).thenReturn(
+            listOf(AssistantCombinationReviewSummary(41L, "혁신바우처와 R&D", 3L, listOf("혁신바우처", "R&D"), "SUCCEEDED", 77L, LocalDate.of(2026, 9, 15), LocalDate.of(2026, 9, 15))),
+        )
+
+        mvc().perform(authorized("combination-reviews"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$[0].latestRunStatus").value("SUCCEEDED"))
+            .andExpect(jsonPath("$[0].programTitles[1]").value("R&D"))
+            .andExpect(jsonPath("$[0].judgment").doesNotExist())
+    }
+
+    @Test
+    fun dailyReportAndProposalsCarryCountsWithoutEmailOrCompanyNames() {
+        `when`(workService.dailyReportStatus(7L)).thenReturn(AssistantDailyReportStatus(true, true, "AI 실증", true, 8, LocalDate.of(2026, 9, 17)))
+        `when`(workService.proposalSummary(7L)).thenReturn(AssistantProposalSummary(true, 2, 1, LocalDate.of(2026, 9, 22)))
+
+        mvc().perform(authorized("daily-report"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.enabled").value(true))
+            .andExpect(jsonPath("$.latestReportDate").value("2026-09-17"))
+            .andExpect(jsonPath("$.email").doesNotExist())
+        mvc().perform(authorized("proposals"))
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.receivedPending").value(2))
+            .andExpect(jsonPath("$.earliestExpiryDate").value("2026-09-22"))
+            .andExpect(jsonPath("$.companyName").doesNotExist())
     }
 }

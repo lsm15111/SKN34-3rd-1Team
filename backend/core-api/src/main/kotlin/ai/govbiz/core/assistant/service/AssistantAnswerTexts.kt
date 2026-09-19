@@ -12,6 +12,9 @@ object AssistantAnswerTexts {
     const val OPEN_PROPOSALS = "제안함 열기"
     const val OPEN_PROFILE = "프로필 열기"
     const val OPEN_PARTNERS = "파트너 모집 열기"
+    const val OPEN_PREPARATIONS = "신청 준비 열기"
+    const val OPEN_REVIEWS = "중복 검토 열기"
+    const val OPEN_REPORTS = "리포트 열기"
 
     const val PROGRAM_QUESTION_ON_DETAIL =
         "공고 원문에서 확인해야 하는 내용입니다. 이 공고의 원문 질문에서 물어보면 공식 문서를 근거로 답합니다."
@@ -34,6 +37,16 @@ object AssistantAnswerTexts {
         AssistantAccountTopic.SAVED_PROGRAMS -> "관심 공고함은 로그인한 뒤 볼 수 있습니다. 로그인하면 담아 둔 공고의 마감을 바로 알려 드립니다."
         AssistantAccountTopic.RECEIVED_PROPOSALS -> "받은 제안함은 로그인한 뒤 볼 수 있습니다. 로그인하면 응답을 기다리는 제안 수를 바로 알려 드립니다."
         AssistantAccountTopic.COMPANY_PROFILE -> "기업 정보는 로그인한 뒤 프로필에서 볼 수 있습니다."
+        AssistantAccountTopic.APPLICATION_PREPARATIONS -> "신청 문서 준비는 로그인한 뒤 볼 수 있습니다. 로그인하면 준비 중인 건의 진행 단계를 알려 드립니다."
+        AssistantAccountTopic.COMBINATION_REVIEWS -> "중복 검토는 로그인한 뒤 볼 수 있습니다. 로그인하면 최근 실행 상태를 알려 드립니다."
+        AssistantAccountTopic.DAILY_REPORT -> "리포트 수신 설정은 로그인한 뒤 볼 수 있습니다."
+    }
+
+    /** 로그인은 했지만 작업 상태를 읽지 못한 경우입니다. 숫자를 지어내지 않고 해당 화면을 열어 줍니다. */
+    fun workStatusUnavailable(topic: AssistantAccountTopic): String = when (topic) {
+        AssistantAccountTopic.APPLICATION_PREPARATIONS -> "지금은 신청 준비 진행 상황을 읽지 못했습니다. 신청 준비 화면에서 각 건의 진행 단계를 확인해 주세요."
+        AssistantAccountTopic.COMBINATION_REVIEWS -> "지금은 중복 검토 상태를 읽지 못했습니다. 중복 검토 화면에서 실행 결과를 확인해 주세요."
+        else -> "지금은 리포트 수신 상태를 읽지 못했습니다. 리포트 화면에서 수신 설정을 확인해 주세요."
     }
 
     /** 도구 의도(모집글 매칭·관심 공고 묶음 질문)의 비로그인 안내입니다. 도구는 로그인 회원의 자료만 읽습니다. */

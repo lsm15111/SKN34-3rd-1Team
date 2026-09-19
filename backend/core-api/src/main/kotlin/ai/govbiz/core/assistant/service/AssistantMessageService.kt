@@ -67,7 +67,7 @@ class AssistantMessageService(
         when (verified.intent) {
             AssistantIntent.PRODUCT_HELP -> productHelp(verified)
             AssistantIntent.ACCOUNT_STATE -> accountState(verified, account)
-            AssistantIntent.SEARCH -> search(verified.searchQuery!!)
+            AssistantIntent.SEARCH -> search(verified, account)
             AssistantIntent.PROGRAM_QUESTION -> programQuestion(question)
             AssistantIntent.OUT_OF_SCOPE -> AssistantAnswer(verified.intent, verified.answer, emptyList(), null, null, null, null)
             AssistantIntent.UNCLEAR -> AssistantAnswer(verified.intent, null, emptyList(), verified.clarificationQuestion, null, null, null)
@@ -121,7 +121,7 @@ class AssistantMessageService(
         val (required, optional) = when (intent) {
             AssistantIntent.PRODUCT_HELP -> setOf("answer", "citations") to emptySet()
             AssistantIntent.ACCOUNT_STATE -> setOf("accountTopic") to setOf("answer")
-            AssistantIntent.SEARCH -> setOf("searchQuery") to emptySet()
+            AssistantIntent.SEARCH -> setOf("searchQuery") to setOf("answer")
             AssistantIntent.PROGRAM_QUESTION -> emptySet<String>() to emptySet()
             AssistantIntent.OUT_OF_SCOPE -> setOf("answer") to emptySet()
             AssistantIntent.UNCLEAR -> setOf("clarificationQuestion") to emptySet()
@@ -165,8 +165,16 @@ class AssistantMessageService(
     /** 카드 경로는 모델 문자열을 믿지 않고 종류·id에서 다시 만든 값과 같을 때만 통과합니다. */
     private fun expectedCardRoute(kind: AssistantCardKind, id: String): String = when (kind) {
         AssistantCardKind.RECRUITMENT -> {
-            if (!RECRUITMENT_ID.matches(id)) invalidResponse()
+            if (!NUMERIC_ID.matches(id)) invalidResponse()
             "${InternalRoutes.PARTNER_DETAIL}?recruitmentId=$id"
+        }
+        AssistantCardKind.PREPARATION -> {
+            if (!NUMERIC_ID.matches(id)) invalidResponse()
+            "${InternalRoutes.APPLICATION_PREPARATIONS}/$id"
+        }
+        AssistantCardKind.REVIEW -> {
+            if (!NUMERIC_ID.matches(id)) invalidResponse()
+            "${InternalRoutes.COMBINATION_REVIEWS}/$id"
         }
         AssistantCardKind.PROGRAM -> {
             val separator = id.indexOf(':')
@@ -192,13 +200,21 @@ class AssistantMessageService(
         return AssistantAnswer(AssistantIntent.PRODUCT_HELP, payload.answer, payload.citations, null, null, null, navigation)
     }
 
-    private fun search(query: String): AssistantAnswer =
-        AssistantAnswer(
+    /**
+     * 검색 요청입니다. 로그인 회원은 AI Service가 공개 공고를 찾아 답과 카드를 만들고, 그러지 못했거나 비로그인이면
+     * Core가 검색어를 안내합니다. 이동 버튼은 어느 경우에도 검색어를 미리 채우는 검색 화면입니다.
+     */
+    private fun search(payload: VerifiedPayload, account: Account?): AssistantAnswer {
+        val query = payload.searchQuery!!
+        val useAgentAnswer = account != null && payload.answer != null
+        return AssistantAnswer(
             AssistantIntent.SEARCH,
-            AssistantAnswerTexts.search(query),
+            if (useAgentAnswer) payload.answer else AssistantAnswerTexts.search(query),
             emptyList(), null, query, null,
             AssistantNavigation(AssistantAnswerTexts.OPEN_SEARCH_FOR_QUERY, InternalRoutes.CHAT),
+            if (useAgentAnswer) payload.cards else emptyList(),
         )
+    }
 
     /** 원문 질문은 공고 문서를 근거로 답하는 기존 화면이 맡습니다. 공고 상세에 있으면 프런트가 그 공고의 질문 화면 버튼을 붙입니다. */
     private fun programQuestion(question: AssistantQuestion): AssistantAnswer =
@@ -221,7 +237,8 @@ class AssistantMessageService(
             account == null -> AssistantAnswerTexts.loginRequired(topic) to null
             topic == AssistantAccountTopic.SAVED_PROGRAMS -> savedPrograms(account)
             topic == AssistantAccountTopic.RECEIVED_PROPOSALS -> receivedProposals(account)
-            else -> companyProfile(account)
+            topic == AssistantAccountTopic.COMPANY_PROFILE -> companyProfile(account)
+            else -> workStatus(topic)
         }
         return AssistantAnswer(AssistantIntent.ACCOUNT_STATE, answer, emptyList(), null, null, topic, navigation)
     }
@@ -276,6 +293,18 @@ class AssistantMessageService(
         return answer to AssistantNavigation(AssistantAnswerTexts.OPEN_PROPOSALS, InternalRoutes.PROPOSALS)
     }
 
+    /** 신청 준비·중복 검토·리포트는 Core가 따로 읽지 않습니다. AI 답이 없으면 해당 화면을 열어 직접 보게 안내합니다. */
+    private fun workStatus(topic: AssistantAccountTopic): Pair<String, AssistantNavigation?> {
+        val navigation = when (topic) {
+            AssistantAccountTopic.APPLICATION_PREPARATIONS ->
+                AssistantNavigation(AssistantAnswerTexts.OPEN_PREPARATIONS, InternalRoutes.APPLICATION_PREPARATIONS)
+            AssistantAccountTopic.COMBINATION_REVIEWS ->
+                AssistantNavigation(AssistantAnswerTexts.OPEN_REVIEWS, InternalRoutes.COMBINATION_REVIEWS)
+            else -> AssistantNavigation(AssistantAnswerTexts.OPEN_REPORTS, InternalRoutes.REPORTS)
+        }
+        return AssistantAnswerTexts.workStatusUnavailable(topic) to navigation
+    }
+
     private fun companyProfile(account: Account): Pair<String, AssistantNavigation?> {
         val company = account.company
         val answer = if (company == null) AssistantAnswerTexts.COMPANY_NONE else AssistantAnswerTexts.companyRegistered(company.companyName)
@@ -313,9 +342,14 @@ class AssistantMessageService(
         const val PARTNERS = "/app/partners"
         const val PARTNER_DETAIL = "/app/partners/detail"
         const val PROGRAM_DETAIL = "/app/support-programs/detail"
+        const val APPLICATION_PREPARATIONS = "/app/application-preparations"
+        const val COMBINATION_REVIEWS = "/app/combination-reviews"
+        const val REPORTS = "/app/reports"
 
         /** 에이전트의 이동 버튼이 가리킬 수 있는 화면입니다. AI Service `NAVIGATIONS`와 같습니다. */
-        val NAVIGABLE: Set<String> = setOf(CHAT, SAVED_PROGRAMS, PROPOSALS, PROFILE, PARTNERS)
+        val NAVIGABLE: Set<String> = setOf(
+            CHAT, SAVED_PROGRAMS, PROPOSALS, PROFILE, PARTNERS, APPLICATION_PREPARATIONS, COMBINATION_REVIEWS, REPORTS,
+        )
     }
 
     companion object {
@@ -333,7 +367,7 @@ class AssistantMessageService(
         private val UNSUPPORTED_TEXT = Regex("\\p{C}")
         private val UNSUPPORTED_LAYOUT_TEXT = Regex("[\\p{C}&&[^\\n\\r\\t]]")
         private val CARD_ID = Regex("[A-Za-z0-9_:.-]{1,80}")
-        private val RECRUITMENT_ID = Regex("[1-9][0-9]{0,18}")
+        private val NUMERIC_ID = Regex("[1-9][0-9]{0,18}")
         private val SOURCE_CODE = Regex("[A-Z][A-Z0-9_]{0,39}")
     }
 }

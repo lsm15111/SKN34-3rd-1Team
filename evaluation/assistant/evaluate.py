@@ -14,13 +14,15 @@ import os
 from pathlib import Path
 import sys
 from time import perf_counter
+from typing import get_args
 
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "backend/ai-service"))
 
-from app.assistant.models import AssistantAnswerRequest, SCHEMA_VERSION  # noqa: E402
+from app.assistant.models import AccountTopic, AssistantAnswerRequest, SCHEMA_VERSION  # noqa: E402
+from app.assistant.tools import GUIDE_TOOLS  # noqa: E402
 
 HELP_CATALOG = ROOT / "backend/core-api/src/main/resources/assistant/help-catalog.json"
 QUESTIONS = HERE / "questions.json"
@@ -28,7 +30,9 @@ ABSTAIN_INTENTS = {"OUT_OF_SCOPE", "UNCLEAR"}
 INTENTS = ["PRODUCT_HELP", "ACCOUNT_STATE", "SEARCH", "PROGRAM_QUESTION", "OUT_OF_SCOPE", "UNCLEAR"]
 # 회원 자료 도구로 답하는 의도. `mode: "agent"`(로그인 세션·도구 기대) 문항만 이 의도를 기대한다.
 AGENT_ONLY_INTENTS = ["PARTNER_MATCH", "SAVED_PROGRAMS_QUESTION"]
-TOOL_NAMES = {"get_my_company_profile", "search_partner_recruitments", "list_saved_programs"}
+# 도구 목록은 에이전트 정의에서 읽습니다. 도구가 늘어도 평가 문항이 옛 이름을 쓰면 바로 걸립니다.
+TOOL_NAMES = {tool.name for tool in GUIDE_TOOLS}
+ACCOUNT_TOPICS = set(get_args(AccountTopic))
 
 
 def require(condition: bool, message: str) -> None:
@@ -44,7 +48,7 @@ def load_help_entries(path: Path = HELP_CATALOG) -> list[dict]:
 
 def load_questions(path: Path = QUESTIONS) -> dict:
     fixture = json.loads(path.read_text(encoding="utf-8"))
-    require(fixture.get("schemaVersion") == "assistant-intent-eval-v3", "unsupported questions schema")
+    require(fixture.get("schemaVersion") == "assistant-intent-eval-v4", "unsupported questions schema")
     require(fixture.get("dataType") == "synthetic", "this fixture must be explicitly synthetic")
     require(fixture.get("referenceSource") == "ai-authored", "reference source must be disclosed")
     cases = fixture.get("cases")
@@ -59,7 +63,7 @@ def load_questions(path: Path = QUESTIONS) -> dict:
         if case["expectedIntent"] == "PRODUCT_HELP":
             require(isinstance(case.get("expectedCitation"), str), f"{case['id']}: PRODUCT_HELP needs expectedCitation")
         if case["expectedIntent"] == "ACCOUNT_STATE":
-            require(case.get("expectedAccountTopic") in ("SAVED_PROGRAMS", "RECEIVED_PROPOSALS", "COMPANY_PROFILE"), f"{case['id']}: bad expectedAccountTopic")
+            require(case.get("expectedAccountTopic") in ACCOUNT_TOPICS, f"{case['id']}: bad expectedAccountTopic")
         if mode == "agent":
             tools = case.get("expectedTools")
             require(isinstance(tools, list) and set(tools) <= TOOL_NAMES, f"{case['id']}: agent cases need expectedTools within {sorted(TOOL_NAMES)}")

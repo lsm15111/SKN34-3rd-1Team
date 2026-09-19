@@ -5,8 +5,10 @@ import type { AssistantAnswer } from '../../domain/entities/AssistantAnswer'
 export const assistantIntentSchema = z.enum([
   'PRODUCT_HELP', 'ACCOUNT_STATE', 'SEARCH', 'PROGRAM_QUESTION', 'OUT_OF_SCOPE', 'UNCLEAR', 'PARTNER_MATCH', 'SAVED_PROGRAMS_QUESTION',
 ])
-export const assistantAccountTopicSchema = z.enum(['SAVED_PROGRAMS', 'RECEIVED_PROPOSALS', 'COMPANY_PROFILE'])
-export const assistantCardKindSchema = z.enum(['RECRUITMENT', 'PROGRAM'])
+export const assistantAccountTopicSchema = z.enum([
+  'SAVED_PROGRAMS', 'RECEIVED_PROPOSALS', 'COMPANY_PROFILE', 'APPLICATION_PREPARATIONS', 'COMBINATION_REVIEWS', 'DAILY_REPORT',
+])
+export const assistantCardKindSchema = z.enum(['RECRUITMENT', 'PROGRAM', 'PREPARATION', 'REVIEW'])
 
 /** 이동 버튼의 경로는 Core가 `/app` 아래 내부 경로만 내려주지만, 화면은 한 번 더 절대 경로인지 확인합니다. */
 export const assistantNavigationDtoSchema = z.object({
@@ -14,7 +16,7 @@ export const assistantNavigationDtoSchema = z.object({
   to: z.string().regex(/^\/[A-Za-z0-9._~!$&'()*+,;=:@%/-]*$/),
 })
 
-/** 도구 에이전트가 고른 항목(모집글·공고)입니다. 경로는 `/app` 아래 내부 경로에 질의만 허용합니다. */
+/** 가이드가 고른 항목(모집글·공고·신청 준비·중복 검토)입니다. 경로는 `/app` 아래 내부 경로에 질의만 허용합니다. */
 export const assistantCardDtoSchema = z.object({
   kind: assistantCardKindSchema,
   id: z.string().regex(/^[A-Za-z0-9_:.-]{1,80}$/),

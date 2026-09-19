@@ -431,6 +431,76 @@ class AssistantMessageServiceTest {
         Mockito.verify(client, Mockito.times(1)).answer(any(AiAssistantAnswerRequest::class.java) ?: EMPTY_REQUEST)
     }
 
+    @Test
+    fun searchKeepsTheAgentProgramCardsAndAlwaysOffersThePrefilledSearchScreen() {
+        respondWith(payload(
+            "SEARCH", answer = "모집 중인 창업 지원사업 두 건을 찾았습니다.", searchQuery = "서울 창업 지원금",
+            cards = listOf(programCard()), navigation = AiAssistantNavigationPayload("파트너 모집 열기", "/app/partners"),
+            toolCalls = listOf(AiAssistantToolCallPayload("find_programs", 30)),
+        ))
+
+        val answer = service.answer(member, question("서울 창업 지원금 찾아줘"))
+
+        assertEquals("모집 중인 창업 지원사업 두 건을 찾았습니다.", answer.answer)
+        assertEquals("서울 창업 지원금", answer.searchQuery)
+        assertEquals(listOf("BIZINFO:PBLN_000000000000001"), answer.cards.map { it.id })
+        // 이동 버튼은 모델이 고른 화면이 아니라 검색어를 미리 채우는 검색 화면으로 고정합니다.
+        assertEquals(AssistantNavigation("검색 화면에서 찾기", "/app/chat"), answer.navigation)
+    }
+
+    @Test
+    fun guestSearchDropsTheAgentAnswerAndCards() {
+        respondWith(payload("SEARCH", answer = "두 건을 찾았습니다.", searchQuery = "창업 지원금", cards = listOf(programCard())))
+        val error = assertThrows(AiServiceCallException::class.java) { service.answer(null, question("창업 지원금 찾아줘")) }
+        assertEquals(AiServiceFailure.INVALID_RESPONSE, error.failure)
+    }
+
+    @Test
+    fun workStatusTopicsUseTheAgentAnswerWithRebuiltCardRoutes() {
+        respondWith(payload(
+            "ACCOUNT_STATE", answer = "준비 중 1건, 신청 완료 1건입니다.", accountTopic = "APPLICATION_PREPARATIONS",
+            cards = listOf(AiAssistantCardPayload("PREPARATION", "31", "서울 AI 실증 지원사업", "준비 중 · 2026-09-16", "아직 준비 중입니다.", "/app/application-preparations/31")),
+            navigation = AiAssistantNavigationPayload("신청 준비 열기", "/app/application-preparations"),
+            toolCalls = listOf(AiAssistantToolCallPayload("list_application_preparations", 21)),
+        ))
+
+        val answer = service.answer(member, question("신청 준비 어디까지 했지?"))
+
+        assertEquals(AssistantAccountTopic.APPLICATION_PREPARATIONS, answer.accountTopic)
+        assertEquals(listOf(AssistantCardKind.PREPARATION), answer.cards.map { it.kind })
+        assertEquals("/app/application-preparations/31", answer.cards[0].to)
+        assertEquals("/app/application-preparations", answer.navigation!!.to)
+    }
+
+    @Test
+    fun workStatusWithoutAnAgentAnswerOpensTheScreenInsteadOfGuessingNumbers() {
+        respondWith(payload("ACCOUNT_STATE", accountTopic = "COMBINATION_REVIEWS"))
+        val member = service.answer(member, question("중복 검토 끝났어?"))
+        assertEquals(AssistantAnswerTexts.workStatusUnavailable(AssistantAccountTopic.COMBINATION_REVIEWS), member.answer)
+        assertEquals("/app/combination-reviews", member.navigation!!.to)
+
+        respondWith(payload("ACCOUNT_STATE", accountTopic = "DAILY_REPORT"))
+        val guest = service.answer(null, question("리포트 오고 있어?"))
+        assertEquals(AssistantAnswerTexts.loginRequired(AssistantAccountTopic.DAILY_REPORT), guest.answer)
+    }
+
+    @Test
+    fun rejectsWorkCardsWhoseIdOrRouteDoesNotMatchTheRebuiltRoute() {
+        listOf(
+            AiAssistantCardPayload("PREPARATION", "31", "제목", null, "이유", "/app/application-preparations/32"),
+            AiAssistantCardPayload("PREPARATION", "0", "제목", null, "이유", "/app/application-preparations/0"),
+            AiAssistantCardPayload("REVIEW", "41", "제목", null, "이유", "/app/combination-reviews/41?run=77"),
+            AiAssistantCardPayload("REVIEW", "BIZINFO:1", "제목", null, "이유", "/app/combination-reviews/BIZINFO:1"),
+        ).forEach { card ->
+            respondWith(payload(
+                "ACCOUNT_STATE", answer = "진행 상황입니다.", accountTopic = "APPLICATION_PREPARATIONS", cards = listOf(card),
+                toolCalls = listOf(AiAssistantToolCallPayload("list_application_preparations", 10)),
+            ))
+            val error = assertThrows(AiServiceCallException::class.java, { service.answer(member, question("신청 준비 어디까지?")) }, card.toString())
+            assertEquals(AiServiceFailure.INVALID_RESPONSE, error.failure)
+        }
+    }
+
     private companion object {
         val EMPTY_REQUEST = AiAssistantAnswerRequest("", "", emptyList(), AiAssistantSession(false, false), AiAssistantContext("/", false), emptyList(), null)
     }

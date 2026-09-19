@@ -29,7 +29,7 @@ class QuestionSetTest(unittest.TestCase):
         prepared = build_requests(fixture, load_help_entries())
         self.assertEqual(len(prepared), len(fixture["cases"]))
         agent_cases = [(case, request) for case, request in prepared if is_agent_case(case)]
-        self.assertEqual(len(agent_cases), 20)
+        self.assertEqual(len(agent_cases), 26)
         self.assertEqual(len([case for case, _ in prepared if case["expectedIntent"] == "PRODUCT_HELP"]), 30, "도움말 10항목 × 표현 3개")
         self.assertEqual(len([case for case, _ in prepared if case["expectedIntent"] in ("OUT_OF_SCOPE", "UNCLEAR")]), 10)
         for case, request in prepared:

@@ -31,7 +31,7 @@ class AssistantService:
             answer, cards, navigation = output.answer, [], None
             if output.intent in TOOL_INTENTS:
                 grounded = (
-                    request.principal is not None and bool(results) and output.account_topic != "RECEIVED_PROPOSALS"
+                    request.principal is not None and bool(results)
                     # 기업 미등록 회원의 모집글 매칭은 Core가 기업 등록 안내로 답합니다.
                     and not (output.intent == "PARTNER_MATCH" and not request.principal.has_company)
                 )

@@ -56,12 +56,20 @@ AssistantIntent = Literal[
     "PRODUCT_HELP", "ACCOUNT_STATE", "SEARCH", "PROGRAM_QUESTION", "OUT_OF_SCOPE", "UNCLEAR",
     "PARTNER_MATCH", "SAVED_PROGRAMS_QUESTION",
 ]
-AccountTopic = Literal["SAVED_PROGRAMS", "RECEIVED_PROPOSALS", "COMPANY_PROFILE"]
-CardKind = Literal["RECRUITMENT", "PROGRAM"]
-NavigationKey = Literal["NONE", "PARTNERS", "SAVED_PROGRAMS", "PROPOSALS", "PROFILE", "CHAT"]
+AccountTopic = Literal[
+    "SAVED_PROGRAMS", "RECEIVED_PROPOSALS", "COMPANY_PROFILE",
+    "APPLICATION_PREPARATIONS", "COMBINATION_REVIEWS", "DAILY_REPORT",
+]
+CardKind = Literal["RECRUITMENT", "PROGRAM", "PREPARATION", "REVIEW"]
+NavigationKey = Literal[
+    "NONE", "PARTNERS", "SAVED_PROGRAMS", "PROPOSALS", "PROFILE", "CHAT",
+    "APPLICATION_PREPARATIONS", "COMBINATION_REVIEWS", "REPORTS",
+]
 
-# 회원 자료로 답하는 의도입니다. 카드와 이동 버튼은 이 의도의 답에만 붙습니다.
-TOOL_INTENTS: frozenset[str] = frozenset({"ACCOUNT_STATE", "PARTNER_MATCH", "SAVED_PROGRAMS_QUESTION"})
+# 회원 자료·공개 공고를 도구로 읽어 답하는 의도입니다. 카드와 이동 버튼은 이 의도의 답에만 붙습니다.
+TOOL_INTENTS: frozenset[str] = frozenset({
+    "ACCOUNT_STATE", "PARTNER_MATCH", "SAVED_PROGRAMS_QUESTION", "SEARCH",
+})
 
 # 이동 버튼이 가리킬 수 있는 화면입니다. Core도 같은 목록으로 다시 검사합니다.
 NAVIGATIONS: dict[str, tuple[str, str]] = {
@@ -70,15 +78,20 @@ NAVIGATIONS: dict[str, tuple[str, str]] = {
     "PROPOSALS": ("제안함 열기", "/app/proposals"),
     "PROFILE": ("프로필 열기", "/app/profile"),
     "CHAT": ("검색 화면 열기", "/app/chat"),
+    "APPLICATION_PREPARATIONS": ("신청 준비 열기", "/app/application-preparations"),
+    "COMBINATION_REVIEWS": ("중복 검토 열기", "/app/combination-reviews"),
+    "REPORTS": ("리포트 열기", "/app/reports"),
 }
 RECRUITMENT_DETAIL_ROUTE = "/app/partners/detail"
 PROGRAM_DETAIL_ROUTE = "/app/support-programs/detail"
+PREPARATION_DETAIL_ROUTE = "/app/application-preparations"
+REVIEW_DETAIL_ROUTE = "/app/combination-reviews"
 
 # 의도별 (필수, 선택) 필드입니다. 도구 의도는 비로그인이면 답 없이 의도만 돌려주고 Core가 로그인 안내를 붙입니다.
 INTENT_FIELDS: dict[str, tuple[frozenset[str], frozenset[str]]] = {
     "PRODUCT_HELP": (frozenset({"answer", "citations"}), frozenset()),
     "ACCOUNT_STATE": (frozenset({"accountTopic"}), frozenset({"answer"})),
-    "SEARCH": (frozenset({"searchQuery"}), frozenset()),
+    "SEARCH": (frozenset({"searchQuery"}), frozenset({"answer"})),
     "PROGRAM_QUESTION": (frozenset(), frozenset()),
     "OUT_OF_SCOPE": (frozenset({"answer"}), frozenset()),
     "UNCLEAR": (frozenset({"clarificationQuestion"}), frozenset()),

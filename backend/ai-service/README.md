@@ -171,11 +171,18 @@ ANSWERED는 비어 있지 않은 answer와 빈 updates, null 질문을 반환합
 | `PARTNER_MATCH` | 도구로 읽었으면 `answer`·카드 | 내 기업에 맞는 모집글 찾기 |
 | `SAVED_PROGRAMS_QUESTION` | 도구로 읽었으면 `answer`·카드 | 관심 공고 여러 건을 묶어 묻기(목록 정보만) |
 
+`ACCOUNT_STATE`의 `accountTopic`은 `SAVED_PROGRAMS`·`RECEIVED_PROPOSALS`·`COMPANY_PROFILE`·`APPLICATION_PREPARATIONS`·
+`COMBINATION_REVIEWS`·`DAILY_REPORT`이고, 각 영역마다 도구 하나만 부릅니다. `SEARCH`는 `find_programs`로 모집 중인 공고를 찾아
+`answer`와 공고 카드를 채우되 `searchQuery`는 항상 채웁니다(검색 실행은 화면이 합니다). 카드 종류는 `RECRUITMENT`·`PROGRAM`·
+`PREPARATION`·`REVIEW`입니다.
+
 ```text
 HTTP API → AssistantService → AssistantAgent(Runner.run, max_turns = 도구 상한 + 1)
   → OpenAI (OPENAI_ASSISTANT_MODEL, 기본 gpt-5.6-luna/low)
   ⇄ 읽기 도구(principal이 있고 ASSISTANT_TOOLS_TOKEN이 설정됐을 때만 보임, 질문당 최대 ASSISTANT_AGENT_MAX_TOOL_CALLS=3회)
-      get_my_company_profile · search_partner_recruitments · list_saved_programs → Core GET /internal/v1/assistant/tools/*
+      get_my_company_profile · search_partner_recruitments · list_saved_programs · find_programs ·
+      list_application_preparations · list_combination_reviews · get_daily_report_status · get_proposals_summary
+        → Core GET /internal/v1/assistant/tools/*
   → AssistantService 검증 → Response
 ```
 

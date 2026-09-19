@@ -237,12 +237,29 @@ export function programIdentityFrom(pathname: string, search: string): { sourceC
   return { sourceCode, sourceProgramId }
 }
 
+/** 상태 답변 옆에 적는 근거입니다. 어떤 자료로 답했는지 한 줄로 알려 줍니다. */
+const accountTopicSources: Record<NonNullable<AssistantAnswer['accountTopic']>, string> = {
+  SAVED_PROGRAMS: assistantMessages.savedSource,
+  RECEIVED_PROPOSALS: assistantMessages.proposalsSource,
+  COMPANY_PROFILE: assistantMessages.profileSource,
+  APPLICATION_PREPARATIONS: assistantMessages.preparationsSource,
+  COMBINATION_REVIEWS: assistantMessages.reviewsSource,
+  DAILY_REPORT: assistantMessages.reportSource,
+}
+
 export type AssistantFreeTextContext = { pathname: string; search: string; session: AssistantSession; returnTo: string }
+
+const cardKindLabels: Record<AssistantAnswerCard['kind'], string> = {
+  RECRUITMENT: assistantMessages.cardRecruitment,
+  PROGRAM: assistantMessages.cardProgram,
+  PREPARATION: assistantMessages.cardPreparation,
+  REVIEW: assistantMessages.cardReview,
+}
 
 /** 에이전트 카드를 목록 행으로 바꿉니다. 종류 태그, 제목 링크, 부제와 고른 이유 한 줄입니다. */
 function agentCardRows(cards: AssistantAnswerCard[], inApp: boolean): AssistantCardRow[] {
   return cards.map((card) => ({
-    tag: { label: card.kind === 'RECRUITMENT' ? assistantMessages.cardRecruitment : assistantMessages.cardProgram, tone: 'ok' },
+    tag: { label: cardKindLabels[card.kind], tone: 'ok' },
     title: card.title,
     detail: [card.subtitle, card.reason].filter((part): part is string => part !== null).join(' · '),
     to: helpActionHref(card.to, inApp),
@@ -288,9 +305,7 @@ export function freeTextAnswer(answer: AssistantAnswer, context: AssistantFreeTe
       })
     }
     case 'ACCOUNT_STATE': {
-      const source = answer.accountTopic === 'SAVED_PROGRAMS'
-        ? assistantMessages.savedSource
-        : answer.accountTopic === 'RECEIVED_PROPOSALS' ? assistantMessages.proposalsSource : assistantMessages.profileSource
+      const source = accountTopicSources[answer.accountTopic ?? 'COMPANY_PROFILE']
       return botMessage([answer.answer ?? ''], {
         card: cardOf(context.session.isAuthenticated ? (navigation === null ? [] : [navigation]) : loginButtons, context.session.isAuthenticated ? agentRows : []),
         source: context.session.isAuthenticated ? (agentRows.length > 0 ? assistantMessages.aiToolSource(source) : source) : null,
@@ -308,8 +323,10 @@ export function freeTextAnswer(answer: AssistantAnswer, context: AssistantFreeTe
       })
     }
     case 'SEARCH':
+      // 로그인 회원에게는 가이드가 찾은 공고 카드가 함께 옵니다. 검색 자체는 버튼을 눌러 검색 화면에서 실행합니다.
       return botMessage([answer.answer ?? ''], {
-        card: cardOf(navigation === null ? [] : [{ ...navigation, searchQuery: answer.searchQuery ?? undefined }]),
+        card: cardOf(navigation === null ? [] : [{ ...navigation, searchQuery: answer.searchQuery ?? undefined }], agentRows),
+        source: agentRows.length > 0 ? assistantMessages.searchSource : null,
         followUps: [otherQuestionReply],
       })
     case 'PROGRAM_QUESTION': {

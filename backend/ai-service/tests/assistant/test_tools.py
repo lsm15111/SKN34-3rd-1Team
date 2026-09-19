@@ -4,7 +4,9 @@ import pytest
 from app.assistant.errors import ToolCallError
 from app.assistant.models import AssistantPrincipal
 from app.assistant.tools import CoreToolClient, ToolResult, card_catalog, sanitize
-from tests.assistant.conftest import RECRUITMENTS, SAVED_PROGRAMS, FakeCoreTools
+from tests.assistant.conftest import (
+    FOUND_PROGRAMS, PREPARATIONS, RECRUITMENTS, REVIEWS, SAVED_PROGRAMS, FakeCoreTools,
+)
 
 
 PRINCIPAL = AssistantPrincipal(accountId=7, toolToken="7.1900000000.sig", hasCompany=True)
@@ -96,3 +98,21 @@ def test_card_catalog_only_uses_items_from_the_matching_tool():
     }
     assert catalog[("PROGRAM", "BIZINFO:PBLN_000000000000001")]["subtitle"] == "서울경제진흥원 · 2026-09-30"
     assert catalog[("RECRUITMENT", "21")]["to"] == "/app/partners/detail?recruitmentId=21"
+
+
+def test_card_catalog_covers_found_programs_preparations_and_reviews():
+    catalog = card_catalog([
+        ToolResult("find_programs", 1, FOUND_PROGRAMS),
+        ToolResult("list_application_preparations", 1, PREPARATIONS + [{"id": 0, "programTitle": "0은 식별자가 아님"}]),
+        ToolResult("list_combination_reviews", 1, REVIEWS),
+        ToolResult("get_daily_report_status", 1, {"id": 5, "title": "목록이 아니면 카드가 아님"}),
+    ])
+    assert set(catalog) == {
+        ("PROGRAM", "KSTARTUP:174520"), ("PROGRAM", "BIZINFO:PBLN_000000000000001"),
+        ("PREPARATION", "31"), ("PREPARATION", "32"), ("REVIEW", "41"), ("REVIEW", "42"),
+    }
+    assert catalog[("PREPARATION", "31")]["to"] == "/app/application-preparations/31"
+    assert catalog[("PREPARATION", "31")]["subtitle"] == "준비 중 · 2026-09-16"
+    assert catalog[("REVIEW", "41")]["to"] == "/app/combination-reviews/41"
+    # 아직 실행하지 않은 검토는 상태 코드가 없으므로 "실행 전"으로 적습니다.
+    assert catalog[("REVIEW", "42")]["subtitle"] == "실행 전"

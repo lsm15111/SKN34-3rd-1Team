@@ -22,7 +22,11 @@ import ai.govbiz.core.supportprogram.domain.SupportProgram
 import ai.govbiz.core.supportprogram.domain.SupportProgramSourceDocument
 import ai.govbiz.core.supportprogram.domain.SupportProgramStatus
 import ai.govbiz.core.supportprogram.helper.SupportProgramContentHashHelper
+import ai.govbiz.core.supportprogram.domain.SupportProgramCatalogSort
 import ai.govbiz.core.supportprogram.repository.SupportProgramRepository
+import ai.govbiz.core.supportprogram.service.catalog.SupportProgramCatalogService
+import ai.govbiz.core.supportprogram.service.catalog.exception.SupportProgramCatalogFilterException
+import ai.govbiz.core.supportprogram.service.dto.SupportProgramCatalogResult
 import ai.govbiz.core.supportprogram.service.saved.SavedSupportProgramService
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -39,7 +43,8 @@ class AssistantToolServiceTest {
     private val recruitments = Mockito.mock(PartnerRecruitmentService::class.java)
     private val savedPrograms = Mockito.mock(SavedSupportProgramService::class.java)
     private val supportPrograms = Mockito.mock(SupportProgramRepository::class.java)
-    private val service = AssistantToolService(companies, partnerProfiles, recruitments, savedPrograms, supportPrograms)
+    private val catalog = Mockito.mock(SupportProgramCatalogService::class.java)
+    private val service = AssistantToolService(companies, partnerProfiles, recruitments, savedPrograms, supportPrograms, catalog)
     private val queries = mutableListOf<PartnerRecruitmentQuery>()
 
     @Test
@@ -169,6 +174,42 @@ class AssistantToolServiceTest {
             queries += invocation.getArgument<PartnerRecruitmentQuery>(0)
             PartnerRecruitmentPage(views, views.size.toLong(), 1, PartnerRecruitmentQuery.MAX_PAGE_SIZE)
         }
+    }
+
+
+    @Test
+    fun findProgramsMarksAlreadySavedProgramsAndAsksForOpenDeadlineOrder() {
+        `when`(savedPrograms.list(7L)).thenReturn(listOf(SavedSupportProgram(NOW, program("PBLN_000000000000001", "https://www.bizinfo.go.kr/1"))))
+        `when`(
+            catalog.browse(
+                rawKeyword = "창업 지원", rawRegion = "서울", rawCategory = "", status = SupportProgramStatus.OPEN,
+                sort = SupportProgramCatalogSort.DEADLINE, page = 1, pageSize = AssistantToolService.PROGRAM_SEARCH_MAX,
+                sourceCode = "", rawStartupStage = "", rawApplicantType = "", rawFounderAge = "",
+            ),
+        ).thenReturn(
+            SupportProgramCatalogResult(
+                listOf(program("PBLN_000000000000001", "https://www.bizinfo.go.kr/1"), program("174520", "https://www.bizinfo.go.kr/2")), 2, 1, 5, 1, listOf("서울"), listOf("창업"),
+            ),
+        )
+
+        val found = service.findPrograms(7L, " 창업 지원 ", " 서울 ")
+
+        assertEquals(listOf(true, false), found.map { it.saved })
+        assertEquals(listOf("PBLN_000000000000001", "174520"), found.map { it.sourceProgramId })
+        assertEquals("OPEN", found[0].status)
+    }
+
+    @Test
+    fun findProgramsWithoutConditionsOrWithRejectedFiltersReturnsNothing() {
+        assertTrue(service.findPrograms(7L, "  ", null).isEmpty())
+        Mockito.verifyNoInteractions(catalog)
+        `when`(
+            catalog.browse(
+                "창업", "없는지역", "", SupportProgramStatus.OPEN, SupportProgramCatalogSort.DEADLINE, 1,
+                AssistantToolService.PROGRAM_SEARCH_MAX, "", "", "", "",
+            ),
+        ).thenThrow(SupportProgramCatalogFilterException())
+        assertTrue(service.findPrograms(7L, "창업", "없는지역").isEmpty())
     }
 
     private fun company() = Company(

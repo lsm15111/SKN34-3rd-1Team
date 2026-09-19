@@ -6,7 +6,9 @@ export type AssistantIntent =
   | 'PRODUCT_HELP' | 'ACCOUNT_STATE' | 'SEARCH' | 'PROGRAM_QUESTION' | 'OUT_OF_SCOPE' | 'UNCLEAR'
   | 'PARTNER_MATCH' | 'SAVED_PROGRAMS_QUESTION'
 
-export type AssistantAccountTopic = 'SAVED_PROGRAMS' | 'RECEIVED_PROPOSALS' | 'COMPANY_PROFILE'
+export type AssistantAccountTopic =
+  | 'SAVED_PROGRAMS' | 'RECEIVED_PROPOSALS' | 'COMPANY_PROFILE'
+  | 'APPLICATION_PREPARATIONS' | 'COMBINATION_REVIEWS' | 'DAILY_REPORT'
 
 /** 답 뒤에 붙는 이동 버튼 하나입니다. `to`는 Core가 허용한 `/app` 아래 경로입니다. */
 export type AssistantNavigation = {
@@ -14,12 +16,12 @@ export type AssistantNavigation = {
   to: string
 }
 
-export type AssistantCardKind = 'RECRUITMENT' | 'PROGRAM'
+export type AssistantCardKind = 'RECRUITMENT' | 'PROGRAM' | 'PREPARATION' | 'REVIEW'
 
 /** 도구 에이전트가 회원 자료에서 고른 항목 하나입니다. 제목을 누르면 `to`의 상세 화면으로 갑니다. */
 export type AssistantCard = {
   kind: AssistantCardKind
-  /** 모집글은 모집글 번호, 공고는 `sourceCode:sourceProgramId`입니다. */
+  /** 모집글·신청 준비·중복 검토는 번호, 공고는 `sourceCode:sourceProgramId`입니다. */
   id: string
   title: string
   subtitle: string | null

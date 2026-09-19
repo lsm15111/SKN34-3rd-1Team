@@ -15,9 +15,9 @@ enum class AssistantIntent {
     SAVED_PROGRAMS_QUESTION,
     ;
 
-    /** 회원 자료를 도구로 읽어 답하는 의도입니다. 비로그인이면 로그인 안내로 끝납니다. */
+    /** 회원 자료·공개 공고를 도구로 읽어 답하는 의도입니다. 비로그인이면 로그인·검색 화면 안내로 끝납니다. */
     val usesTools: Boolean
-        get() = this == ACCOUNT_STATE || this == PARTNER_MATCH || this == SAVED_PROGRAMS_QUESTION
+        get() = this == ACCOUNT_STATE || this == PARTNER_MATCH || this == SAVED_PROGRAMS_QUESTION || this == SEARCH
 }
 
 /** 계정 상태 질문의 영역입니다. Core가 회원 자료를 읽어 답을 만드는 기준입니다. */
@@ -25,6 +25,9 @@ enum class AssistantAccountTopic {
     SAVED_PROGRAMS,
     RECEIVED_PROPOSALS,
     COMPANY_PROFILE,
+    APPLICATION_PREPARATIONS,
+    COMBINATION_REVIEWS,
+    DAILY_REPORT,
 }
 
 /** 답변 뒤에 붙는 이동 버튼입니다. `to`는 Core가 허용한 내부 경로만 담습니다. */
@@ -36,6 +39,8 @@ data class AssistantNavigation(
 enum class AssistantCardKind {
     RECRUITMENT,
     PROGRAM,
+    PREPARATION,
+    REVIEW,
 }
 
 /**

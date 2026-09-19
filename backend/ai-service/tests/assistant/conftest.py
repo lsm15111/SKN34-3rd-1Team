@@ -101,6 +101,29 @@ SAVED_PROGRAMS = [
     {"sourceCode": "MSIT", "sourceProgramId": "3186880", "title": "국가과학자지원사업", "organization": "과학기술정보통신부",
      "applicationEndDate": None, "status": "CLOSED"},
 ]
+FOUND_PROGRAMS = [
+    {"sourceCode": "KSTARTUP", "sourceProgramId": "174520", "title": "예비창업패키지", "organization": "창업진흥원",
+     "applicationEndDate": "2026-10-10", "status": "OPEN", "regions": ["서울"], "saved": False},
+    {"sourceCode": "BIZINFO", "sourceProgramId": "PBLN_000000000000001", "title": "서울 AI 실증 지원사업", "organization": "서울경제진흥원",
+     "applicationEndDate": "2026-09-30", "status": "OPEN", "regions": ["서울"], "saved": True},
+]
+PREPARATIONS = [
+    {"id": 31, "sourceCode": "BIZINFO", "sourceProgramId": "PBLN_000000000000001", "programTitle": "서울 AI 실증 지원사업",
+     "progressStage": "PREPARING", "progressRevision": 2, "updatedAt": "2026-09-16"},
+    {"id": 32, "sourceCode": "MSIT", "sourceProgramId": "3186880", "programTitle": "국가과학자지원사업",
+     "progressStage": "APPLIED", "progressRevision": 5, "updatedAt": "2026-09-10"},
+]
+REVIEWS = [
+    {"id": 41, "title": "혁신바우처와 R&D 중복", "inputRevision": 3, "programTitles": ["혁신바우처", "R&D 지원"],
+     "latestRunStatus": "SUCCEEDED", "latestRunId": 77, "latestRunDate": "2026-09-15", "updatedAt": "2026-09-15"},
+    {"id": 42, "title": "아직 실행 전 검토", "inputRevision": 1, "programTitles": ["수출바우처", "마케팅 지원"],
+     "latestRunStatus": None, "latestRunId": None, "latestRunDate": None, "updatedAt": "2026-09-14"},
+]
+DAILY_REPORT = {
+    "enabled": True, "emailConfirmed": True, "supportPurpose": "AI 실증", "serviceEnabled": True,
+    "sendHour": 8, "latestReportDate": "2026-09-17",
+}
+PROPOSAL_SUMMARY = {"hasCompany": True, "receivedPending": 2, "sentPending": 1, "earliestExpiryDate": "2026-09-22"}
 
 
 class FakeCoreTools:
@@ -135,6 +158,17 @@ class FakeCoreTools:
             return httpx.Response(200, json=[item for item in RECRUITMENTS if not region or item["region"] == region])
         if path.endswith("/saved-programs"):
             return httpx.Response(200, json=SAVED_PROGRAMS)
+        if path.endswith("/programs"):
+            region = request.url.params.get("region")
+            return httpx.Response(200, json=[item for item in FOUND_PROGRAMS if not region or region in item["regions"]])
+        if path.endswith("/application-preparations"):
+            return httpx.Response(200, json=PREPARATIONS)
+        if path.endswith("/combination-reviews"):
+            return httpx.Response(200, json=REVIEWS)
+        if path.endswith("/daily-report"):
+            return httpx.Response(200, json=DAILY_REPORT)
+        if path.endswith("/proposals"):
+            return httpx.Response(200, json=PROPOSAL_SUMMARY)
         return httpx.Response(404, json={"code": "NOT_FOUND"})
 
 

@@ -53,6 +53,16 @@ def conversation_output(payload: dict) -> dict | None:
             "updates": updates, "clarificationQuestion": question}
 
 
+TOPIC_TOOLS = {
+    "SAVED_PROGRAMS": "list_saved_programs",
+    "RECEIVED_PROPOSALS": "get_proposals_summary",
+    "COMPANY_PROFILE": "get_my_company_profile",
+    "APPLICATION_PREPARATIONS": "list_application_preparations",
+    "COMBINATION_REVIEWS": "list_combination_reviews",
+    "DAILY_REPORT": "get_daily_report_status",
+}
+
+
 def guide_output(request: dict, payload: dict) -> tuple[str, object]:
     """GovBiz 가이드 에이전트(Agents SDK)의 도구 호출·최종 답을 문구로 흉내 낸다. 도구가 보일 때만(로그인 회원) 도구를 부른다."""
     message = payload["message"]
@@ -101,26 +111,53 @@ def guide_output(request: dict, payload: dict) -> tuple[str, object]:
         topic = "SAVED_PROGRAMS"
     elif "제안" in message:
         topic = "RECEIVED_PROPOSALS"
+    elif "신청 준비" in message or "신청 문서" in message:
+        topic = "APPLICATION_PREPARATIONS"
+    elif "중복 검토" in message:
+        topic = "COMBINATION_REVIEWS"
+    elif "리포트" in message:
+        topic = "DAILY_REPORT"
     elif "내 기업" in message or "기업 등록됐" in message:
         topic = "COMPANY_PROFILE"
     if topic is not None:
         state = {**empty, "intent": "ACCOUNT_STATE", "accountTopic": topic}
-        if not tools or topic == "RECEIVED_PROPOSALS":
+        if not tools:
             return "message", state
         if not outputs:
-            return "tool_calls", [("get_my_company_profile" if topic == "COMPANY_PROFILE" else "list_saved_programs", {})]
+            return "tool_calls", [(TOPIC_TOOLS[topic], {})]
+        data = outputs[0]
         if topic == "COMPANY_PROFILE":
-            profile = outputs[0]
-            answer = f"{profile.get('companyName')}이(가) 등록되어 있어요." if profile.get("registered") else "아직 기업이 등록되지 않았어요."
+            answer = f"{data.get('companyName')}이(가) 등록되어 있어요." if data.get("registered") else "아직 기업이 등록되지 않았어요."
             return "message", {**state, "answer": answer, "navigation": "PROFILE"}
-        programs = outputs[0] if isinstance(outputs[0], list) else []
-        answer = f"관심 공고 {len(programs)}건이 있어요." if programs else "관심 공고함이 비어 있어요."
-        return "message", {**state, "answer": answer, "cards": program_cards(programs), "navigation": "SAVED_PROGRAMS"}
+        if topic == "RECEIVED_PROPOSALS":
+            answer = f"응답을 기다리는 받은 제안이 {data.get('receivedPending', 0)}건이에요."
+            return "message", {**state, "answer": answer, "navigation": "PROPOSALS"}
+        if topic == "DAILY_REPORT":
+            answer = "리포트를 받고 있어요." if data.get("enabled") else "리포트 수신이 꺼져 있어요."
+            return "message", {**state, "answer": answer, "navigation": "REPORTS"}
+        items = data if isinstance(data, list) else []
+        if topic == "APPLICATION_PREPARATIONS":
+            cards = [{"kind": "PREPARATION", "id": str(item["id"]), "reason": "테스트 대역이 고른 준비 건입니다."} for item in items[:2]]
+            answer = f"신청 준비 {len(items)}건이 있어요." if items else "아직 시작한 신청 준비가 없어요."
+            return "message", {**state, "answer": answer, "cards": cards, "navigation": "APPLICATION_PREPARATIONS"}
+        if topic == "COMBINATION_REVIEWS":
+            cards = [{"kind": "REVIEW", "id": str(item["id"]), "reason": "테스트 대역이 고른 검토입니다."} for item in items[:2]]
+            answer = f"중복 검토 {len(items)}건이 있어요." if items else "아직 만든 중복 검토가 없어요."
+            return "message", {**state, "answer": answer, "cards": cards, "navigation": "COMBINATION_REVIEWS"}
+        answer = f"관심 공고 {len(items)}건이 있어요." if items else "관심 공고함이 비어 있어요."
+        return "message", {**state, "answer": answer, "cards": program_cards(items), "navigation": "SAVED_PROGRAMS"}
     if "이 공고" in message:
         return "message", {**empty, "intent": "PROGRAM_QUESTION"}
     if "찾아" in message or "검색해" in message:
-        query = message.replace("찾아줘", "").replace("찾아 줘", "").replace("검색해줘", "").replace("검색해 줘", "").strip()
-        return "message", {**empty, "intent": "SEARCH", "searchQuery": query or message}
+        query = message.replace("찾아줘", "").replace("찾아 줘", "").replace("검색해줘", "").replace("검색해 줘", "").strip() or message
+        search = {**empty, "intent": "SEARCH", "searchQuery": query}
+        if not tools:
+            return "message", search
+        if not outputs:
+            return "tool_calls", [("find_programs", {"keyword": query, "region": None})]
+        programs = outputs[0] if isinstance(outputs[0], list) else []
+        answer = f"모집 중인 공고 {len(programs)}건을 찾았어요." if programs else "지금 모집 중인 공고를 찾지 못했어요."
+        return "message", {**search, "answer": answer, "cards": program_cards(programs), "navigation": "CHAT"}
     if "날씨" in message:
         return "message", {**empty, "intent": "OUT_OF_SCOPE",
                            "answer": "날씨는 이 가이드가 답할 수 있는 범위가 아닙니다. 지원사업 검색과 화면 사용법을 물어봐 주세요."}
