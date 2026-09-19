@@ -1,4 +1,6 @@
-import type { AskAssistantResult, AssistantQuestion, AssistantRepository } from '../repositories/AssistantRepository'
+import type {
+  AskAssistantProgress, AskAssistantResult, AssistantQuestion, AssistantRepository,
+} from '../repositories/AssistantRepository'
 
 type AskAssistantRepository = Pick<AssistantRepository, 'ask'>
 
@@ -20,10 +22,10 @@ export class AskAssistantUseCase {
     this.repository = repository
   }
 
-  execute(question: AssistantQuestion, signal?: AbortSignal): Promise<AskAssistantResult> {
+  execute(question: AssistantQuestion, signal?: AbortSignal, progress?: AskAssistantProgress): Promise<AskAssistantResult> {
     const message = question.message.trim()
     if (!isValidAssistantMessage(message)) throw new RangeError(`message must be 1~${assistantQuestionLimits.message} characters`)
     if (!conversationIdPattern.test(question.conversationId)) throw new RangeError('conversationId must be a lowercase UUID')
-    return this.repository.ask({ ...question, message }, signal)
+    return this.repository.ask({ ...question, message }, signal, progress)
   }
 }

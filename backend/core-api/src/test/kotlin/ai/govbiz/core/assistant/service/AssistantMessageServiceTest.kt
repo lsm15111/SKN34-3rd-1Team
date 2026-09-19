@@ -14,6 +14,7 @@ import ai.govbiz.core.assistant.client.dto.AiAssistantCardPayload
 import ai.govbiz.core.assistant.client.dto.AiAssistantContext
 import ai.govbiz.core.assistant.client.dto.AiAssistantNavigationPayload
 import ai.govbiz.core.assistant.client.dto.AiAssistantSession
+import ai.govbiz.core.assistant.client.dto.AiAssistantStreamEvent
 import ai.govbiz.core.assistant.client.dto.AiAssistantToolCallPayload
 import ai.govbiz.core.assistant.config.AssistantAgentProperties
 import ai.govbiz.core.assistant.domain.AssistantAccountTopic
@@ -25,6 +26,8 @@ import ai.govbiz.core.assistant.domain.AssistantHistoryRole
 import ai.govbiz.core.assistant.domain.AssistantIntent
 import ai.govbiz.core.assistant.domain.AssistantNavigation
 import ai.govbiz.core.assistant.domain.AssistantQuestion
+import ai.govbiz.core.assistant.domain.AssistantStreamEvent
+import ai.govbiz.core.assistant.domain.AssistantStreamPhase
 import ai.govbiz.core.assistant.domain.AssistantScreenContext
 import ai.govbiz.core.assistant.repository.AssistantConversationRepository
 import ai.govbiz.core.assistant.repository.exception.AssistantConversationStoreException
@@ -571,6 +574,80 @@ class AssistantMessageServiceTest {
             assertEquals(AiServiceFailure.INVALID_RESPONSE, error.failure)
         }
         Mockito.verifyNoInteractions(supportPrograms)
+    }
+
+    private fun streamWith(vararg events: AiAssistantStreamEvent) {
+        Mockito.doAnswer { invocation ->
+            sentRequests += invocation.getArgument<AiAssistantAnswerRequest>(0)
+            val sink = invocation.getArgument<(AiAssistantStreamEvent) -> Unit>(1)
+            events.forEach(sink)
+            null
+        }.`when`(client).stream(any(AiAssistantAnswerRequest::class.java) ?: EMPTY_REQUEST, any() ?: {})
+    }
+
+    private fun collect(account: Account?, question: AssistantQuestion): List<AssistantStreamEvent> =
+        buildList { service.answerStreaming(account, question) { add(it) } }
+
+    @Test
+    fun streamingRelaysProgressAndTextAndEndsWithTheVerifiedAnswer() {
+        streamWith(
+            AiAssistantStreamEvent.Status("thinking", null),
+            AiAssistantStreamEvent.Status("reading", "list_saved_programs"),
+            AiAssistantStreamEvent.Text("관심 공고 2건 중 "),
+            AiAssistantStreamEvent.Text("가장 빠른 마감은 9월 30일입니다."),
+            AiAssistantStreamEvent.Final(payload(
+                "ACCOUNT_STATE", answer = "관심 공고 2건 중 가장 빠른 마감은 9월 30일입니다.", accountTopic = "SAVED_PROGRAMS",
+                cards = listOf(programCard()), navigation = AiAssistantNavigationPayload("관심 공고함 열기", "/app/saved-programs"),
+                toolCalls = listOf(AiAssistantToolCallPayload("list_saved_programs", 15)),
+            )),
+        )
+
+        val events = collect(member, question("관심 공고 마감 언제야?"))
+
+        assertEquals(
+            listOf(AssistantStreamPhase.THINKING, AssistantStreamPhase.READING),
+            events.filterIsInstance<AssistantStreamEvent.Status>().map { it.phase },
+        )
+        assertEquals("관심 공고 2건 중 가장 빠른 마감은 9월 30일입니다.", events.filterIsInstance<AssistantStreamEvent.Text>().joinToString("") { it.delta })
+        val last = events.last()
+        assertTrue(last is AssistantStreamEvent.Final)
+        val answer = (last as AssistantStreamEvent.Final).answer
+        assertEquals(listOf("BIZINFO:PBLN_000000000000001"), answer.cards.map { it.id })
+        assertEquals("/app/saved-programs", answer.navigation!!.to)
+        // 보여 준 답만 다음 질문의 맥락으로 남습니다. 조각이 아니라 확정된 문장을 남깁니다.
+        Mockito.verify(conversations).append(7L, conversationId, "관심 공고 마감 언제야?", answer.answer!!)
+    }
+
+    @Test
+    fun streamingCutsTextAtTheAnswerLimitAndDropsControlCharacters() {
+        streamWith(
+            AiAssistantStreamEvent.Text("가".repeat(700)),
+            AiAssistantStreamEvent.Text("넘친 뒤 조각"),
+            AiAssistantStreamEvent.Text("제어 " + 7.toChar() + " 문자"),
+            AiAssistantStreamEvent.Final(payload("OUT_OF_SCOPE", answer = "여기서는 할 수 없는 일입니다.")),
+        )
+
+        val streamed = collect(null, question("날씨 알려줘")).filterIsInstance<AssistantStreamEvent.Text>().joinToString("") { it.delta }
+
+        assertEquals(AssistantMessageService.ANSWER_MAX, streamed.length)
+        assertEquals("가".repeat(AssistantMessageService.ANSWER_MAX), streamed)
+    }
+
+    @Test
+    fun streamingWithoutAFinalOrWithAFailureEventDoesNotInventAnAnswer() {
+        streamWith(AiAssistantStreamEvent.Status("thinking", null), AiAssistantStreamEvent.Text("쓰다 말았습니다"))
+        val missing = assertThrows(AiServiceCallException::class.java) { collect(null, question()) }
+        assertEquals(AiServiceFailure.INVALID_RESPONSE, missing.failure)
+
+        streamWith(AiAssistantStreamEvent.Failure("execution"))
+        assertEquals(AiServiceFailure.UNAVAILABLE, assertThrows(AiServiceCallException::class.java) { collect(null, question()) }.failure)
+
+        streamWith(AiAssistantStreamEvent.Failure("timeout"))
+        assertEquals(AiServiceFailure.TIMEOUT, assertThrows(AiServiceCallException::class.java) { collect(null, question()) }.failure)
+
+        // 계약을 어긴 마지막 결과도 그대로 실패입니다.
+        streamWith(AiAssistantStreamEvent.Final(payload("PRODUCT_HELP", answer = "인용이 없습니다.")))
+        assertEquals(AiServiceFailure.INVALID_RESPONSE, assertThrows(AiServiceCallException::class.java) { collect(null, question()) }.failure)
     }
 
     private companion object {

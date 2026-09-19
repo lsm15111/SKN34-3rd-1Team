@@ -241,6 +241,51 @@ describe('GovBiz 가이드 화면별 메뉴와 권한 안내', () => {
   })
 })
 
+describe('GovBiz 가이드 실시간 출력', () => {
+  it('답을 기다리는 동안 진행 상황과 조각을 보여 주고, 확정 답이 오면 그 답으로 바꾼다', async () => {
+    const pending = deferred()
+    vi.spyOn(appContainer.resolve('askAssistantUseCase'), 'execute').mockImplementation((_question, _signal, progress) => {
+      progress?.onStatus?.('READING')
+      progress?.onText?.('관심 공고 2건 중 ')
+      progress?.onText?.('가장 빠른 마감은 9월 30일입니다.')
+      return pending.promise
+    })
+    renderApp('/app/chat', memberAccount)
+    const { panel, input, log } = openPanel()
+
+    type(input, '관심 공고 마감 언제야?')
+
+    expect(within(log).getByText('관심 공고 2건 중 가장 빠른 마감은 9월 30일입니다.')).toBeTruthy()
+    expect(within(panel).getByText(assistantMessages.streamReading)).toBeTruthy()
+
+    await act(async () => { pending.resolve(answered('관심 공고 2건입니다. 9월 30일이 가장 빠릅니다.')) })
+
+    // 조각은 검증 전이라 남기지 않고, 확정 답 하나만 대화에 남습니다.
+    expect(within(log).queryByText('관심 공고 2건 중 가장 빠른 마감은 9월 30일입니다.')).toBeNull()
+    expect(within(log).getByText('관심 공고 2건입니다. 9월 30일이 가장 빠릅니다.')).toBeTruthy()
+    expect(within(panel).queryByText(assistantMessages.streamReading)).toBeNull()
+  })
+
+  it('새 대화를 시작하면 흘러오던 조각도 함께 사라진다', async () => {
+    const pending = deferred()
+    vi.spyOn(appContainer.resolve('askAssistantUseCase'), 'execute').mockImplementation((_question, _signal, progress) => {
+      progress?.onText?.('쓰다 만 문장')
+      return pending.promise
+    })
+    renderApp('/app/chat', memberAccount)
+    const { panel, input, log } = openPanel()
+    type(input, '관심 공고 마감 언제야?')
+    expect(within(log).getByText('쓰다 만 문장')).toBeTruthy()
+
+    fireEvent.click(within(panel).getByRole('button', { name: assistantMessages.menu }))
+    fireEvent.click(within(panel).getByRole('menuitem', { name: assistantMessages.newConversation }))
+
+    expect(within(log).queryByText('쓰다 만 문장')).toBeNull()
+    await act(async () => { pending.resolve(answered('늦게 온 답')) })
+    expect(within(log).queryByText('늦게 온 답')).toBeNull()
+  })
+})
+
 describe('GovBiz 가이드 실행 확인 버튼', () => {
   const saveAction = {
     kind: 'SAVE_PROGRAM' as const, label: '관심 공고함에 담기', confirm: "'예비창업패키지'을(를) 관심 공고함에 담을까요?",
@@ -258,7 +303,7 @@ describe('GovBiz 가이드 실행 확인 버튼', () => {
   it('버튼을 눌렀을 때만 기존 담기 API를 부르고, 한 번 실행하면 다시 누를 수 없다', async () => {
     vi.spyOn(appContainer.resolve('askAssistantUseCase'), 'execute').mockResolvedValue(withSaveAction)
     const save = vi.spyOn(appContainer.resolve('saveSupportProgramUseCase'), 'execute')
-      .mockResolvedValue({ savedAt: '2026-09-19T10:00:00', program: supportPrograms[0]! })
+      .mockResolvedValue({ outcome: 'saved', saved: { savedAt: '2026-09-19T10:00:00', program: supportPrograms[0]! } })
     renderApp('/app/chat', memberAccount)
     const { panel, input, log } = openPanel()
 
@@ -277,9 +322,13 @@ describe('GovBiz 가이드 실행 확인 버튼', () => {
     expect((used as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('실행이 실패하면 성공한 것처럼 말하지 않고 화면에서 직접 하도록 안내한다', async () => {
+  it.each([
+    ['요청이 실패하면', () => vi.spyOn(appContainer.resolve('saveSupportProgramUseCase'), 'execute').mockRejectedValue(new Error('500'))],
+    // 담기 API는 공고가 사라져도 오류가 아니라 not-found를 돌려줍니다. 이때도 담았다고 말하면 안 됩니다.
+    ['공고가 사라졌으면', () => vi.spyOn(appContainer.resolve('saveSupportProgramUseCase'), 'execute').mockResolvedValue({ outcome: 'not-found' })],
+  ])('%s 성공한 것처럼 말하지 않고 화면에서 직접 하도록 안내한다', async (_label, stub) => {
     vi.spyOn(appContainer.resolve('askAssistantUseCase'), 'execute').mockResolvedValue(withSaveAction)
-    vi.spyOn(appContainer.resolve('saveSupportProgramUseCase'), 'execute').mockRejectedValue(new Error('500'))
+    stub()
     renderApp('/app/chat', memberAccount)
     const { panel, log } = openPanel()
 

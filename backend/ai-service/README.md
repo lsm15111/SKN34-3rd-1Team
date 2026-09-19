@@ -178,6 +178,11 @@ ANSWERED는 비어 있지 않은 answer와 빈 updates, null 질문을 반환합
 실행 제안의 대상도 카드와 같이 이번 실행의 도구 결과 안에 있어야 하며(`action_catalog`), 이미 담은 공고를 또 담거나
 지금과 같은 단계로 바꾸자는 제안, 실행 중인 검토를 다시 실행하자는 제안은 답 전체를 오류로 끝냅니다.
 
+`POST /internal/v1/assistant/answers/stream`은 같은 실행을 SSE로 보냅니다(`Runner.run_streamed`). `status`는 진행 단계,
+`text`는 구조화 출력에서 `answer` 값만 뽑아낸 조각(`app/assistant/streaming.py`), `final`은 `/answers`와 똑같이 검증한 응답입니다.
+실행은 따로 만든 작업이 맡고 시간 제한도 그 작업에만 걸어, 화면이 늦게 읽어도 실행이 끊기지 않습니다. 머리글이 이미 나간 뒤의
+실패는 상태 코드를 바꿀 수 없으므로 `error` 이벤트로 알립니다.
+
 ```text
 HTTP API → AssistantService → AssistantAgent(Runner.run, max_turns = 도구 상한 + 1)
   → OpenAI (OPENAI_ASSISTANT_MODEL, 기본 gpt-5.6-luna/low)

@@ -15,7 +15,9 @@ import ai.govbiz.core.assistant.domain.AssistantCard
 import ai.govbiz.core.assistant.domain.AssistantCardKind
 import ai.govbiz.core.assistant.domain.AssistantIntent
 import ai.govbiz.core.assistant.domain.AssistantNavigation
+import ai.govbiz.core.assistant.domain.AssistantStreamEvent
 import ai.govbiz.core.assistant.domain.AssistantQuestion
+import ai.govbiz.core.assistant.domain.AssistantStreamPhase
 import ai.govbiz.core.assistant.domain.AssistantScreenContext
 import ai.govbiz.core.assistant.service.AssistantMessageService
 import ai.govbiz.core.supportprogram.service.admission.SupportProgramRequestAdmissionService
@@ -58,7 +60,7 @@ class AssistantMessageControllerTest {
     private fun mvc(perClient: Int = 100, agent: AssistantAgentProperties = AssistantAgentProperties(), agentPerClient: Int = 100): MockMvc {
         val admission = SupportProgramRequestAdmissionService(SupportProgramRequestAdmissionProperties(perClient, 100, 4)) { 0L }
         val agentAdmission = SupportProgramRequestAdmissionService(SupportProgramRequestAdmissionProperties(agentPerClient, 100, 4)) { 0L }
-        return MockMvcBuilders.standaloneSetup(AssistantMessageController(service, admission, agentAdmission, agent))
+        return MockMvcBuilders.standaloneSetup(AssistantMessageController(service, admission, agentAdmission, agent, mapper))
             .setCustomArgumentResolvers(AuthenticatedAccountArgumentResolver { sessionService })
             .setControllerAdvice(ApiExceptionHandler()).setValidator(validator)
             .setMessageConverters(JacksonJsonHttpMessageConverter(mapper)).build()
@@ -210,5 +212,76 @@ class AssistantMessageControllerTest {
         val expectedStatus = when (kind) { "unavailable" -> 503; "timeout" -> 504; else -> 502 }
         val expectedCode = when (kind) { "unavailable" -> "AI_SERVICE_UNAVAILABLE"; "timeout" -> "AI_SERVICE_TIMEOUT"; else -> "AI_SERVICE_INVALID_RESPONSE" }
         mvc().perform(request()).andExpect(status().`is`(expectedStatus)).andExpect(jsonPath("$.code").value(expectedCode))
+    }
+
+    private fun streamRequest(cookie: String? = null) = request(cookie = cookie).accept(MediaType.TEXT_EVENT_STREAM)
+
+    /** SSE 본문을 빈 줄 기준으로 나눈 덩어리입니다. */
+    private fun sseEvents(body: String): List<String> = body.split("\n\n").filter { it.isNotBlank() }
+
+    private fun streamWith(vararg events: AssistantStreamEvent) {
+        Mockito.doAnswer { invocation ->
+            val sink = invocation.getArgument<(AssistantStreamEvent) -> Unit>(2)
+            events.forEach(sink)
+            null
+        }.`when`(service).answerStreaming(isNull(), anyQuestion(), any() ?: {})
+    }
+
+    @Test
+    fun streamsProgressTextAndTheFinalAnswerAsServerSentEvents() {
+        streamWith(
+            AssistantStreamEvent.Status(AssistantStreamPhase.THINKING),
+            AssistantStreamEvent.Text("점수는 "),
+            AssistantStreamEvent.Text("관련도입니다."),
+            AssistantStreamEvent.Final(answer()),
+        )
+
+        val body = mvc().perform(streamRequest()).andExpect(status().isOk)
+            .andExpect(header().string("Cache-Control", "no-store"))
+            .andExpect(header().string("X-Accel-Buffering", "no"))
+            .andReturn().response.contentAsString
+
+        val events = sseEvents(body)
+        assertEquals(4, events.size)
+        assertTrue(events[0].startsWith("event: status"))
+        assertTrue(events[0].contains("\"phase\":\"THINKING\""))
+        assertTrue(events[1].contains("\"delta\":\"점수는 \""))
+        assertTrue(events[3].startsWith("event: final"))
+        // 카드·이동 버튼이 실린 답은 마지막 이벤트에만 있습니다.
+        assertTrue(events[3].contains("\"intent\":\"PRODUCT_HELP\"") && events[3].contains("/app/chat"))
+        assertFalse(events[1].contains("navigation"))
+    }
+
+    @Test
+    fun streamingFailuresBeforeTheFirstEventKeepTheNormalErrorResponse() {
+        Mockito.doThrow(AiServiceCallException.unavailable(null))
+            .`when`(service).answerStreaming(isNull(), anyQuestion(), any() ?: {})
+
+        mvc().perform(streamRequest())
+            .andExpect(status().isServiceUnavailable)
+            .andExpect(jsonPath("$.code").value("AI_SERVICE_UNAVAILABLE"))
+    }
+
+    @Test
+    fun streamingFailuresAfterTheFirstEventBecomeAnErrorEvent() {
+        Mockito.doAnswer { invocation ->
+            invocation.getArgument<(AssistantStreamEvent) -> Unit>(2)(AssistantStreamEvent.Status(AssistantStreamPhase.THINKING))
+            throw AiServiceCallException.timeout(null)
+        }.`when`(service).answerStreaming(isNull(), anyQuestion(), any() ?: {})
+
+        val body = mvc().perform(streamRequest()).andExpect(status().isOk).andReturn().response.contentAsString
+
+        val events = sseEvents(body)
+        assertTrue(events.last().startsWith("event: error"))
+        assertTrue(events.last().contains("TIMEOUT"))
+        assertFalse(body.contains("event: final"))
+    }
+
+    @Test
+    fun streamingSharesTheSameRequestLimitAsTheJsonAnswer() {
+        streamWith(AssistantStreamEvent.Final(answer()))
+        val mvc = mvc(perClient = 1)
+        mvc.perform(streamRequest()).andExpect(status().isOk)
+        mvc.perform(streamRequest()).andExpect(status().isTooManyRequests)
     }
 }

@@ -141,3 +141,24 @@ data class AssistantQuestion(
     val conversationId: String,
     val context: AssistantScreenContext,
 )
+
+/**
+ * 가이드 답을 만드는 동안 화면으로 나가는 사건 하나입니다.
+ *
+ * [Status]와 [Text]는 아직 검증 전이라 화면에 "만드는 중"으로만 보여 주고, 카드·이동 버튼·실행 제안이 실린
+ * [Final]이 와야 답이 확정됩니다. [Text]로 나간 문장과 [Final]의 문장이 다를 수 있어(Core가 템플릿 답으로 바꾸는 경우)
+ * 화면은 마지막에 [Final]의 문장으로 덮어씁니다.
+ */
+sealed interface AssistantStreamEvent {
+    data class Status(val phase: AssistantStreamPhase) : AssistantStreamEvent
+
+    data class Text(val delta: String) : AssistantStreamEvent
+
+    data class Final(val answer: AssistantAnswer) : AssistantStreamEvent
+}
+
+/** 화면에 보여 줄 진행 단계입니다. 도구 이름 같은 내부 값은 내보내지 않습니다. */
+enum class AssistantStreamPhase {
+    THINKING,
+    READING,
+}

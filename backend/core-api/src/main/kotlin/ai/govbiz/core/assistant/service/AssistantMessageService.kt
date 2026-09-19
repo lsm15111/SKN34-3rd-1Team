@@ -14,6 +14,7 @@ import ai.govbiz.core.assistant.client.dto.AiAssistantHistoryMessage
 import ai.govbiz.core.assistant.client.dto.AiAssistantNavigationPayload
 import ai.govbiz.core.assistant.client.dto.AiAssistantPrincipal
 import ai.govbiz.core.assistant.client.dto.AiAssistantSession
+import ai.govbiz.core.assistant.client.dto.AiAssistantStreamEvent
 import ai.govbiz.core.assistant.client.dto.AiAssistantToolCallPayload
 import ai.govbiz.core.assistant.config.AssistantAgentProperties
 import ai.govbiz.core.assistant.domain.AssistantAccountTopic
@@ -27,6 +28,8 @@ import ai.govbiz.core.assistant.domain.AssistantIntent
 import ai.govbiz.core.assistant.domain.AssistantNavigation
 import ai.govbiz.core.assistant.domain.AssistantHistoryMessage
 import ai.govbiz.core.assistant.domain.AssistantQuestion
+import ai.govbiz.core.assistant.domain.AssistantStreamEvent
+import ai.govbiz.core.assistant.domain.AssistantStreamPhase
 import ai.govbiz.core.assistant.repository.AssistantConversationRepository
 import ai.govbiz.core.partner.domain.PartnerProposalBox
 import ai.govbiz.core.partner.domain.PartnerProposalStatus
@@ -67,6 +70,47 @@ class AssistantMessageService(
         (answer.answer ?: answer.clarificationQuestion)?.let { conversations.append(account?.id, question.conversationId, request.message, it) }
         return answer
     }
+
+    /**
+     * 같은 답을 만들면서 진행 상황과 답변 조각을 먼저 내보냅니다. 모델 호출 수와 토큰은 [answer]와 같습니다.
+     *
+     * 조각은 아직 검증 전이라 화면이 "만드는 중"으로만 쓰고, 카드·이동 버튼·실행 제안과 최종 문장은 [AssistantStreamEvent.Final]에만
+     * 실립니다. 마지막 결과가 오지 않은 채 연결이 끝나면 답을 지어내지 않고 계약 위반으로 끝냅니다.
+     */
+    fun answerStreaming(account: Account?, question: AssistantQuestion, sink: (AssistantStreamEvent) -> Unit) {
+        val history = conversations.recent(account?.id, question.conversationId)
+        val request = toRequest(account, question, history)
+        var streamed = 0
+        var final: AssistantAnswer? = null
+        client.stream(request) { event ->
+            when (event) {
+                is AiAssistantStreamEvent.Status -> phase(event.phase)?.let { sink(AssistantStreamEvent.Status(it)) }
+                is AiAssistantStreamEvent.Text -> {
+                    // 조각도 답변과 같은 상한을 넘지 않게 자릅니다. 제어 문자가 섞인 조각은 버립니다.
+                    val delta = event.delta?.takeIf { it.isNotEmpty() && !UNSUPPORTED_LAYOUT_TEXT.containsMatchIn(it) }
+                    val room = ANSWER_MAX - streamed
+                    if (delta != null && room > 0) {
+                        val clipped = delta.take(room)
+                        streamed += clipped.length
+                        sink(AssistantStreamEvent.Text(clipped))
+                    }
+                }
+                is AiAssistantStreamEvent.Final -> {
+                    if (final != null) invalidResponse()
+                    final = answerFor(verify(event.payload, account), account, question)
+                }
+                is AiAssistantStreamEvent.Failure ->
+                    if (event.kind == "timeout") throw AiServiceCallException.timeout(null)
+                    else throw AiServiceCallException.unavailable(null)
+            }
+        }
+        val answer = final ?: invalidResponse()
+        (answer.answer ?: answer.clarificationQuestion)?.let { conversations.append(account?.id, question.conversationId, request.message, it) }
+        sink(AssistantStreamEvent.Final(answer))
+    }
+
+    private fun phase(name: String?): AssistantStreamPhase? =
+        AssistantStreamPhase.entries.firstOrNull { it.name == name?.uppercase() }
 
     private fun answerFor(verified: VerifiedPayload, account: Account?, question: AssistantQuestion): AssistantAnswer =
         when (verified.intent) {

@@ -93,3 +93,17 @@ data class AiAssistantToolCallPayload(
     val name: String?,
     val ms: Int?,
 )
+
+/**
+ * AI Service가 SSE로 보내는 이벤트입니다. `status`·`text`는 진행 중 알림이고, `final`만 검증을 거쳐 화면에 나갑니다.
+ * 응답 머리글이 이미 나간 뒤에는 상태 코드를 바꿀 수 없어 실패도 `error` 이벤트로 옵니다.
+ */
+sealed interface AiAssistantStreamEvent {
+    data class Status(val phase: String?, val tool: String?) : AiAssistantStreamEvent
+
+    data class Text(val delta: String?) : AiAssistantStreamEvent
+
+    data class Final(val payload: AiAssistantAnswerPayload) : AiAssistantStreamEvent
+
+    data class Failure(val kind: String?) : AiAssistantStreamEvent
+}

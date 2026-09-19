@@ -4,12 +4,14 @@ import ai.govbiz.core._common.config.JsonDeserializationConfig
 import ai.govbiz.core._common.exception.AiServiceCallException
 import ai.govbiz.core._common.exception.AiServiceFailure
 import ai.govbiz.core.assistant.client.dto.AiAssistantAnswerRequest
+import ai.govbiz.core.assistant.client.dto.AiAssistantStreamEvent
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 import org.springframework.http.HttpMethod
+import org.springframework.http.HttpStatus
 import org.springframework.http.HttpStatusCode
 import org.springframework.http.MediaType
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter
@@ -29,7 +31,7 @@ class AiAssistantClientTest {
     private val builder = RestClient.builder().baseUrl("http://ai-service.test")
         .messageConverters { it.clear(); it.add(JacksonJsonHttpMessageConverter(mapper)) }
     private val server = MockRestServiceServer.bindTo(builder).build()
-    private val client = AiAssistantClient(builder.build())
+    private val client = AiAssistantClient(builder.build(), mapper)
     private val requestJson = resource("contract-request.json")
     private val request = mapper.readValue(requestJson, AiAssistantAnswerRequest::class.java)
 
@@ -83,5 +85,65 @@ class AiAssistantClientTest {
 
     private companion object {
         const val URL = "http://ai-service.test/internal/v1/assistant/answers"
+    }
+
+    @Test
+    fun readsSseEventsInOrderAndIgnoresCommentsAndUnknownFields() {
+        val body = listOf(
+            ": 연결 유지용 주석",
+            "",
+            """event: status""",
+            """data: {"phase":"thinking","tool":null}""",
+            "",
+            // id 같은 모르는 필드가 섞여도 이름·데이터만 읽습니다.
+            "id: 7",
+            """event: status""",
+            """data: {"phase":"reading","tool":"list_saved_programs"}""",
+            "",
+            """event: text""",
+            """data: {"delta":"관심 공고 2건"}""",
+            "",
+            """event: final""",
+            "data: " + resource("contract-response.json").lines().joinToString("") { it.trim() },
+            "",
+        ).joinToString("\n", postfix = "\n")
+        server.expect(requestTo("http://ai-service.test/internal/v1/assistant/answers/stream"))
+            .andExpect(method(HttpMethod.POST))
+            .andRespond(withSuccess(body, MediaType.TEXT_EVENT_STREAM))
+
+        val events = mutableListOf<AiAssistantStreamEvent>()
+        client.stream(request) { events += it }
+
+        assertEquals(4, events.size)
+        assertEquals(AiAssistantStreamEvent.Status("thinking", null), events[0])
+        assertEquals(AiAssistantStreamEvent.Status("reading", "list_saved_programs"), events[1])
+        assertEquals(AiAssistantStreamEvent.Text("관심 공고 2건"), events[2])
+        assertEquals("PARTNER_MATCH", (events[3] as AiAssistantStreamEvent.Final).payload.intent)
+    }
+
+    @Test
+    fun rejectsUnknownEventNamesAndMalformedData() {
+        for (body in listOf(
+            "event: surprise\ndata: {}\n\n",
+            "event: text\ndata: {깨진\n\n",
+        )) {
+            server.reset()
+            server.expect(anything()).andRespond(withSuccess(body, MediaType.TEXT_EVENT_STREAM))
+            val error = assertThrows(AiServiceCallException::class.java) { client.stream(request) { } }
+            assertEquals(AiServiceFailure.INVALID_RESPONSE, error.failure)
+        }
+    }
+
+    @Test
+    fun mapsStreamStartFailuresToTheSameFailuresAsTheJsonCall() {
+        for ((status, failure) in listOf(
+            HttpStatus.SERVICE_UNAVAILABLE to AiServiceFailure.UNAVAILABLE,
+            HttpStatus.GATEWAY_TIMEOUT to AiServiceFailure.TIMEOUT,
+            HttpStatus.INTERNAL_SERVER_ERROR to AiServiceFailure.UPSTREAM_ERROR,
+        )) {
+            server.reset()
+            server.expect(anything()).andRespond(withStatus(status))
+            assertEquals(failure, assertThrows(AiServiceCallException::class.java) { client.stream(request) { } }.failure)
+        }
     }
 }

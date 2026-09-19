@@ -2,7 +2,9 @@ import logging
 
 from pydantic import ValidationError
 
-from app.assistant.agent import AssistantAgent
+from collections.abc import AsyncIterator
+
+from app.assistant.agent import AssistantAgent, GuideFinalEvent, GuideStatusEvent, GuideTextEvent
 from app.assistant.errors import AssistantAnswerError
 from app.assistant.models import (
     MAX_TOOL_CALL_REPORTS, NAVIGATIONS, SCHEMA_VERSION, TOOL_INTENTS, AssistantActionChoice, AssistantAnswerOutput,
@@ -27,6 +29,23 @@ class AssistantService:
 
     async def answer(self, request: AssistantAnswerRequest) -> AssistantAnswerResponse:
         output, results = await self._agent.answer(request)
+        return self.build_response(request, output, results)
+
+    async def answer_stream(self, request: AssistantAnswerRequest) -> AsyncIterator[object]:
+        """진행 상황과 답변 조각을 먼저 내보내고, 마지막에 같은 검증을 거친 응답을 한 번 내보냅니다.
+
+        카드·이동 버튼·실행 제안은 검증을 통과한 마지막 결과에만 실립니다. 조각으로 나간 문장은 아직 검증 전이므로
+        Core와 화면이 마지막 결과의 문장으로 덮어씁니다.
+        """
+        async for event in self._agent.answer_stream(request):
+            if isinstance(event, GuideFinalEvent):
+                yield self.build_response(request, event.output, event.results)
+            elif isinstance(event, (GuideStatusEvent, GuideTextEvent)):
+                yield event
+
+    def build_response(
+        self, request: AssistantAnswerRequest, output: AssistantAnswerOutput, results: list[ToolResult],
+    ) -> AssistantAnswerResponse:
         try:
             if not isinstance(output, AssistantAnswerOutput):
                 raise AssistantAnswerError()

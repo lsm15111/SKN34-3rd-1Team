@@ -4,6 +4,7 @@ import { useLocation } from 'react-router'
 import { appContainer } from '../../../app/appContainer'
 import { useAppDispatch } from '../../../app/hooks'
 import type { AssistantExecutableAction } from '../../../domain/entities/AssistantAnswer'
+import type { AssistantStreamPhase } from '../../../data/api/assistantApi'
 import type { ApplicationPreparationUseCase } from '../../../domain/usecases/ApplicationPreparationUseCase'
 import type { AskAssistantUseCase } from '../../../domain/usecases/AskAssistantUseCase'
 import type { CombinationReviewUseCase } from '../../../domain/usecases/CombinationReviewUseCase'
@@ -148,6 +149,9 @@ export function useAssistantViewModel(
   const [startedAt, setStartedAt] = useState(() => stored?.startedAt ?? new Date().toISOString())
   const [conversationId, setConversationId] = useState(() => stored?.conversationId ?? newConversationId())
   const [isTyping, setIsTyping] = useState(false)
+  // 답이 만들어지는 동안의 상태입니다. 확정 전이라 대화에 넣지 않고 화면에만 보여 주며, 세션에도 저장하지 않습니다.
+  const [streamPhase, setStreamPhase] = useState<AssistantStreamPhase | null>(null)
+  const [streamingText, setStreamingText] = useState('')
   const conversationOwnerRef = useRef<string | null | undefined>(stored?.owner)
   // 진행 중인 요청과 대화 세대입니다. 새 대화·계정 전환으로 세대가 바뀌면 늦게 온 답을 버립니다.
   const pendingRef = useRef<AbortController | null>(null)
@@ -188,6 +192,8 @@ export function useAssistantViewModel(
     pendingRef.current = null
     generationRef.current += 1
     setIsTyping(false)
+    setStreamPhase(null)
+    setStreamingText('')
   }, [])
 
   useEffect(() => () => { pendingRef.current?.abort() }, [])
@@ -245,9 +251,12 @@ export function useAssistantViewModel(
 
   const executeAction = useCallback(async (action: AssistantExecutableAction, signal: AbortSignal): Promise<{ text: string; button: AssistantCardButton | null }> => {
     switch (action.kind) {
-      case 'SAVE_PROGRAM':
-        await saveSupportProgram.execute({ sourceCode: action.sourceCode, sourceProgramId: action.sourceProgramId }, signal)
+      case 'SAVE_PROGRAM': {
+        const saved = await saveSupportProgram.execute({ sourceCode: action.sourceCode, sourceProgramId: action.sourceProgramId }, signal)
+        // 그 사이 내려간 공고는 담기지 않습니다. 담았다고 말하지 않고 실패로 알립니다.
+        if (saved.outcome !== 'saved') throw new Error('support program is no longer available')
         return { text: assistantMessages.actionSaved, button: { label: assistantMessages.savedOpen, to: appPaths.savedPrograms } }
+      }
       case 'UNSAVE_PROGRAM':
         await removeSavedSupportProgram.execute({ sourceCode: action.sourceCode, sourceProgramId: action.sourceProgramId }, signal)
         return { text: assistantMessages.actionUnsaved, button: null }
@@ -289,6 +298,8 @@ export function useAssistantViewModel(
     setMessages((current) => [...current, asked])
     setQuickReplies([])
     setIsTyping(true)
+    setStreamPhase('THINKING')
+    setStreamingText('')
     const controller = new AbortController()
     pendingRef.current = controller
     const generation = generationRef.current
@@ -298,7 +309,11 @@ export function useAssistantViewModel(
         message: trimmed,
         conversationId,
         context: { route: pathname.replace(/\/+$/, '') || '/', programSelected: programIdentityFrom(pathname, search) !== null },
-      }, controller.signal)
+      }, controller.signal, {
+        // 늦게 온 조각은 이미 다른 대화이므로 버립니다.
+        onStatus: (phase) => { if (generation === generationRef.current) setStreamPhase(phase) },
+        onText: (delta) => { if (generation === generationRef.current) setStreamingText((current) => current + delta) },
+      })
       if (generation !== generationRef.current) return
       const answer = result.outcome === 'answered'
         ? freeTextAnswer(result.answer, { pathname, search, session, returnTo })
@@ -313,6 +328,8 @@ export function useAssistantViewModel(
       if (generation === generationRef.current) {
         pendingRef.current = null
         setIsTyping(false)
+        setStreamPhase(null)
+        setStreamingText('')
       }
     }
   }, [aiEnabled, append, askAssistant, conversationId, pathname, returnTo, routeReplies, search, session])
@@ -431,6 +448,8 @@ export function useAssistantViewModel(
     messages,
     quickReplies,
     isTyping,
+    streamPhase,
+    streamingText,
     dateLabel: conversationDateLabel(startedAt, new Date()),
     usedActionIds,
     runAction: (offer: AssistantActionOffer) => { void runAction(offer) },

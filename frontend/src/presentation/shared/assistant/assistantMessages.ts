@@ -35,6 +35,8 @@ export const assistantMessages = {
   actionReviewStarted: '중복 검토를 시작했습니다. 결과가 나오면 결과 화면에서 볼 수 있습니다.',
   actionFailed: '요청을 처리하지 못했습니다. 해당 화면에서 직접 해 주세요.',
   actionDone: '실행했습니다',
+  streamThinking: '답을 찾고 있어요',
+  streamReading: '내 자료를 확인하고 있어요',
   openPipeline: '진행 관리 열기',
   openReviewResult: '검토 결과 열기',
   cardReview: '중복 검토',

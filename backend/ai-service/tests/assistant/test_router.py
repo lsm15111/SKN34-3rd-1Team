@@ -4,7 +4,7 @@ import logging
 import re
 
 import pytest
-from agents.testing import ModelStep, ScriptedModel, assistant_message
+from agents.testing import ModelStep, ScriptedModel, assistant_message, function_call
 from fastapi.testclient import TestClient
 
 from app.assistant.agent import AssistantAgent
@@ -17,6 +17,7 @@ from app.main import create_app
 SETTINGS = Settings(openai_api_key="test-key-never-sent", openai_model="test-model",
                     llm_model_timeout_seconds=1, llm_run_timeout_seconds=2)
 PATH = "/internal/v1/assistant/answers"
+STREAM_PATH = "/internal/v1/assistant/answers/stream"
 
 
 def guide_agent(model, *, model_timeout_seconds=1, run_timeout_seconds=2):
@@ -107,3 +108,71 @@ def test_agent_log_never_contains_message_or_answer_text(request_data, output_da
     assert message.startswith("assistant_answer_run outcome=completed ")
     assert request_data["message"] not in message
     assert output_data["answer"] not in message
+
+
+def read_events(response) -> list[tuple[str, dict]]:
+    """SSE 본문을 (이름, 데이터) 목록으로 읽습니다."""
+    events = []
+    for block in response.text.split("\n\n"):
+        lines = [line for line in block.splitlines() if line]
+        if not lines:
+            continue
+        name = next(line[len("event: "):] for line in lines if line.startswith("event: "))
+        data = next(line[len("data: "):] for line in lines if line.startswith("data: "))
+        events.append((name, json.loads(data)))
+    return events
+
+
+def test_streaming_sends_status_then_text_then_the_verified_final(member_request_data, core_tools):
+    member_request_data["message"] = "관심 공고 마감 언제야?"
+    output = {
+        "intent": "ACCOUNT_STATE", "answer": "관심 공고 2건 중 가장 빠른 마감은 9월 30일입니다.", "citations": [],
+        "clarificationQuestion": None, "searchQuery": None, "accountTopic": "SAVED_PROGRAMS",
+        "cards": [{"kind": "PROGRAM", "id": "BIZINFO:PBLN_000000000000001", "reason": "가장 빨리 마감됩니다."}],
+        "navigation": "SAVED_PROGRAMS", "actions": [],
+    }
+    model = ScriptedModel([
+        [function_call("list_saved_programs", {}, call_id="call_1")],
+        [assistant_message(json.dumps(output, ensure_ascii=False))],
+    ])
+    agent = AssistantAgent(
+        model=model, tool_client=core_tools.client(), model_timeout_seconds=1, run_timeout_seconds=5, max_tool_calls=3,
+    )
+    with TestClient(create_app(settings=SETTINGS, assistant_agent=agent)) as client:
+        response = client.post(STREAM_PATH, json=member_request_data)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = read_events(response)
+    assert [name for name, _ in events] == ["status", "status", "text", "final"]
+    assert events[0][1] == {"phase": "thinking", "tool": None}
+    assert events[1][1] == {"phase": "reading", "tool": "list_saved_programs"}
+    # 답변 문장만 조각으로 나가고, JSON의 다른 항목은 새 나가지 않습니다.
+    assert events[2][1]["delta"] == output["answer"]
+    final = events[3][1]
+    assert final["answer"] == output["answer"]
+    assert [card["id"] for card in final["cards"]] == ["BIZINFO:PBLN_000000000000001"]
+    assert final["navigation"]["to"] == "/app/saved-programs"
+
+
+def test_streaming_reports_a_contract_violation_as_an_error_event(member_request_data, core_tools):
+    # 도구 결과에 없는 카드입니다. 조각은 나갔더라도 마지막에는 실패를 그대로 알립니다.
+    output = {
+        "intent": "ACCOUNT_STATE", "answer": "관심 공고를 확인했습니다.", "citations": [], "clarificationQuestion": None,
+        "searchQuery": None, "accountTopic": "SAVED_PROGRAMS",
+        "cards": [{"kind": "PROGRAM", "id": "BIZINFO:MADE_UP", "reason": "지어낸 카드"}], "navigation": "NONE", "actions": [],
+    }
+    model = ScriptedModel([
+        [function_call("list_saved_programs", {}, call_id="call_1")],
+        [assistant_message(json.dumps(output, ensure_ascii=False))],
+    ])
+    agent = AssistantAgent(
+        model=model, tool_client=core_tools.client(), model_timeout_seconds=1, run_timeout_seconds=5, max_tool_calls=3,
+    )
+    with TestClient(create_app(settings=SETTINGS, assistant_agent=agent)) as client:
+        response = client.post(STREAM_PATH, json=member_request_data)
+
+    events = read_events(response)
+    assert [name for name, _ in events][-1] == "error"
+    assert events[-1][1] == {"kind": "execution"}
+    assert not any(name == "final" for name, _ in events)

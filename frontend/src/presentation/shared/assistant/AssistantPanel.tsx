@@ -134,9 +134,19 @@ export function AssistantPanel({ vm, launcherRef }: { vm: AssistantViewModel; la
         {vm.isTyping ? (
           <div className={styles.group}>
             <span className={styles.avatarSmall} aria-hidden="true">G</span>
-            <span className={styles.typing} role="status" aria-label={assistantMessages.typing}>
-              <i className={styles.typingDot} /><i className={styles.typingDot} /><i className={styles.typingDot} />
-            </span>
+            <div className={styles.column}>
+              {vm.streamingText === '' ? (
+                <span className={styles.typing} role="status" aria-label={assistantMessages.typing}>
+                  <i className={styles.typingDot} /><i className={styles.typingDot} /><i className={styles.typingDot} />
+                </span>
+              ) : (
+                // 아직 검증 전이라 확정 답이 오면 이 말풍선을 지우고 확정 답을 붙입니다.
+                <div className={`${styles.bubble} ${styles.bubbleBot}`} aria-busy="true">
+                  <p className={styles.paragraph}>{vm.streamingText}</p>
+                </div>
+              )}
+              {vm.streamPhase !== null ? <span className={styles.source} role="status">{streamPhaseLabel(vm.streamPhase)}</span> : null}
+            </div>
           </div>
         ) : null}
         {vm.quickReplies.length > 0 && !vm.isTyping ? (
@@ -165,6 +175,11 @@ export function AssistantPanel({ vm, launcherRef }: { vm: AssistantViewModel; la
       </form>
     </section>
   )
+}
+
+/** 답을 만드는 동안 보여 줄 한 줄입니다. 도구 이름 같은 내부 값은 쓰지 않습니다. */
+function streamPhaseLabel(phase: 'THINKING' | 'READING'): string {
+  return phase === 'READING' ? assistantMessages.streamReading : assistantMessages.streamThinking
 }
 
 function AssistantBubble({ message, onNavigate, onRunAction, usedActionIds, busy }: {
