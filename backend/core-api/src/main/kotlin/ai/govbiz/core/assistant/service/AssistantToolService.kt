@@ -111,38 +111,46 @@ class AssistantToolService(
 
     /**
      * 공개 공고를 키워드·지역으로 찾습니다. 카탈로그(DB) 검색이라 AI 점수화·임베딩을 쓰지 않습니다.
+     *
+     * 카탈로그 검색은 제목·기관을 통째로 포함하는지 보므로 "창업 지원 사업" 같은 말은 한 건도 찾지 못합니다.
+     * 그래서 가장 긴 낱말로 마감 임박순 [PROGRAM_SCAN_MAX]건을 훑은 뒤 나머지 낱말이 더 많이 맞는 공고를 앞에 둡니다.
      * 이미 담은 공고인지 함께 표시해, 가이드가 담기 카드와 빼기 카드를 잘못 고르지 않게 합니다.
      */
     fun findPrograms(accountId: Long, keyword: String?, region: String?): List<AssistantProgramSearchResult> {
         val normalizedKeyword = keyword?.trim()?.take(KEYWORD_MAX).orEmpty()
         val normalizedRegion = region?.trim()?.take(REGION_MAX).orEmpty()
         if (normalizedKeyword.isEmpty() && normalizedRegion.isEmpty()) return emptyList()
+        val words = normalizedKeyword.split(WHITESPACE).filter { it.isNotBlank() }.take(KEYWORD_WORD_MAX)
         val found = try {
             catalogService.browse(
-                rawKeyword = normalizedKeyword,
+                rawKeyword = words.maxByOrNull { it.length }.orEmpty(),
                 rawRegion = normalizedRegion,
                 status = SupportProgramStatus.OPEN,
                 sort = SupportProgramCatalogSort.DEADLINE,
                 page = 1,
-                pageSize = PROGRAM_SEARCH_MAX,
+                pageSize = PROGRAM_SCAN_MAX,
             )
         } catch (_: SupportProgramCatalogFilterException) {
             // 모르는 지역 이름 같은 조건은 조건을 무시한 결과로 답하지 않고 빈 목록으로 둡니다.
             return emptyList()
         }
         val saved = savedSupportProgramService.list(accountId).map { it.program.sourceCode to it.program.id }.toSet()
-        return found.programs.map { program ->
-            AssistantProgramSearchResult(
-                sourceCode = program.sourceCode,
-                sourceProgramId = program.id,
-                title = program.title,
-                organization = program.organization,
-                applicationEndDate = program.applicationEndDate,
-                status = program.status.name,
-                regions = program.regions.take(REGION_LIST_MAX),
-                saved = (program.sourceCode to program.id) in saved,
-            )
-        }
+        // 정렬은 안정적이라 맞는 낱말 수가 같으면 마감 임박순이 그대로 유지됩니다.
+        return found.programs
+            .sortedByDescending { program -> words.count { program.title.contains(it, true) || program.organization.contains(it, true) } }
+            .take(PROGRAM_SEARCH_MAX)
+            .map { program ->
+                AssistantProgramSearchResult(
+                    sourceCode = program.sourceCode,
+                    sourceProgramId = program.id,
+                    title = program.title,
+                    organization = program.organization,
+                    applicationEndDate = program.applicationEndDate,
+                    status = program.status.name,
+                    regions = program.regions.take(REGION_LIST_MAX),
+                    saved = (program.sourceCode to program.id) in saved,
+                )
+            }
     }
 
     /** 개인정보를 가린 뒤 자릅니다. 잘린 본문은 끝에 줄임표를 붙여 모델이 문장이 끝난 것으로 오해하지 않게 합니다. */
@@ -159,6 +167,9 @@ class AssistantToolService(
         const val REGION_MAX = 50
         const val KEYWORD_MAX = 100
         const val PROGRAM_SEARCH_MAX = 5
+        const val PROGRAM_SCAN_MAX = 50
+        const val KEYWORD_WORD_MAX = 4
         const val REGION_LIST_MAX = 5
+        private val WHITESPACE = Regex("\\s+")
     }
 }

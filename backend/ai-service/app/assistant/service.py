@@ -1,3 +1,5 @@
+import logging
+
 from pydantic import ValidationError
 
 from app.assistant.agent import AssistantAgent
@@ -7,6 +9,9 @@ from app.assistant.models import (
     AssistantAnswerRequest, AssistantAnswerResponse, AssistantCard, AssistantNavigation, AssistantToolCallReport,
 )
 from app.assistant.tools import ToolResult, action_catalog, card_catalog
+
+
+logger = logging.getLogger(__name__)
 
 
 class AssistantService:
@@ -49,7 +54,12 @@ class AssistantService:
                 toolCalls=[AssistantToolCallReport(name=result.name, ms=result.ms) for result in results][:MAX_TOOL_CALL_REPORTS],
             )
             return AssistantAnswerResponse.model_validate(response.model_dump(by_alias=True))
+        except AssistantAnswerError as error:
+            # 어떤 규칙에 걸렸는지만 남깁니다. 질문·답·도구 결과 본문은 남기지 않습니다.
+            logger.info("assistant_answer_rejected intent=%s reason=%s", getattr(output, "intent", None), error)
+            raise
         except (ValidationError, ValueError) as error:
+            logger.info("assistant_answer_rejected intent=%s reason=%s", getattr(output, "intent", None), type(error).__name__)
             raise AssistantAnswerError() from error
 
 

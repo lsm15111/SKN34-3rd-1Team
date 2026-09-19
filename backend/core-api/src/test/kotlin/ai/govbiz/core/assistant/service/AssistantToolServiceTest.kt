@@ -178,24 +178,30 @@ class AssistantToolServiceTest {
 
 
     @Test
-    fun findProgramsMarksAlreadySavedProgramsAndAsksForOpenDeadlineOrder() {
+    fun findProgramsScansWithTheLongestWordAndPutsTheBestWordMatchFirst() {
         `when`(savedPrograms.list(7L)).thenReturn(listOf(SavedSupportProgram(NOW, program("PBLN_000000000000001", "https://www.bizinfo.go.kr/1"))))
+        // 카탈로그는 제목을 통째로 포함하는지만 보므로 가장 긴 낱말 하나로 훑고 나머지 낱말은 순서에만 씁니다.
         `when`(
             catalog.browse(
-                rawKeyword = "창업 지원", rawRegion = "서울", rawCategory = "", status = SupportProgramStatus.OPEN,
-                sort = SupportProgramCatalogSort.DEADLINE, page = 1, pageSize = AssistantToolService.PROGRAM_SEARCH_MAX,
+                rawKeyword = "스타트업", rawRegion = "서울", rawCategory = "", status = SupportProgramStatus.OPEN,
+                sort = SupportProgramCatalogSort.DEADLINE, page = 1, pageSize = AssistantToolService.PROGRAM_SCAN_MAX,
                 sourceCode = "", rawStartupStage = "", rawApplicantType = "", rawFounderAge = "",
             ),
         ).thenReturn(
             SupportProgramCatalogResult(
-                listOf(program("PBLN_000000000000001", "https://www.bizinfo.go.kr/1"), program("174520", "https://www.bizinfo.go.kr/2")), 2, 1, 5, 1, listOf("서울"), listOf("창업"),
+                listOf(
+                    program("PBLN_000000000000001", "https://www.bizinfo.go.kr/1", "스타트업 실증 지원"),
+                    program("174520", "https://www.bizinfo.go.kr/2", "스타트업 자금 지원"),
+                ),
+                2, 1, 50, 1, listOf("서울"), listOf("창업"),
             ),
         )
 
-        val found = service.findPrograms(7L, " 창업 지원 ", " 서울 ")
+        val found = service.findPrograms(7L, " 스타트업 자금 ", " 서울 ")
 
-        assertEquals(listOf(true, false), found.map { it.saved })
-        assertEquals(listOf("PBLN_000000000000001", "174520"), found.map { it.sourceProgramId })
+        // 마감 임박순으로 먼저 온 공고라도, 낱말이 더 많이 맞는 공고를 앞에 둡니다.
+        assertEquals(listOf("174520", "PBLN_000000000000001"), found.map { it.sourceProgramId })
+        assertEquals(listOf(false, true), found.map { it.saved })
         assertEquals("OPEN", found[0].status)
     }
 
@@ -206,7 +212,7 @@ class AssistantToolServiceTest {
         `when`(
             catalog.browse(
                 "창업", "없는지역", "", SupportProgramStatus.OPEN, SupportProgramCatalogSort.DEADLINE, 1,
-                AssistantToolService.PROGRAM_SEARCH_MAX, "", "", "", "",
+                AssistantToolService.PROGRAM_SCAN_MAX, "", "", "", "",
             ),
         ).thenThrow(SupportProgramCatalogFilterException())
         assertTrue(service.findPrograms(7L, "창업", "없는지역").isEmpty())
@@ -217,8 +223,8 @@ class AssistantToolServiceTest {
         CompanyProfileInput("서울특별시", "정보통신업", 2021, null), NOW, NOW, NOW,
     )
 
-    private fun program(id: String, sourceUrl: String) = SupportProgram(
-        id, "BIZINFO", "서울 AI 실증 지원사업", "서울경제진흥원", "요약", emptyList(), emptyList(), "대상", "2026-09-01 ~ 2026-09-30",
+    private fun program(id: String, sourceUrl: String, title: String = "서울 AI 실증 지원사업") = SupportProgram(
+        id, "BIZINFO", title, "서울경제진흥원", "요약", emptyList(), emptyList(), "대상", "2026-09-01 ~ 2026-09-30",
         LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30), SupportProgramStatus.OPEN, "기업마당", sourceUrl, emptyList(),
     )
 
