@@ -3,7 +3,7 @@ import pytest
 
 from app.assistant.errors import ToolCallError
 from app.assistant.models import AssistantPrincipal
-from app.assistant.tools import CoreToolClient, ToolResult, card_catalog, sanitize
+from app.assistant.tools import CoreToolClient, ToolResult, action_catalog, card_catalog, sanitize
 from tests.assistant.conftest import (
     FOUND_PROGRAMS, PREPARATIONS, RECRUITMENTS, REVIEWS, SAVED_PROGRAMS, FakeCoreTools,
 )
@@ -116,3 +116,24 @@ def test_card_catalog_covers_found_programs_preparations_and_reviews():
     assert catalog[("REVIEW", "41")]["to"] == "/app/combination-reviews/41"
     # 아직 실행하지 않은 검토는 상태 코드가 없으므로 "실행 전"으로 적습니다.
     assert catalog[("REVIEW", "42")]["subtitle"] == "실행 전"
+
+
+def test_action_catalog_splits_save_and_unsave_and_skips_running_reviews():
+    catalog = action_catalog([
+        ToolResult("find_programs", 1, FOUND_PROGRAMS),
+        ToolResult("list_saved_programs", 1, SAVED_PROGRAMS),
+        ToolResult("list_application_preparations", 1, PREPARATIONS),
+        ToolResult("list_combination_reviews", 1, REVIEWS + [{"id": 43, "title": "실행 중", "latestRunStatus": "RUNNING"}]),
+    ])
+    # find_programs에서 saved=false인 공고만 담기 대상이고, 이미 담은 공고는 빼기 대상입니다.
+    assert set(catalog["SAVE_PROGRAM"]) == {"KSTARTUP:174520"}
+    assert set(catalog["UNSAVE_PROGRAM"]) == {"BIZINFO:PBLN_000000000000001", "MSIT:3186880"}
+    assert set(catalog["START_APPLICATION_PREPARATION"]) == {"KSTARTUP:174520", "BIZINFO:PBLN_000000000000001", "MSIT:3186880"}
+    assert catalog["SET_PREPARATION_STAGE"]["31"]["stage"] == "PREPARING"
+    # 실행 중인 검토는 다시 실행하자고 제안할 수 없습니다.
+    assert set(catalog["RUN_COMBINATION_REVIEW"]) == {"41", "42"}
+
+
+def test_action_catalog_is_empty_without_the_matching_tools():
+    catalog = action_catalog([ToolResult("get_my_company_profile", 1, {"registered": True})])
+    assert all(targets == {} for targets in catalog.values())

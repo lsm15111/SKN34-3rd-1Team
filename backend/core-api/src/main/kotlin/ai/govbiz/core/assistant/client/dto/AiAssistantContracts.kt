@@ -64,7 +64,15 @@ data class AiAssistantAnswerPayload(
     val accountTopic: String?,
     val cards: List<AiAssistantCardPayload?>?,
     val navigation: AiAssistantNavigationPayload?,
+    val actions: List<AiAssistantActionPayload?>?,
     val toolCalls: List<AiAssistantToolCallPayload?>?,
+)
+
+/** 모델이 제안한 실행입니다. 버튼 문구·대상 값은 Core가 자기 자료에서 다시 만듭니다. */
+data class AiAssistantActionPayload(
+    val kind: String?,
+    val targetId: String?,
+    val stage: String?,
 )
 
 data class AiAssistantCardPayload(

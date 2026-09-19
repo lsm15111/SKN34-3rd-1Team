@@ -212,7 +212,7 @@ describe('GovBiz 가이드 위젯', () => {
 })
 
 function freeAnswer(overrides: Partial<AssistantAnswer>): AssistantAnswer {
-  return { intent: 'OUT_OF_SCOPE', answer: null, citations: [], clarificationQuestion: null, searchQuery: null, accountTopic: null, navigation: null, cards: [], ...overrides }
+  return { intent: 'OUT_OF_SCOPE', answer: null, citations: [], clarificationQuestion: null, searchQuery: null, accountTopic: null, navigation: null, cards: [], actions: [], ...overrides }
 }
 
 describe('가이드 자유 질문', () => {

@@ -20,6 +20,13 @@
     "label": "파트너 모집 열기",
     "to": "/app/partners"
   },
+  "actions": [
+    {
+      "kind": "SAVE_PROGRAM",
+      "targetId": "KSTARTUP:174520",
+      "stage": null
+    }
+  ],
   "toolCalls": [
     {
       "name": "get_my_company_profile",

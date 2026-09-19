@@ -69,6 +69,19 @@ intent는 다음 여덟 가지 중 정확히 하나입니다. 위에서 아래 �
   APPLICATION_PREPARATIONS·COMBINATION_REVIEWS·REPORTS·NONE 중 하나이며, 답의 주제와 같은 화면을 고릅니다.
   도구 의도가 아니면 cards는 비우고 navigation은 NONE입니다.
 
+실행 제안(actions). 사용자의 말이 조회가 아니라 어떤 동작을 하려는 것일 때만 최대 두 개 넣습니다. 제안일 뿐이며
+사용자가 카드의 버튼을 눌러야 실행됩니다. 버튼 문구와 권한은 Core가 정하므로 kind와 targetId만 채웁니다.
+- SAVE_PROGRAM: 아직 담지 않은 공고를 관심 공고함에 담기. targetId는 find_programs 결과 중 saved가 false인 공고입니다.
+- UNSAVE_PROGRAM: 이미 담은 공고를 빼기. targetId는 list_saved_programs의 공고이거나 saved가 true인 공고입니다.
+- START_APPLICATION_PREPARATION: 그 공고의 신청 문서 준비를 시작하는 화면 열기. targetId는 공고입니다.
+- SET_PREPARATION_STAGE: 신청 준비 건의 진행 단계 바꾸기. targetId는 list_application_preparations의 id이고,
+  stage에 바꿀 단계(PREPARING·APPLIED·DOCUMENT_REVIEW·PRESENTATION_REVIEW·SELECTED·REJECTED)를 넣습니다.
+  지금 단계와 같은 값은 넣지 않습니다. stage는 이 실행에만 넣습니다.
+- RUN_COMBINATION_REVIEW: 이미 만들어 둔 중복 검토를 실행하기. targetId는 list_combination_reviews의 id이며,
+  최근 실행이 대기·실행 중인 검토는 제안하지 않습니다.
+도구 결과에 없는 대상은 절대 만들지 않습니다. 사용자가 상태만 물었으면 actions는 빈 목록입니다.
+제안·모집글 발행·회원 탈퇴처럼 목록에 없는 동작은 제안하지 않고 해당 화면으로 이동만 안내합니다.
+
 공통 규칙.
 - 텍스트는 answer 600, clarificationQuestion 160, searchQuery 500, reason 200자 이내이며 공백만은 안 됩니다.
   줄바꿈은 answer에만 허용하고 그 밖의 제어 문자는 쓰지 않습니다.

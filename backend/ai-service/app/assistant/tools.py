@@ -12,7 +12,8 @@ from agents import Agent, RunContextWrapper, function_tool
 
 from app.assistant.errors import ToolCallError
 from app.assistant.models import (
-    PREPARATION_DETAIL_ROUTE, PROGRAM_DETAIL_ROUTE, RECRUITMENT_DETAIL_ROUTE, REVIEW_DETAIL_ROUTE, AssistantPrincipal,
+    ACTION_TARGET_KINDS, PREPARATION_DETAIL_ROUTE, PROGRAM_DETAIL_ROUTE, RECRUITMENT_DETAIL_ROUTE, REVIEW_DETAIL_ROUTE,
+    AssistantPrincipal,
 )
 
 
@@ -32,8 +33,8 @@ IDENTIFIER_KEYS = frozenset({
 
 # 카드 부제에 쓰는 표시 이름입니다. 모델이 만든 문장이 아니라 도구 결과의 코드값을 여기서 옮깁니다.
 PROGRESS_STAGE_NAMES = {
-    "PREPARING": "준비 중", "APPLIED": "신청 완료", "DOCUMENT_REVIEW": "서류 심사",
-    "PRESENTATION_REVIEW": "발표 심사", "SELECTED": "선정", "REJECTED": "미선정",
+    "PREPARING": "준비 중", "APPLIED": "지원 완료", "DOCUMENT_REVIEW": "서류 심사",
+    "PRESENTATION_REVIEW": "발표 심사", "SELECTED": "선정", "REJECTED": "탈락",
 }
 RUN_STATUS_NAMES = {
     "QUEUED": "실행 대기", "RUNNING": "실행 중", "SUCCEEDED": "검토 완료",
@@ -271,6 +272,37 @@ _CARD_BUILDERS = {
 def _number_id(value: Any) -> str | None:
     """Core가 준 양수 식별자만 카드 id가 됩니다. bool은 int의 하위형이라 따로 막습니다."""
     return str(value) if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
+
+
+def action_catalog(results: list[ToolResult]) -> dict[str, dict[str, dict[str, Any]]]:
+    """이번 실행에서 실제로 제안할 수 있는 실행과 그 대상입니다. 도구 결과에 없는 대상은 제안할 수 없습니다.
+
+    담기·빼기는 도구 결과의 `saved`로 갈립니다. 관심 공고 목록의 공고는 이미 담긴 것이므로 빼기만 됩니다.
+    이미 실행 중인 검토는 다시 실행하지 않고, 진행 단계는 지금 단계와 같은 값으로 바꾸지 않습니다.
+    """
+    catalog: dict[str, dict[str, dict[str, Any]]] = {kind: {} for kind in ACTION_TARGET_KINDS}
+    for result in results:
+        if not isinstance(result.data, list):
+            continue
+        for item in result.data:
+            if not isinstance(item, dict):
+                continue
+            if result.name in ("list_saved_programs", "find_programs"):
+                card = _program_card(item)
+                if card is None:
+                    continue
+                saved = result.name == "list_saved_programs" or item.get("saved") is True
+                catalog["UNSAVE_PROGRAM" if saved else "SAVE_PROGRAM"][card["id"]] = {"title": card["title"]}
+                catalog["START_APPLICATION_PREPARATION"][card["id"]] = {"title": card["title"]}
+            elif result.name == "list_application_preparations":
+                identifier = _number_id(item.get("id"))
+                if identifier is not None:
+                    catalog["SET_PREPARATION_STAGE"][identifier] = {"stage": item.get("progressStage")}
+            elif result.name == "list_combination_reviews":
+                identifier = _number_id(item.get("id"))
+                if identifier is not None and item.get("latestRunStatus") not in ("QUEUED", "RUNNING"):
+                    catalog["RUN_COMBINATION_REVIEW"][identifier] = {"title": _short(item.get("title"))}
+    return catalog
 
 
 def sanitize(value: Any, depth: int = 0) -> Any:

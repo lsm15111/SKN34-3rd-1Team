@@ -71,13 +71,14 @@ def output_data():
         "accountTopic": None,
         "cards": [],
         "navigation": "NONE",
+        "actions": [],
     }
 
 
 def model_output(**overrides):
     return {
         "intent": "PROGRAM_QUESTION", "answer": None, "citations": [], "clarificationQuestion": None,
-        "searchQuery": None, "accountTopic": None, "cards": [], "navigation": "NONE", **overrides,
+        "searchQuery": None, "accountTopic": None, "cards": [], "navigation": "NONE", "actions": [], **overrides,
     }
 
 

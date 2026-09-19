@@ -5,6 +5,7 @@ import ai.govbiz.core.account.domain.Account
 import ai.govbiz.core.assistant.client.AiAssistantClient
 import ai.govbiz.core.assistant.client.dto.AiAssistantAnswerPayload
 import ai.govbiz.core.assistant.client.dto.AiAssistantAnswerRequest
+import ai.govbiz.core.assistant.client.dto.AiAssistantActionPayload
 import ai.govbiz.core.assistant.client.dto.AiAssistantCardPayload
 import ai.govbiz.core.assistant.client.dto.AiAssistantContext
 import ai.govbiz.core.assistant.client.dto.AiAssistantHelpAction
@@ -16,6 +17,9 @@ import ai.govbiz.core.assistant.client.dto.AiAssistantSession
 import ai.govbiz.core.assistant.client.dto.AiAssistantToolCallPayload
 import ai.govbiz.core.assistant.config.AssistantAgentProperties
 import ai.govbiz.core.assistant.domain.AssistantAccountTopic
+import ai.govbiz.core.assistant.domain.AssistantAction
+import ai.govbiz.core.assistant.domain.AssistantActionChoice
+import ai.govbiz.core.assistant.domain.AssistantActionKind
 import ai.govbiz.core.assistant.domain.AssistantAnswer
 import ai.govbiz.core.assistant.domain.AssistantCard
 import ai.govbiz.core.assistant.domain.AssistantCardKind
@@ -53,6 +57,7 @@ class AssistantMessageService(
     private val properties: AssistantAgentProperties,
     private val tokenService: AssistantToolTokenService,
     private val conversations: AssistantConversationRepository,
+    private val actionService: AssistantActionService,
 ) {
     fun answer(account: Account?, question: AssistantQuestion): AssistantAnswer {
         val history = conversations.recent(account?.id, question.conversationId)
@@ -130,10 +135,26 @@ class AssistantMessageService(
         if (!present.containsAll(required) || !(required + optional).containsAll(present)) invalidResponse()
         val cards = verifyCards(payload.cards)
         val navigation = payload.navigation?.let(::verifyNavigation)
-        if ((cards.isNotEmpty() || navigation != null) && (!intent.usesTools || answer == null)) invalidResponse()
+        val actions = verifyActions(payload.actions)
+        if ((cards.isNotEmpty() || navigation != null || actions.isNotEmpty()) && (!intent.usesTools || answer == null)) invalidResponse()
         if (account == null && intent.usesTools && answer != null) invalidResponse()
         verifyToolCalls(payload.toolCalls)
-        return VerifiedPayload(intent, answer, citedIds, clarification, searchQuery, accountTopic, navigation, cards)
+        return VerifiedPayload(intent, answer, citedIds, clarification, searchQuery, accountTopic, navigation, cards, actionService.verify(account, actions))
+    }
+
+    /** 실행 제안은 종류·대상 형식만 여기서 보고, 대상이 지금도 내 것인지는 [AssistantActionService]가 확인합니다. */
+    private fun verifyActions(actions: List<AiAssistantActionPayload?>?): List<AssistantActionChoice> {
+        if (actions == null) invalidResponse()
+        if (actions.size > AssistantActionService.MAX_ACTIONS || actions.any { it == null }) invalidResponse()
+        val verified = actions.map { action ->
+            val kind = AssistantActionKind.entries.firstOrNull { it.name == action!!.kind } ?: invalidResponse()
+            val targetId = action!!.targetId?.takeIf { CARD_ID.matches(it) } ?: invalidResponse()
+            val stage = action.stage?.also { if (!STAGE.matches(it)) invalidResponse() }
+            if ((stage != null) != (kind == AssistantActionKind.SET_PREPARATION_STAGE)) invalidResponse()
+            AssistantActionChoice(kind, targetId, stage)
+        }
+        if (verified.map { it.kind to it.targetId }.toSet().size != verified.size) invalidResponse()
+        return verified
     }
 
     private fun verifyToolCalls(toolCalls: List<AiAssistantToolCallPayload?>?) {
@@ -213,6 +234,7 @@ class AssistantMessageService(
             emptyList(), null, query, null,
             AssistantNavigation(AssistantAnswerTexts.OPEN_SEARCH_FOR_QUERY, InternalRoutes.CHAT),
             if (useAgentAnswer) payload.cards else emptyList(),
+            if (useAgentAnswer) payload.actions else emptyList(),
         )
     }
 
@@ -231,7 +253,7 @@ class AssistantMessageService(
     private fun accountState(payload: VerifiedPayload, account: Account?): AssistantAnswer {
         val topic = payload.accountTopic!!
         if (account != null && payload.answer != null) {
-            return AssistantAnswer(AssistantIntent.ACCOUNT_STATE, payload.answer, emptyList(), null, null, topic, payload.navigation, payload.cards)
+            return AssistantAnswer(AssistantIntent.ACCOUNT_STATE, payload.answer, emptyList(), null, null, topic, payload.navigation, payload.cards, payload.actions)
         }
         val (answer, navigation) = when {
             account == null -> AssistantAnswerTexts.loginRequired(topic) to null
@@ -259,7 +281,7 @@ class AssistantMessageService(
                 AssistantNavigation(AssistantAnswerTexts.OPEN_SAVED, InternalRoutes.SAVED_PROGRAMS)
             },
         )
-        else -> AssistantAnswer(payload.intent, payload.answer, emptyList(), null, null, null, payload.navigation, payload.cards)
+        else -> AssistantAnswer(payload.intent, payload.answer, emptyList(), null, null, null, payload.navigation, payload.cards, payload.actions)
     }
 
     private fun savedPrograms(account: Account): Pair<String, AssistantNavigation?> {
@@ -331,6 +353,7 @@ class AssistantMessageService(
         val accountTopic: AssistantAccountTopic?,
         val navigation: AssistantNavigation? = null,
         val cards: List<AssistantCard> = emptyList(),
+        val actions: List<AssistantAction> = emptyList(),
     )
 
     /** 답변 버튼·카드가 열 수 있는 내부 화면입니다. 프런트 `appPaths`의 값과 같아야 합니다. */
@@ -341,6 +364,7 @@ class AssistantMessageService(
         const val PROFILE = "/app/profile"
         const val PARTNERS = "/app/partners"
         const val PARTNER_DETAIL = "/app/partners/detail"
+        const val APPLICATION_PREPARATION_NEW = "/app/application-preparations/new"
         const val PROGRAM_DETAIL = "/app/support-programs/detail"
         const val APPLICATION_PREPARATIONS = "/app/application-preparations"
         const val COMBINATION_REVIEWS = "/app/combination-reviews"
@@ -367,6 +391,7 @@ class AssistantMessageService(
         private val UNSUPPORTED_TEXT = Regex("\\p{C}")
         private val UNSUPPORTED_LAYOUT_TEXT = Regex("[\\p{C}&&[^\\n\\r\\t]]")
         private val CARD_ID = Regex("[A-Za-z0-9_:.-]{1,80}")
+        private val STAGE = Regex("[A-Z][A-Z_]{0,39}")
         private val NUMERIC_ID = Regex("[1-9][0-9]{0,18}")
         private val SOURCE_CODE = Regex("[A-Z][A-Z0-9_]{0,39}")
     }

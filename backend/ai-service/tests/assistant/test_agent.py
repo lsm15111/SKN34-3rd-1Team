@@ -115,6 +115,45 @@ async def test_work_status_answers_come_from_the_matching_job_tool(member_reques
 
 
 @pytest.mark.anyio
+async def test_actions_must_point_at_items_the_tools_actually_returned(member_request_data, core_tools):
+    member_request_data["message"] = "예비창업패키지 담아줘"
+    for actions in (
+        # 도구 결과에 없는 공고
+        [{"kind": "SAVE_PROGRAM", "targetId": "BIZINFO:UNKNOWN", "stage": None}],
+        # 이미 담은 공고를 다시 담자는 제안
+        [{"kind": "SAVE_PROGRAM", "targetId": "BIZINFO:PBLN_000000000000001", "stage": None}],
+        # 대상 종류가 맞지 않는 실행
+        [{"kind": "RUN_COMBINATION_REVIEW", "targetId": "KSTARTUP:174520", "stage": None}],
+    ):
+        model = ScriptedModel([
+            [function_call("find_programs", {"keyword": "예비창업패키지", "region": None}, call_id="call_1")],
+            final(intent="SEARCH", searchQuery="예비창업패키지", answer="한 건을 찾았어요.", navigation="CHAT", actions=actions),
+        ])
+        with pytest.raises(AssistantAnswerError):
+            await AssistantService(agent_for(model, core_tools)).answer(AssistantAnswerRequest.model_validate(member_request_data))
+
+
+@pytest.mark.anyio
+async def test_stage_action_must_change_the_stage_and_survives_as_a_choice(member_request_data, core_tools):
+    member_request_data["message"] = "서울 AI 실증 신청 완료로 바꿔줘"
+    same_stage = ScriptedModel([
+        [function_call("list_application_preparations", {}, call_id="call_1")],
+        final(intent="ACCOUNT_STATE", accountTopic="APPLICATION_PREPARATIONS", answer="준비 중입니다.", navigation="APPLICATION_PREPARATIONS",
+              actions=[{"kind": "SET_PREPARATION_STAGE", "targetId": "31", "stage": "PREPARING"}]),
+    ])
+    with pytest.raises(AssistantAnswerError):
+        await AssistantService(agent_for(same_stage, core_tools)).answer(AssistantAnswerRequest.model_validate(member_request_data))
+
+    changed = ScriptedModel([
+        [function_call("list_application_preparations", {}, call_id="call_1")],
+        final(intent="ACCOUNT_STATE", accountTopic="APPLICATION_PREPARATIONS", answer="신청 완료로 바꿀까요?", navigation="APPLICATION_PREPARATIONS",
+              actions=[{"kind": "SET_PREPARATION_STAGE", "targetId": "31", "stage": "APPLIED"}]),
+    ])
+    response = await AssistantService(agent_for(changed, core_tools)).answer(AssistantAnswerRequest.model_validate(member_request_data))
+    assert [(action.kind, action.target_id, action.stage) for action in response.actions] == [("SET_PREPARATION_STAGE", "31", "APPLIED")]
+
+
+@pytest.mark.anyio
 async def test_search_answers_with_found_programs_and_keeps_the_search_query(member_request_data, core_tools):
     member_request_data["message"] = "서울 창업 지원금 찾아줘"
     model = ScriptedModel([

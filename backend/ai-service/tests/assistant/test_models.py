@@ -71,7 +71,7 @@ def test_rejects_invalid_outputs(data):
 def response(**overrides):
     return {
         "schemaVersion": SCHEMA_VERSION, "intent": "PRODUCT_HELP", "answer": "점수는 관련도입니다.", "citations": ["search-score-meaning"],
-        "clarificationQuestion": None, "searchQuery": None, "accountTopic": None, "cards": [], "navigation": None, "toolCalls": [],
+        "clarificationQuestion": None, "searchQuery": None, "accountTopic": None, "cards": [], "navigation": None, "actions": [], "toolCalls": [],
         **overrides,
     }
 
@@ -86,6 +86,9 @@ def test_response_revalidates_intent_fields_and_card_placement():
         response(intent="PARTNER_MATCH", answer=None, citations=[], cards=[card]),
         response(intent="PARTNER_MATCH", citations=[], cards=[{**card, "to": "https://evil.example"}]),
         response(toolCalls=[{"name": "Bad Name", "ms": 1}]),
+        response(actions=[{"kind": "SAVE_PROGRAM", "targetId": "KSTARTUP:174520", "stage": None}]),
+        response(intent="SEARCH", citations=[], searchQuery="창업", actions=[{"kind": "SET_PREPARATION_STAGE", "targetId": "31", "stage": None}]),
+        response(intent="SEARCH", citations=[], searchQuery="창업", actions=[{"kind": "SAVE_PROGRAM", "targetId": "A:1", "stage": "APPLIED"}]),
     ):
         with pytest.raises(ValidationError):
             AssistantAnswerResponse.model_validate(invalid)

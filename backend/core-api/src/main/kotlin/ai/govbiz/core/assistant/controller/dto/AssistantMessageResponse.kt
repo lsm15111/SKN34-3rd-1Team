@@ -1,5 +1,6 @@
 package ai.govbiz.core.assistant.controller.dto
 
+import ai.govbiz.core.assistant.domain.AssistantAction
 import ai.govbiz.core.assistant.domain.AssistantAnswer
 import ai.govbiz.core.assistant.domain.AssistantCard
 
@@ -16,6 +17,8 @@ data class AssistantMessageResponse(
     val accountTopic: String?,
     val navigation: AssistantNavigationResponse?,
     val cards: List<AssistantCardResponse>,
+    /** 사용자가 확인해야 실행되는 제안입니다. 화면은 기존 기능 API로 실행합니다. */
+    val actions: List<AssistantActionResponse>,
 ) {
     companion object {
         fun from(answer: AssistantAnswer) = AssistantMessageResponse(
@@ -27,6 +30,7 @@ data class AssistantMessageResponse(
             answer.accountTopic?.name,
             answer.navigation?.let { AssistantNavigationResponse(it.label, it.to) },
             answer.cards.map(AssistantCardResponse::from),
+            answer.actions.map(AssistantActionResponse::from),
         )
     }
 }
@@ -47,5 +51,24 @@ data class AssistantCardResponse(
     companion object {
         fun from(card: AssistantCard) =
             AssistantCardResponse(card.kind.name, card.id, card.title, card.subtitle, card.reason, card.to)
+    }
+}
+
+data class AssistantActionResponse(
+    val kind: String,
+    val label: String,
+    val confirm: String,
+    val sourceCode: String?,
+    val sourceProgramId: String?,
+    val preparationId: Long?,
+    val stage: String?,
+    val reviewId: Long?,
+    val to: String?,
+) {
+    companion object {
+        fun from(action: AssistantAction) = AssistantActionResponse(
+            action.kind.name, action.label, action.confirm, action.sourceCode, action.sourceProgramId,
+            action.preparationId, action.stage, action.reviewId, action.to,
+        )
     }
 }

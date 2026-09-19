@@ -33,6 +33,7 @@ def load_stub():
     (True, "중복 검토 끝났어?", "ACCOUNT_STATE", ["REVIEW", "REVIEW"], ["list_combination_reviews"]),
     (True, "리포트 오고 있어?", "ACCOUNT_STATE", [], ["get_daily_report_status"]),
     (True, "부산 수출 지원 찾아줘", "SEARCH", ["PROGRAM", "PROGRAM"], ["find_programs"]),
+    (True, "예비창업패키지 찾아서 담아줘", "SEARCH", ["PROGRAM", "PROGRAM"], ["find_programs"]),
     (False, "나한테 맞는 파트너 모집글 있어?", "PARTNER_MATCH", [], []),
     (False, "점수는 무슨 뜻이야?", "PRODUCT_HELP", [], []),
     (False, "부산 수출 지원 찾아줘", "SEARCH", [], []),
@@ -74,3 +75,5 @@ async def test_actual_compose_stub_through_agents_sdk_and_service(
     assert len(calls) == len(tools) + 1
     if not member and intent == "PARTNER_MATCH":
         assert response.answer is None and core.requests == []
+    # 동작을 부탁한 말에만 확인 버튼이 붙고, 조회만 물으면 붙지 않습니다.
+    assert [action.kind for action in response.actions] == (["SAVE_PROGRAM"] if "담아줘" in message else [])

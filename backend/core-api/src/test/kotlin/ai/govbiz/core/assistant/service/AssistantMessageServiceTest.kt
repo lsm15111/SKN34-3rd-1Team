@@ -8,6 +8,8 @@ import ai.govbiz.core.account.domain.CompanySummary
 import ai.govbiz.core.assistant.client.AiAssistantClient
 import ai.govbiz.core.assistant.client.dto.AiAssistantAnswerPayload
 import ai.govbiz.core.assistant.client.dto.AiAssistantAnswerRequest
+import ai.govbiz.core.applicationpreparation.service.ApplicationPreparationService
+import ai.govbiz.core.assistant.client.dto.AiAssistantActionPayload
 import ai.govbiz.core.assistant.client.dto.AiAssistantCardPayload
 import ai.govbiz.core.assistant.client.dto.AiAssistantContext
 import ai.govbiz.core.assistant.client.dto.AiAssistantNavigationPayload
@@ -36,9 +38,11 @@ import ai.govbiz.core.partner.domain.PartnerRecruitmentStatus
 import ai.govbiz.core.partner.domain.PartnerProposalStatus
 import ai.govbiz.core.partner.domain.PartnerProposalView
 import ai.govbiz.core.partner.service.PartnerProposalService
+import ai.govbiz.core.combinationreview.service.CombinationReviewService
 import ai.govbiz.core.supportprogram.domain.SavedSupportProgram
 import ai.govbiz.core.supportprogram.domain.SupportProgram
 import ai.govbiz.core.supportprogram.domain.SupportProgramStatus
+import ai.govbiz.core.supportprogram.repository.SupportProgramRepository
 import ai.govbiz.core.supportprogram.service.saved.SavedSupportProgramService
 import java.time.Clock
 import java.time.Instant
@@ -71,7 +75,11 @@ class AssistantMessageServiceTest {
     )
     private val catalog = AssistantHelpCatalog(listOf(scoreEntry, partnerEntry))
     private val conversations = Mockito.mock(AssistantConversationRepository::class.java)
-    private val service = AssistantMessageService(client, savedPrograms, proposals, clock, catalog, properties, tokens, conversations)
+    private val supportPrograms = Mockito.mock(SupportProgramRepository::class.java)
+    private val preparations = Mockito.mock(ApplicationPreparationService::class.java)
+    private val reviews = Mockito.mock(CombinationReviewService::class.java)
+    private val actions = AssistantActionService(savedPrograms, supportPrograms, preparations, reviews)
+    private val service = AssistantMessageService(client, savedPrograms, proposals, clock, catalog, properties, tokens, conversations, actions)
     private val conversationId = "8f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f"
     private val member = Account(7L, "member@example.com", AccountRole.USER, LocalDateTime.of(2026, 9, 1, 9, 0), null, LocalDateTime.of(2026, 9, 1, 9, 0))
     private val companyMember = member.copy(company = CompanySummary(3L, "데이터브릿지 주식회사", "1248100998"))
@@ -83,8 +91,8 @@ class AssistantMessageServiceTest {
         intent: String, answer: String? = null, citations: List<String?>? = emptyList(), clarification: String? = null,
         searchQuery: String? = null, accountTopic: String? = null, schemaVersion: String? = "govbiz-assistant-v2",
         cards: List<AiAssistantCardPayload?>? = emptyList(), navigation: AiAssistantNavigationPayload? = null,
-        toolCalls: List<AiAssistantToolCallPayload?>? = emptyList(),
-    ) = AiAssistantAnswerPayload(schemaVersion, intent, answer, citations, clarification, searchQuery, accountTopic, cards, navigation, toolCalls)
+        actions: List<AiAssistantActionPayload?>? = emptyList(), toolCalls: List<AiAssistantToolCallPayload?>? = emptyList(),
+    ) = AiAssistantAnswerPayload(schemaVersion, intent, answer, citations, clarification, searchQuery, accountTopic, cards, navigation, actions, toolCalls)
 
     private fun recruitmentCard(id: String = "21", to: String = "/app/partners/detail?recruitmentId=$id", kind: String = "RECRUITMENT") =
         AiAssistantCardPayload(kind, id, "AI 실증 참여기관 구합니다", "서울AI 주식회사 · 서울", "지역과 역할이 맞습니다.", to)
@@ -300,7 +308,7 @@ class AssistantMessageServiceTest {
         service.answer(null, question("나한테 맞는 파트너 모집글 있어?"))
         assertNull(lastSent().principal)
 
-        val withoutSecret = AssistantMessageService(client, savedPrograms, proposals, clock, catalog, AssistantAgentProperties(), AssistantToolTokenService(AssistantAgentProperties(), clock), conversations)
+        val withoutSecret = AssistantMessageService(client, savedPrograms, proposals, clock, catalog, AssistantAgentProperties(), AssistantToolTokenService(AssistantAgentProperties(), clock), conversations, actions)
         withoutSecret.answer(companyMember, question("나한테 맞는 파트너 모집글 있어?"))
         assertNull(lastSent().principal)
     }
@@ -499,6 +507,70 @@ class AssistantMessageServiceTest {
             val error = assertThrows(AiServiceCallException::class.java, { service.answer(member, question("신청 준비 어디까지?")) }, card.toString())
             assertEquals(AiServiceFailure.INVALID_RESPONSE, error.failure)
         }
+    }
+
+    @Test
+    fun executionSuggestionsBecomeConfirmButtonsWithCoreOwnedWording() {
+        `when`(supportPrograms.findPresentBySourceAndProgramId("KSTARTUP", "174520")).thenReturn(
+            ai.govbiz.core.supportprogram.domain.CatalogSupportProgram(
+                SupportProgram("174520", "KSTARTUP", "예비창업패키지", "창업진흥원", "요약", emptyList(), emptyList(), "대상", "기간",
+                    null, LocalDate.of(2026, 10, 10), SupportProgramStatus.OPEN, "K-스타트업", "https://example.com", emptyList()),
+                "2026-09-10T10:00:00",
+            ),
+        )
+        `when`(savedPrograms.isSaved(7L, "KSTARTUP", "174520")).thenReturn(false)
+        respondWith(payload(
+            "SEARCH", answer = "예비창업패키지가 모집 중입니다.", searchQuery = "예비창업패키지",
+            actions = listOf(AiAssistantActionPayload("SAVE_PROGRAM", "KSTARTUP:174520", null)),
+            toolCalls = listOf(AiAssistantToolCallPayload("find_programs", 20)),
+        ))
+
+        val answer = service.answer(member, question("예비창업패키지 담아줘"))
+
+        val action = answer.actions.single()
+        assertEquals(AssistantActionTexts.SAVE_LABEL, action.label)
+        assertEquals("KSTARTUP", action.sourceCode)
+        assertEquals("174520", action.sourceProgramId)
+    }
+
+    @Test
+    fun rejectsExecutionSuggestionsThatBreakTheContract() {
+        listOf(
+            // 종류가 없거나 모르는 값
+            payload("SEARCH", answer = "답", searchQuery = "창업", actions = listOf(AiAssistantActionPayload("DELETE_ACCOUNT", "1", null))),
+            payload("SEARCH", answer = "답", searchQuery = "창업", actions = listOf(AiAssistantActionPayload(null, "1", null))),
+            // 대상 형식이 카드 id가 아님
+            payload("SEARCH", answer = "답", searchQuery = "창업", actions = listOf(AiAssistantActionPayload("SAVE_PROGRAM", "../etc", null))),
+            // 진행 단계는 단계 변경에만 붙습니다
+            payload("SEARCH", answer = "답", searchQuery = "창업", actions = listOf(AiAssistantActionPayload("SAVE_PROGRAM", "A:1", "APPLIED"))),
+            payload("SEARCH", answer = "답", searchQuery = "창업", actions = listOf(AiAssistantActionPayload("SET_PREPARATION_STAGE", "31", null))),
+            // 같은 제안 반복, 상한 초과, 필드 자체가 빠진 응답
+            payload("SEARCH", answer = "답", searchQuery = "창업", actions = List(2) { AiAssistantActionPayload("SAVE_PROGRAM", "A:1", null) }),
+            payload("SEARCH", answer = "답", searchQuery = "창업", actions = List(3) { AiAssistantActionPayload("SAVE_PROGRAM", "A:$it", null) }),
+            payload("SEARCH", answer = "답", searchQuery = "창업", actions = null),
+            // 도구 의도가 아니거나 답이 없는 응답에는 붙을 수 없습니다
+            payload("OUT_OF_SCOPE", answer = "답", actions = listOf(AiAssistantActionPayload("SAVE_PROGRAM", "A:1", null))),
+            payload("SEARCH", searchQuery = "창업", actions = listOf(AiAssistantActionPayload("SAVE_PROGRAM", "A:1", null))),
+        ).forEach { bad ->
+            respondWith(bad)
+            val error = assertThrows(AiServiceCallException::class.java, { service.answer(member, question("창업 지원금 담아줘")) }, bad.toString())
+            assertEquals(AiServiceFailure.INVALID_RESPONSE, error.failure)
+        }
+    }
+
+    @Test
+    fun guestsNeverGetExecutionButtons() {
+        // 비로그인에게 실행 제안이 오는 응답은 답이 있든 없든 계약 위반입니다. Core는 버튼을 지우는 대신 오류로 끝냅니다.
+        listOf(
+            payload("SEARCH", searchQuery = "창업 지원금", actions = listOf(AiAssistantActionPayload("SAVE_PROGRAM", "KSTARTUP:174520", null))),
+            payload("SEARCH", answer = "담아 드릴까요?", searchQuery = "창업 지원금",
+                actions = listOf(AiAssistantActionPayload("SAVE_PROGRAM", "KSTARTUP:174520", null))),
+        ).forEach { bad ->
+            respondWith(bad)
+            val error = assertThrows(AiServiceCallException::class.java) { service.answer(null, question("창업 지원금 담아줘")) }
+            assertEquals(AiServiceFailure.INVALID_RESPONSE, error.failure)
+        }
+        Mockito.verifyNoInteractions(supportPrograms)
     }
 
     private companion object {

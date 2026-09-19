@@ -84,7 +84,7 @@ describe('helpAnswer 권한 안내', () => {
 })
 
 describe('freeTextAnswer 이동 버튼', () => {
-  const base = { citations: [], clarificationQuestion: null, searchQuery: null, accountTopic: null, cards: [] }
+  const base = { citations: [], clarificationQuestion: null, searchQuery: null, accountTopic: null, cards: [], actions: [] }
 
   it('AI가 고른 회원 화면 이동은 비로그인에게 로그인하고 여는 버튼으로 바꾼다', () => {
     const answer = bot(freeTextAnswer(

@@ -1,3 +1,5 @@
+import type { ApplicationProgressStage } from './ApplicationPreparation'
+
 /**
  * Core가 AI Service 분류를 검증해 돌려준 도우미 의도입니다. 화면은 이 값으로 말풍선 모양을 정합니다.
  * `PARTNER_MATCH`·`SAVED_PROGRAMS_QUESTION`은 Core의 도구 에이전트가 켜져 있을 때만 옵니다.
@@ -31,6 +33,23 @@ export type AssistantCard = {
   to: string
 }
 
+export type AssistantActionKind =
+  | 'SAVE_PROGRAM' | 'UNSAVE_PROGRAM' | 'START_APPLICATION_PREPARATION' | 'SET_PREPARATION_STAGE' | 'RUN_COMBINATION_REVIEW'
+
+/**
+ * 사용자가 눌러야 실행되는 제안 하나입니다. 문구와 대상은 Core가 자기 자료로 만든 값이고,
+ * 실행은 화면이 기존 기능 API로 합니다. 가이드가 대신 실행하지는 않습니다.
+ */
+export type AssistantAction =
+  | { kind: 'SAVE_PROGRAM'; label: string; confirm: string; sourceCode: string; sourceProgramId: string }
+  | { kind: 'UNSAVE_PROGRAM'; label: string; confirm: string; sourceCode: string; sourceProgramId: string }
+  | { kind: 'START_APPLICATION_PREPARATION'; label: string; confirm: string; to: string }
+  | { kind: 'SET_PREPARATION_STAGE'; label: string; confirm: string; preparationId: number; stage: ApplicationProgressStage }
+  | { kind: 'RUN_COMBINATION_REVIEW'; label: string; confirm: string; reviewId: number }
+
+/** 확인 버튼을 눌러 실제로 실행하는 제안입니다. 화면만 여는 제안(신청 문서 준비 시작)은 이동 버튼으로 답니다. */
+export type AssistantExecutableAction = Exclude<AssistantAction, { kind: 'START_APPLICATION_PREPARATION' }>
+
 /** 도우미 자유 질문 한 건의 답입니다. 의도에 따라 채워지는 필드가 다르고, `UNCLEAR`만 `answer`가 없습니다. */
 export type AssistantAnswer = {
   intent: AssistantIntent
@@ -43,4 +62,6 @@ export type AssistantAnswer = {
   navigation: AssistantNavigation | null
   /** 도구 의도의 답에만 붙는 항목 목록(최대 5장)입니다. 그 밖에는 빈 배열입니다. */
   cards: AssistantCard[]
+  /** 확인 버튼으로 보여 줄 실행 제안(최대 2개)입니다. 비로그인에게는 언제나 빈 배열입니다. */
+  actions: AssistantAction[]
 }

@@ -21,7 +21,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT / "backend/ai-service"))
 
-from app.assistant.models import AccountTopic, AssistantAnswerRequest, SCHEMA_VERSION  # noqa: E402
+from app.assistant.models import AccountTopic, ActionKind, AssistantAnswerRequest, SCHEMA_VERSION  # noqa: E402
 from app.assistant.tools import GUIDE_TOOLS  # noqa: E402
 
 HELP_CATALOG = ROOT / "backend/core-api/src/main/resources/assistant/help-catalog.json"
@@ -33,6 +33,7 @@ AGENT_ONLY_INTENTS = ["PARTNER_MATCH", "SAVED_PROGRAMS_QUESTION"]
 # 도구 목록은 에이전트 정의에서 읽습니다. 도구가 늘어도 평가 문항이 옛 이름을 쓰면 바로 걸립니다.
 TOOL_NAMES = {tool.name for tool in GUIDE_TOOLS}
 ACCOUNT_TOPICS = set(get_args(AccountTopic))
+ACTION_KINDS = set(get_args(ActionKind))
 
 
 def require(condition: bool, message: str) -> None:
@@ -70,6 +71,9 @@ def load_questions(path: Path = QUESTIONS) -> dict:
             require(case.get("session", {}).get("authenticated") is True, f"{case['id']}: agent cases are asked with a logged-in session")
             cards = case.get("expectedCards") or []
             require(isinstance(cards, list) and all(isinstance(item, str) for item in cards), f"{case['id']}: expectedCards must be a list of ids")
+            actions = case.get("expectedActions")
+            require(actions is None or (isinstance(actions, list) and set(actions) <= ACTION_KINDS),
+                    f"{case['id']}: expectedActions must be kinds within {sorted(ACTION_KINDS)}")
     return fixture
 
 
@@ -136,6 +140,13 @@ def score_agent(case: dict, output: dict | None, valid_ids: set[str]) -> dict:
     expected_cards = set(case.get("expectedCards") or [])
     result["expectedCardsIncluded"] = expected_cards <= {card.get("id") for card in cards} if expected_cards else None
     result["answered"] = bool(output.get("answer"))
+    expected_actions = case.get("expectedActions")
+    # 실행 제안은 부탁한 문항에서만, 조회만 물은 문항에서는 하나도 나오면 안 됩니다.
+    result["actions"] = sorted(action["kind"] for action in output.get("actions") or [])
+    result["actionsCorrect"] = (
+        result["actions"] == sorted(expected_actions) if expected_actions is not None
+        else (len(result["actions"]) == 0 if is_agent_case(case) else None)
+    )
     return result
 
 
@@ -149,6 +160,7 @@ def summarize_agent(results: list[dict]) -> dict:
         "cardValidityRate": _rate([item["cardsValid"] for item in scored if "cardsValid" in item]),
         "expectedCardsIncludedRate": _rate([item["expectedCardsIncluded"] for item in with_expected_cards]),
         "answeredRate": _rate([item["answered"] for item in agent_cases]),
+        "actionAccuracy": _rate([item["actionsCorrect"] for item in agent_cases if item.get("actionsCorrect") is not None]),
     }
 
 

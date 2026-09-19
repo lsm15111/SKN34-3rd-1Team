@@ -91,6 +91,15 @@ export const assistantStyles = {
   ),
   source: 'px-1 text-[10.5px] text-sample-muted',
 
+  // 실행 확인: 무엇을 실행할지 한 줄로 적고 버튼 하나를 둡니다. 한 번 누르면 잠깁니다.
+  actionCard: 'overflow-hidden rounded-xl border border-brand-primary bg-white text-[13px]',
+  actionConfirm: 'm-0 px-3 py-2.5 leading-[1.5] text-app-ink',
+  actionButton: classes(
+    'block w-full cursor-pointer border-0 border-t border-sample-border bg-brand-accent px-3 py-2.5 text-center text-[13px] font-bold text-[#066538]',
+    'hover:bg-brand-primary hover:text-white focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary',
+    'disabled:cursor-default disabled:bg-app-canvas disabled:text-sample-muted disabled:hover:text-sample-muted',
+  ),
+
   // 입력창
   composer: 'flex shrink-0 items-end gap-2 border-t border-sample-border bg-white px-3 pt-2.5 pb-3 max-[639px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]',
   input: classes(

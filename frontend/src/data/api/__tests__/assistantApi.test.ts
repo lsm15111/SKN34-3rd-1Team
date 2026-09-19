@@ -15,7 +15,7 @@ const question: AssistantQuestion = {
 }
 const answer = {
   intent: 'PRODUCT_HELP', answer: '점수는 관련도입니다.', citations: ['search-score-meaning'],
-  clarificationQuestion: null, searchQuery: null, accountTopic: null, navigation: { label: '검색 화면 열기', to: '/app/chat' }, cards: [],
+  clarificationQuestion: null, searchQuery: null, accountTopic: null, navigation: { label: '검색 화면 열기', to: '/app/chat' }, cards: [], actions: [],
 }
 
 describe('askAssistantApi', () => {
@@ -50,6 +50,29 @@ describe('askAssistantApi', () => {
     }
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ...agentAnswer, cards: Array(6).fill(card) })))
     await expect(askAssistantApi(question)).rejects.toThrow()
+  })
+
+  it('keeps confirm buttons whose target is complete and drops the ones missing it', async () => {
+    const save = {
+      kind: 'SAVE_PROGRAM', label: '관심 공고함에 담기', confirm: "'예비창업패키지'을(를) 관심 공고함에 담을까요?",
+      sourceCode: 'KSTARTUP', sourceProgramId: '174520', preparationId: null, stage: null, reviewId: null, to: null,
+    }
+    const withActions = { ...answer, intent: 'SEARCH', citations: [], searchQuery: '창업 지원금', actions: [save] }
+    const repository = new AssistantRepositoryImpl()
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(withActions)))
+    await expect(repository.ask(question)).resolves.toMatchObject({
+      answer: { actions: [{ kind: 'SAVE_PROGRAM', label: save.label, confirm: save.confirm, sourceCode: 'KSTARTUP', sourceProgramId: '174520' }] },
+    })
+
+    // 대상 값이 빠진 제안은 눌러도 아무 일도 하지 않으므로 버튼을 만들지 않습니다.
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ...withActions, actions: [{ ...save, sourceProgramId: null }] })))
+    await expect(repository.ask(question)).resolves.toMatchObject({ answer: { actions: [] } })
+
+    // 모르는 실행 종류나 바깥 경로는 답 전체를 거절합니다.
+    for (const bad of [{ ...save, kind: 'DELETE_ACCOUNT' }, { ...save, kind: 'START_APPLICATION_PREPARATION', to: 'https://evil.example' }]) {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ ...withActions, actions: [bad] })))
+      await expect(askAssistantApi(question)).rejects.toThrow()
+    }
   })
 
   it('surfaces the problem code and retry seconds of a failed response', async () => {

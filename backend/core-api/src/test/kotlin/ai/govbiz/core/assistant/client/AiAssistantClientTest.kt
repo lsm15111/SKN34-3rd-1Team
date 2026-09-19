@@ -50,6 +50,8 @@ class AiAssistantClientTest {
         assertEquals("/app/partners/detail?recruitmentId=21", payload.cards!!.single()!!.to)
         assertEquals("/app/partners", payload.navigation!!.to)
         assertEquals(listOf("get_my_company_profile", "search_partner_recruitments"), payload.toolCalls!!.map { it!!.name })
+        assertEquals("SAVE_PROGRAM", payload.actions!!.single()!!.kind)
+        assertEquals("KSTARTUP:174520", payload.actions!!.single()!!.targetId)
         assertNull(payload.clarificationQuestion)
     }
 

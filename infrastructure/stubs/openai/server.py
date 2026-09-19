@@ -71,7 +71,7 @@ def guide_output(request: dict, payload: dict) -> tuple[str, object]:
     outputs = [json.loads(item["output"]) for item in request["input"]
                if isinstance(item, dict) and item.get("type") == "function_call_output"]
     empty = {"answer": None, "citations": [], "clarificationQuestion": None, "searchQuery": None, "accountTopic": None,
-             "cards": [], "navigation": "NONE"}
+             "cards": [], "navigation": "NONE", "actions": []}
 
     def program_cards(programs: list) -> list:
         return [{"kind": "PROGRAM", "id": f"{item['sourceCode']}:{item['sourceProgramId']}", "reason": "테스트 대역이 고른 공고입니다."}
@@ -157,7 +157,11 @@ def guide_output(request: dict, payload: dict) -> tuple[str, object]:
             return "tool_calls", [("find_programs", {"keyword": query, "region": None})]
         programs = outputs[0] if isinstance(outputs[0], list) else []
         answer = f"모집 중인 공고 {len(programs)}건을 찾았어요." if programs else "지금 모집 중인 공고를 찾지 못했어요."
-        return "message", {**search, "answer": answer, "cards": program_cards(programs), "navigation": "CHAT"}
+        # "담아줘"처럼 동작을 부탁한 말에는 담기 확인 버튼을 제안합니다. 아직 담지 않은 공고만 대상입니다.
+        unsaved = [item for item in programs if item.get("saved") is not True]
+        actions = ([{"kind": "SAVE_PROGRAM", "targetId": f"{unsaved[0]['sourceCode']}:{unsaved[0]['sourceProgramId']}", "stage": None}]
+                   if unsaved and ("담아" in message or "저장해" in message) else [])
+        return "message", {**search, "answer": answer, "cards": program_cards(programs), "navigation": "CHAT", "actions": actions}
     if "날씨" in message:
         return "message", {**empty, "intent": "OUT_OF_SCOPE",
                            "answer": "날씨는 이 가이드가 답할 수 있는 범위가 아닙니다. 지원사업 검색과 화면 사용법을 물어봐 주세요."}

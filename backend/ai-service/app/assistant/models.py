@@ -14,6 +14,7 @@ MAX_HISTORY_MESSAGES = 6
 MAX_HELP_ENTRIES = 40
 MAX_CITATIONS = 3
 MAX_CARDS = 5
+MAX_ACTIONS = 2
 MAX_TOOL_CALL_REPORTS = 12
 MAX_TOOL_TOKEN_LENGTH = 400
 
@@ -82,6 +83,17 @@ NAVIGATIONS: dict[str, tuple[str, str]] = {
     "COMBINATION_REVIEWS": ("중복 검토 열기", "/app/combination-reviews"),
     "REPORTS": ("리포트 열기", "/app/reports"),
 }
+ActionKind = Literal[
+    "SAVE_PROGRAM", "UNSAVE_PROGRAM", "START_APPLICATION_PREPARATION", "SET_PREPARATION_STAGE", "RUN_COMBINATION_REVIEW",
+]
+ProgressStage = Literal["PREPARING", "APPLIED", "DOCUMENT_REVIEW", "PRESENTATION_REVIEW", "SELECTED", "REJECTED"]
+
+# 실행 제안이 가리킬 수 있는 대상 종류입니다. 대상은 이번 실행의 도구 결과에 있는 항목만 됩니다.
+ACTION_TARGET_KINDS: dict[str, str] = {
+    "SAVE_PROGRAM": "PROGRAM", "UNSAVE_PROGRAM": "PROGRAM", "START_APPLICATION_PREPARATION": "PROGRAM",
+    "SET_PREPARATION_STAGE": "PREPARATION", "RUN_COMBINATION_REVIEW": "REVIEW",
+}
+
 RECRUITMENT_DETAIL_ROUTE = "/app/partners/detail"
 PROGRAM_DETAIL_ROUTE = "/app/support-programs/detail"
 PREPARATION_DETAIL_ROUTE = "/app/application-preparations"
@@ -205,6 +217,16 @@ class AssistantCardChoice(BaseModel):
     reason: ReasonText
 
 
+class AssistantActionChoice(BaseModel):
+    """모델이 제안하는 실행입니다. 버튼 문구·경로·권한은 모델이 아니라 Core가 정하고 사용자가 눌러야 실행됩니다."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+    kind: ActionKind
+    target_id: CardId = Field(alias="targetId")
+    stage: ProgressStage | None
+
+
 class AssistantAnswerOutput(BaseModel):
     """모델의 구조화 출력입니다. 의도 하나와 그 의도의 필드, 도구 의도라면 카드·이동 버튼을 고릅니다."""
 
@@ -218,6 +240,7 @@ class AssistantAnswerOutput(BaseModel):
     account_topic: AccountTopic | None = Field(alias="accountTopic")
     cards: list[AssistantCardChoice] = Field(max_length=MAX_CARDS)
     navigation: NavigationKey
+    actions: list[AssistantActionChoice] = Field(max_length=MAX_ACTIONS)
 
     @model_validator(mode="before")
     @classmethod
@@ -238,6 +261,7 @@ class AssistantAnswerOutput(BaseModel):
         if data["intent"] not in TOOL_INTENTS or cleaned.get("answer") is None:
             cleaned["cards"] = []
             cleaned["navigation"] = "NONE"
+            cleaned["actions"] = []
         return cleaned
 
     @model_validator(mode="after")
@@ -250,8 +274,9 @@ class AssistantAnswerOutput(BaseModel):
             raise ValueError(f"{self.intent} requires {sorted(required)} and allows {sorted(optional)}")
         if len({(card.kind, card.id) for card in self.cards}) != len(self.cards):
             raise ValueError("cards must be unique")
-        if (self.cards or self.navigation != "NONE") and self.answer is None:
-            raise ValueError("cards and navigation need an answer")
+        if (self.cards or self.navigation != "NONE" or self.actions) and self.answer is None:
+            raise ValueError("cards, navigation and actions need an answer")
+        validate_actions(self.actions)
         return self
 
 
@@ -294,6 +319,7 @@ class AssistantAnswerResponse(BaseModel):
     account_topic: AccountTopic | None = Field(alias="accountTopic")
     cards: list[AssistantCard] = Field(max_length=MAX_CARDS)
     navigation: AssistantNavigation | None
+    actions: list[AssistantActionChoice] = Field(max_length=MAX_ACTIONS)
     tool_calls: list[AssistantToolCallReport] = Field(alias="toolCalls", max_length=MAX_TOOL_CALL_REPORTS)
 
     @model_validator(mode="after")
@@ -304,11 +330,21 @@ class AssistantAnswerResponse(BaseModel):
         present = present_fields(self)
         if not (required <= present <= required | optional):
             raise ValueError(f"{self.intent} requires {sorted(required)} and allows {sorted(optional)}")
-        if (self.cards or self.navigation is not None) and (self.intent not in TOOL_INTENTS or self.answer is None):
-            raise ValueError("cards and navigation belong to tool answers only")
+        if (self.cards or self.navigation is not None or self.actions) and (self.intent not in TOOL_INTENTS or self.answer is None):
+            raise ValueError("cards, navigation and actions belong to tool answers only")
         if len({(card.kind, card.id) for card in self.cards}) != len(self.cards):
             raise ValueError("cards must be unique")
+        validate_actions(self.actions)
         return self
+
+
+def validate_actions(actions: list[AssistantActionChoice]) -> None:
+    """실행 제안은 서로 달라야 하고, 진행 단계는 단계 변경에만 있습니다. 대상이 도구 결과 안인지는 Service가 봅니다."""
+    if len({(action.kind, action.target_id) for action in actions}) != len(actions):
+        raise ValueError("actions must be unique")
+    for action in actions:
+        if (action.stage is not None) != (action.kind == "SET_PREPARATION_STAGE"):
+            raise ValueError("stage belongs to SET_PREPARATION_STAGE only")
 
 
 def present_fields(output: AssistantAnswerOutput | AssistantAnswerResponse) -> frozenset[str]:

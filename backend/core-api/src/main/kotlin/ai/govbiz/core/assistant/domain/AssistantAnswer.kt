@@ -56,6 +56,39 @@ data class AssistantCard(
     val to: String,
 )
 
+/** 가이드가 제안할 수 있는 실행입니다. 사용자가 카드에서 확인해야 기존 화면과 같은 API로 실행됩니다. */
+enum class AssistantActionKind {
+    SAVE_PROGRAM,
+    UNSAVE_PROGRAM,
+    START_APPLICATION_PREPARATION,
+    SET_PREPARATION_STAGE,
+    RUN_COMBINATION_REVIEW,
+}
+
+/** AI Service가 제안한 실행입니다. 종류와 대상만 있고 문구·경로·권한은 Core가 채웁니다. */
+data class AssistantActionChoice(
+    val kind: AssistantActionKind,
+    val targetId: String,
+    val stage: String?,
+)
+
+/**
+ * 확인 버튼 하나입니다. 문구·대상 값·경로는 모델 문자열이 아니라 Core가 자기 자료에서 다시 만든 값이며,
+ * 종류에 따라 쓰는 필드가 다릅니다(공고 담기·빼기는 공고 식별자, 단계 변경은 준비 건, 검토 실행은 검토 id).
+ */
+data class AssistantAction(
+    val kind: AssistantActionKind,
+    val label: String,
+    val confirm: String,
+    val sourceCode: String? = null,
+    val sourceProgramId: String? = null,
+    val preparationId: Long? = null,
+    val stage: String? = null,
+    val reviewId: Long? = null,
+    /** 실행하지 않고 화면만 여는 제안(신청 문서 준비 시작)의 경로입니다. */
+    val to: String? = null,
+)
+
 /** 프런트 말풍선 하나에 해당하는 답입니다. 의도에 따라 채워지는 필드가 다릅니다. */
 data class AssistantAnswer(
     val intent: AssistantIntent,
@@ -69,6 +102,8 @@ data class AssistantAnswer(
     val navigation: AssistantNavigation?,
     /** 도구 에이전트가 고른 항목입니다. 도구 의도의 답에만 붙고 최대 5장입니다. */
     val cards: List<AssistantCard> = emptyList(),
+    /** 사용자가 확인해야 실행되는 제안입니다. 도구 의도의 답에만 붙고 최대 2개입니다. */
+    val actions: List<AssistantAction> = emptyList(),
 )
 
 /** 가이드 답변의 근거가 되는 도움말 한 항목입니다. Core 카탈로그(`assistant/help-catalog.json`)가 원본입니다. */

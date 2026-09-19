@@ -1,7 +1,9 @@
 import { type FormEvent, type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 
-import { type AssistantCard as AssistantCardModel, type AssistantCardButton, type AssistantMessage } from './assistantConversation'
+import {
+  type AssistantActionOffer, type AssistantCard as AssistantCardModel, type AssistantCardButton, type AssistantMessage,
+} from './assistantConversation'
 import { assistantMessages } from './assistantMessages'
 import { assistantCardTagClassName, assistantStyles as styles } from './Assistant.styles'
 import { useFloatingPopover } from '../workspace/useFloatingPopover'
@@ -120,6 +122,9 @@ export function AssistantPanel({ vm, launcherRef }: { vm: AssistantViewModel; la
                     key={message.id}
                     message={message}
                     onNavigate={onNavigate}
+                    onRunAction={vm.runAction}
+                    usedActionIds={vm.usedActionIds}
+                    busy={vm.isTyping}
                   />
                 ) : null)}
               </div>
@@ -162,9 +167,12 @@ export function AssistantPanel({ vm, launcherRef }: { vm: AssistantViewModel; la
   )
 }
 
-function AssistantBubble({ message, onNavigate }: {
+function AssistantBubble({ message, onNavigate, onRunAction, usedActionIds, busy }: {
   message: Extract<AssistantMessage, { role: 'assistant' }>
   onNavigate: (button: AssistantCardButton) => void
+  onRunAction: (offer: AssistantActionOffer) => void
+  usedActionIds: string[]
+  busy: boolean
 }) {
   return (
     <>
@@ -174,6 +182,19 @@ function AssistantBubble({ message, onNavigate }: {
         ))}
       </div>
       {message.card !== null ? <AssistantCard card={message.card} onNavigate={onNavigate} /> : null}
+      {message.actions.map((offer) => (
+        <div className={styles.actionCard} key={offer.id}>
+          <p className={styles.actionConfirm}>{offer.action.confirm}</p>
+          <button
+            className={styles.actionButton}
+            type="button"
+            disabled={busy || usedActionIds.includes(offer.id)}
+            onClick={() => onRunAction(offer)}
+          >
+            {usedActionIds.includes(offer.id) ? assistantMessages.actionDone : offer.action.label}
+          </button>
+        </div>
+      ))}
       {message.source !== null ? <span className={styles.source}>{message.source}</span> : null}
     </>
   )

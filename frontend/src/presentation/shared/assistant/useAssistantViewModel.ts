@@ -3,19 +3,27 @@ import { useLocation } from 'react-router'
 
 import { appContainer } from '../../../app/appContainer'
 import { useAppDispatch } from '../../../app/hooks'
+import type { AssistantExecutableAction } from '../../../domain/entities/AssistantAnswer'
+import type { ApplicationPreparationUseCase } from '../../../domain/usecases/ApplicationPreparationUseCase'
 import type { AskAssistantUseCase } from '../../../domain/usecases/AskAssistantUseCase'
+import type { CombinationReviewUseCase } from '../../../domain/usecases/CombinationReviewUseCase'
 import { isValidAssistantMessage } from '../../../domain/usecases/AskAssistantUseCase'
-import type { BrowseSavedSupportProgramsUseCase } from '../../../domain/usecases/SavedSupportProgramUseCases'
+import type {
+  BrowseSavedSupportProgramsUseCase, RemoveSavedSupportProgramUseCase, SaveSupportProgramUseCase,
+} from '../../../domain/usecases/SavedSupportProgramUseCases'
 import type { IsAssistantAiEnabled } from '../../../data/config/assistantAi'
 import type { KakaoChannelChatUrl } from '../../../data/config/kakaoChannel'
 import { draftChanged } from '../../features/chat/state/chatSlice'
 import { useAuthSession } from '../auth/hooks/useAuthSession'
 import { findHelpEntry } from '../help/helpContent'
 import { useReceivedProposals } from '../partner-proposal/useReceivedProposals'
+import { appPaths, combinationReviewRunResultPath, savedProgramsPath } from '../routes/appPaths'
 import {
+  type AssistantActionOffer,
   type AssistantCardButton,
   type AssistantMessage,
   type AssistantQuickReply,
+  actionResultAnswer,
   contactAnswer,
   conversationDateLabel,
   findAssistantHelpTopic,
@@ -41,6 +49,10 @@ import { assistantMessages } from './assistantMessages'
 
 type SavedProgramsUseCase = Pick<BrowseSavedSupportProgramsUseCase, 'execute'>
 type AskUseCase = Pick<AskAssistantUseCase, 'execute'>
+type SaveUseCase = Pick<SaveSupportProgramUseCase, 'execute'>
+type RemoveSavedUseCase = Pick<RemoveSavedSupportProgramUseCase, 'execute'>
+type PreparationUseCase = Pick<ApplicationPreparationUseCase, 'get' | 'updateProgress'>
+type ReviewUseCase = Pick<CombinationReviewUseCase, 'get' | 'start'>
 
 /**
  * 자유 질문은 이 시간 안에 답이 없으면 끊고 다시 시도를 안내합니다. 도구 에이전트의 관심 공고 질문은 분류 → 원문 확보(최대 6초) →
@@ -113,6 +125,10 @@ export function useAssistantViewModel(
   kakaoChannelChatUrl: KakaoChannelChatUrl = appContainer.resolve('kakaoChannelChatUrl'),
   askAssistant: AskUseCase = appContainer.resolve('askAssistantUseCase'),
   isAssistantAiEnabled: IsAssistantAiEnabled = appContainer.resolve('isAssistantAiEnabled'),
+  saveSupportProgram: SaveUseCase = appContainer.resolve('saveSupportProgramUseCase'),
+  removeSavedSupportProgram: RemoveSavedUseCase = appContainer.resolve('removeSavedSupportProgramUseCase'),
+  applicationPreparations: PreparationUseCase = appContainer.resolve('applicationPreparationUseCase'),
+  combinationReviews: ReviewUseCase = appContainer.resolve('combinationReviewUseCase'),
 ) {
   const dispatchToStore = useAppDispatch()
   const { pathname, search } = useLocation()
@@ -137,6 +153,8 @@ export function useAssistantViewModel(
   const pendingRef = useRef<AbortController | null>(null)
   const generationRef = useRef(0)
   const [hasUnread, setHasUnread] = useState(false)
+  // 이미 누른 확인 버튼입니다. 같은 제안을 두 번 실행하지 않고, 대화를 새로 시작하면 함께 비웁니다.
+  const [usedActionIds, setUsedActionIds] = useState<string[]>([])
   const [showLabel, setShowLabel] = useState(() => !readLabelShown())
   const isOpenRef = useRef(isOpen)
   isOpenRef.current = isOpen
@@ -186,6 +204,7 @@ export function useAssistantViewModel(
     setQuickReplies([])
     setStartedAt(new Date().toISOString())
     setConversationId(newConversationId())
+    setUsedActionIds([])
     writeStored(null)
   }, [cancelPending, owner])
 
@@ -221,7 +240,36 @@ export function useAssistantViewModel(
     setQuickReplies(routeReplies())
     setStartedAt(new Date().toISOString())
     setConversationId(newConversationId())
+    setUsedActionIds([])
   }, [cancelPending, routeReplies])
+
+  const executeAction = useCallback(async (action: AssistantExecutableAction, signal: AbortSignal): Promise<{ text: string; button: AssistantCardButton | null }> => {
+    switch (action.kind) {
+      case 'SAVE_PROGRAM':
+        await saveSupportProgram.execute({ sourceCode: action.sourceCode, sourceProgramId: action.sourceProgramId }, signal)
+        return { text: assistantMessages.actionSaved, button: { label: assistantMessages.savedOpen, to: appPaths.savedPrograms } }
+      case 'UNSAVE_PROGRAM':
+        await removeSavedSupportProgram.execute({ sourceCode: action.sourceCode, sourceProgramId: action.sourceProgramId }, signal)
+        return { text: assistantMessages.actionUnsaved, button: null }
+      case 'SET_PREPARATION_STAGE': {
+        const preparation = await applicationPreparations.get(action.preparationId, signal)
+        await applicationPreparations.updateProgress(
+          action.preparationId, { expectedProgressRevision: preparation.progressRevision, progressStage: action.stage }, signal,
+        )
+        return { text: assistantMessages.actionStageChanged, button: { label: assistantMessages.openPipeline, to: savedProgramsPath('pipeline') } }
+      }
+      case 'RUN_COMBINATION_REVIEW': {
+        const review = await combinationReviews.get(action.reviewId, signal)
+        const run = await combinationReviews.start(
+          action.reviewId, { expectedRevision: review.inputRevision, requestKey: crypto.randomUUID(), additionalFacts: '' }, signal,
+        )
+        return {
+          text: assistantMessages.actionReviewStarted,
+          button: { label: assistantMessages.openReviewResult, to: combinationReviewRunResultPath(action.reviewId, run.id) },
+        }
+      }
+    }
+  }, [applicationPreparations, combinationReviews, removeSavedSupportProgram, saveSupportProgram])
 
   const returnTo = `${pathname}${search}`
 
@@ -268,6 +316,35 @@ export function useAssistantViewModel(
       }
     }
   }, [aiEnabled, append, askAssistant, conversationId, pathname, returnTo, routeReplies, search, session])
+
+  /**
+   * 확인 버튼을 눌렀을 때만 실행합니다. 가이드가 대신 실행하지 않으므로 여기서 기존 기능 UseCase를 그대로 부르고,
+   * 낙관적 잠금이 필요한 변경(진행 단계·검토 실행)은 바로 직전에 지금 개정 번호를 다시 읽습니다.
+   * 결과는 말풍선으로 남기고, 실패는 감추지 않고 화면에서 직접 하도록 안내합니다.
+   */
+  const runAction = useCallback(async (offer: AssistantActionOffer) => {
+    if (pendingRef.current !== null || usedActionIds.includes(offer.id)) return
+    const controller = new AbortController()
+    pendingRef.current = controller
+    const generation = generationRef.current
+    setUsedActionIds((current) => [...current, offer.id])
+    setIsTyping(true)
+    try {
+      const result = await executeAction(offer.action, controller.signal)
+      if (generation !== generationRef.current) return
+      const answer = actionResultAnswer(result.text, result.button)
+      append([answer], answer.role === 'assistant' ? answer.followUps : [])
+    } catch {
+      if (generation !== generationRef.current) return
+      const answer = actionResultAnswer(assistantMessages.actionFailed, null, true)
+      append([answer], answer.role === 'assistant' ? answer.followUps : [])
+    } finally {
+      if (generation === generationRef.current) {
+        pendingRef.current = null
+        setIsTyping(false)
+      }
+    }
+  }, [append, executeAction, usedActionIds])
 
   /** 검색 이동 버튼은 검색 입력창에 도우미가 고른 검색어를 미리 채웁니다. 검색 자체는 사용자가 보낼 때 시작합니다. */
   const prepareNavigation = useCallback((button: AssistantCardButton) => {
@@ -355,6 +432,8 @@ export function useAssistantViewModel(
     quickReplies,
     isTyping,
     dateLabel: conversationDateLabel(startedAt, new Date()),
+    usedActionIds,
+    runAction: (offer: AssistantActionOffer) => { void runAction(offer) },
     pickQuickReply: (reply: AssistantQuickReply) => { void pickQuickReply(reply) },
     submitText: (text: string) => { void submitText(text) },
     prepareNavigation,

@@ -45,7 +45,7 @@ function deferred() {
 
 const answered = (text: string): AskAssistantResult => ({
   outcome: 'answered',
-  answer: { intent: 'OUT_OF_SCOPE', answer: text, citations: [], clarificationQuestion: null, searchQuery: null, accountTopic: null, navigation: null, cards: [] },
+  answer: { intent: 'OUT_OF_SCOPE', answer: text, citations: [], clarificationQuestion: null, searchQuery: null, accountTopic: null, navigation: null, cards: [], actions: [] },
 })
 
 describe('GovBiz 가이드 대화 안정성', () => {
@@ -238,6 +238,57 @@ describe('GovBiz 가이드 화면별 메뉴와 권한 안내', () => {
 
     fireEvent.keyDown(screen.getByRole('button', { name: assistantMessages.closeLauncher }), { key: 'Escape' })
     expect(screen.queryByRole('dialog', { name: assistantMessages.name })).toBeNull()
+  })
+})
+
+describe('GovBiz 가이드 실행 확인 버튼', () => {
+  const saveAction = {
+    kind: 'SAVE_PROGRAM' as const, label: '관심 공고함에 담기', confirm: "'예비창업패키지'을(를) 관심 공고함에 담을까요?",
+    sourceCode: 'KSTARTUP', sourceProgramId: '174520',
+  }
+  const withSaveAction: AskAssistantResult = {
+    outcome: 'answered',
+    answer: {
+      intent: 'SEARCH', answer: '예비창업패키지가 모집 중입니다.', citations: [], clarificationQuestion: null,
+      searchQuery: '창업 지원금', accountTopic: null, navigation: { label: '검색 화면에서 찾기', to: '/app/chat' },
+      cards: [], actions: [saveAction],
+    },
+  }
+
+  it('버튼을 눌렀을 때만 기존 담기 API를 부르고, 한 번 실행하면 다시 누를 수 없다', async () => {
+    vi.spyOn(appContainer.resolve('askAssistantUseCase'), 'execute').mockResolvedValue(withSaveAction)
+    const save = vi.spyOn(appContainer.resolve('saveSupportProgramUseCase'), 'execute')
+      .mockResolvedValue({ savedAt: '2026-09-19T10:00:00', program: supportPrograms[0]! })
+    renderApp('/app/chat', memberAccount)
+    const { panel, input, log } = openPanel()
+
+    type(input, '창업 지원금 찾아줘')
+    expect(await within(log).findByText(saveAction.confirm)).toBeTruthy()
+    // 답만 받은 시점에는 아직 아무것도 실행하지 않습니다.
+    expect(save).not.toHaveBeenCalled()
+
+    const button = within(panel).getByRole('button', { name: saveAction.label })
+    await act(async () => { fireEvent.click(button) })
+
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(save.mock.calls[0]![0]).toEqual({ sourceCode: 'KSTARTUP', sourceProgramId: '174520' })
+    expect(within(log).getByText(assistantMessages.actionSaved)).toBeTruthy()
+    const used = within(panel).getByRole('button', { name: assistantMessages.actionDone })
+    expect((used as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('실행이 실패하면 성공한 것처럼 말하지 않고 화면에서 직접 하도록 안내한다', async () => {
+    vi.spyOn(appContainer.resolve('askAssistantUseCase'), 'execute').mockResolvedValue(withSaveAction)
+    vi.spyOn(appContainer.resolve('saveSupportProgramUseCase'), 'execute').mockRejectedValue(new Error('500'))
+    renderApp('/app/chat', memberAccount)
+    const { panel, log } = openPanel()
+
+    type(within(panel).getByRole('textbox', { name: assistantMessages.placeholder }), '창업 지원금 찾아줘')
+    await within(log).findByText(saveAction.confirm)
+    await act(async () => { fireEvent.click(within(panel).getByRole('button', { name: saveAction.label })) })
+
+    expect(within(log).getByText(assistantMessages.actionFailed)).toBeTruthy()
+    expect(within(log).queryByText(assistantMessages.actionSaved)).toBeNull()
   })
 })
 

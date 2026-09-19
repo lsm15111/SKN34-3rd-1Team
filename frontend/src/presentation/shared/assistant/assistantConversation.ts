@@ -1,4 +1,6 @@
-import type { AssistantAnswer, AssistantCard as AssistantAnswerCard } from '../../../domain/entities/AssistantAnswer'
+import type {
+  AssistantAction, AssistantAnswer, AssistantCard as AssistantAnswerCard, AssistantExecutableAction,
+} from '../../../domain/entities/AssistantAnswer'
 import type { PartnerProposal } from '../../../domain/entities/PartnerProposal'
 import type { SavedSupportProgram } from '../../../domain/entities/SavedSupportProgram'
 import { loginPathFor, signupPathFor } from '../auth/returnPath'
@@ -53,6 +55,9 @@ export type AssistantCard = {
   buttons: AssistantCardButton[]
 }
 
+/** 말풍선 하나에 붙는 확인 버튼입니다. [id]는 한 번만 실행하도록 표시해 두는 데 씁니다. */
+export type AssistantActionOffer = { id: string; action: AssistantExecutableAction }
+
 export type AssistantMessage =
   | { id: string; role: 'user'; text: string }
   | {
@@ -65,6 +70,8 @@ export type AssistantMessage =
       tone: 'normal' | 'warn'
       /** 이 답변 뒤에 붙일 빠른 답변입니다. 비어 있으면 화면 추천으로 돌아갑니다. */
       followUps: AssistantQuickReply[]
+      /** 사용자가 눌러야 실행되는 제안입니다. 로그인 회원의 도구 답에만 붙습니다. */
+      actions: AssistantActionOffer[]
       /** 처음 열 때의 인사입니다. 자유 질문의 최근 대화에 싣지 않습니다. */
       greeting?: boolean
     }
@@ -101,6 +108,7 @@ function botMessage(
     source: options.source ?? null,
     tone: options.tone ?? 'normal',
     followUps: options.followUps ?? [],
+    actions: options.actions ?? [],
     ...(options.greeting === true ? { greeting: true } : {}),
   }
 }
@@ -256,6 +264,22 @@ const cardKindLabels: Record<AssistantAnswerCard['kind'], string> = {
   REVIEW: assistantMessages.cardReview,
 }
 
+/**
+ * 답에 실린 실행 제안을 확인 버튼으로 바꿉니다. 말풍선 안에서만 쓰는 id를 붙여 같은 제안을 두 번 실행하지 않게 합니다.
+ * 신청 문서 준비 시작은 양식을 고르는 화면을 열 뿐이라 실행이 아니라 이동 버튼으로 답니다.
+ */
+function actionOffers(actions: AssistantAction[]): AssistantActionOffer[] {
+  return actions
+    .filter((action): action is AssistantExecutableAction => action.kind !== 'START_APPLICATION_PREPARATION')
+    .map((action) => ({ id: nextId('x'), action }))
+}
+
+function actionLinks(actions: AssistantAction[], pathname: string, session: AssistantSession): AssistantCardButton[] {
+  return actions
+    .filter((action) => action.kind === 'START_APPLICATION_PREPARATION')
+    .map((action) => destinationButton(action.label, action.to, pathname, session))
+}
+
 /** 에이전트 카드를 목록 행으로 바꿉니다. 종류 태그, 제목 링크, 부제와 고른 이유 한 줄입니다. */
 function agentCardRows(cards: AssistantAnswerCard[], inApp: boolean): AssistantCardRow[] {
   return cards.map((card) => ({
@@ -278,6 +302,7 @@ export function freeTextAnswer(answer: AssistantAnswer, context: AssistantFreeTe
   const cardOf = (buttons: AssistantCardButton[], rows: AssistantCardRow[] = []): AssistantCard | null =>
     (buttons.length > 0 || rows.length > 0 ? { rows, buttons } : null)
   const agentRows = agentCardRows(answer.cards, inApp)
+  const navigationButtons: AssistantCardButton[] = navigation === null ? [] : [navigation]
   const loginButtons: AssistantCardButton[] = [
     { label: assistantMessages.login, to: loginPathFor(context.returnTo) },
     { label: assistantMessages.signup, to: signupPathFor(context.returnTo) },
@@ -307,9 +332,10 @@ export function freeTextAnswer(answer: AssistantAnswer, context: AssistantFreeTe
     case 'ACCOUNT_STATE': {
       const source = accountTopicSources[answer.accountTopic ?? 'COMPANY_PROFILE']
       return botMessage([answer.answer ?? ''], {
-        card: cardOf(context.session.isAuthenticated ? (navigation === null ? [] : [navigation]) : loginButtons, context.session.isAuthenticated ? agentRows : []),
+        card: cardOf(context.session.isAuthenticated ? [...navigationButtons, ...actionLinks(answer.actions, context.pathname, context.session)] : loginButtons, context.session.isAuthenticated ? agentRows : []),
         source: context.session.isAuthenticated ? (agentRows.length > 0 ? assistantMessages.aiToolSource(source) : source) : null,
         followUps: [otherQuestionReply],
+        actions: context.session.isAuthenticated ? actionOffers(answer.actions) : [],
       })
     }
     case 'PARTNER_MATCH':
@@ -317,17 +343,22 @@ export function freeTextAnswer(answer: AssistantAnswer, context: AssistantFreeTe
       // 도구 에이전트의 답입니다. 비로그인이면 Core가 로그인 안내를 보내므로 로그인 버튼을 붙입니다.
       const basis = answer.intent === 'PARTNER_MATCH' ? assistantMessages.profileSource : assistantMessages.savedSource
       return botMessage([answer.answer ?? ''], {
-        card: cardOf(context.session.isAuthenticated ? (navigation === null ? [] : [navigation]) : loginButtons, context.session.isAuthenticated ? agentRows : []),
+        card: cardOf(context.session.isAuthenticated ? [...navigationButtons, ...actionLinks(answer.actions, context.pathname, context.session)] : loginButtons, context.session.isAuthenticated ? agentRows : []),
         source: context.session.isAuthenticated ? assistantMessages.aiToolSource(basis) : null,
         followUps: [otherQuestionReply],
+        actions: context.session.isAuthenticated ? actionOffers(answer.actions) : [],
       })
     }
     case 'SEARCH':
       // 로그인 회원에게는 가이드가 찾은 공고 카드가 함께 옵니다. 검색 자체는 버튼을 눌러 검색 화면에서 실행합니다.
       return botMessage([answer.answer ?? ''], {
-        card: cardOf(navigation === null ? [] : [{ ...navigation, searchQuery: answer.searchQuery ?? undefined }], agentRows),
+        card: cardOf([
+          ...(navigation === null ? [] : [{ ...navigation, searchQuery: answer.searchQuery ?? undefined }]),
+          ...(context.session.isAuthenticated ? actionLinks(answer.actions, context.pathname, context.session) : []),
+        ], agentRows),
         source: agentRows.length > 0 ? assistantMessages.searchSource : null,
         followUps: [otherQuestionReply],
+        actions: context.session.isAuthenticated ? actionOffers(answer.actions) : [],
       })
     case 'PROGRAM_QUESTION': {
       const identity = programIdentityFrom(context.pathname, context.search)
@@ -339,6 +370,18 @@ export function freeTextAnswer(answer: AssistantAnswer, context: AssistantFreeTe
     case 'OUT_OF_SCOPE':
       return botMessage([answer.answer ?? ''], { source: assistantMessages.aiSource, followUps: [otherQuestionReply] })
   }
+}
+
+/**
+ * 확인 버튼을 눌러 실행한 결과입니다. 실제로 일어난 일만 적고, 이어서 볼 화면이 있으면 버튼 하나를 답니다.
+ * 실패하면 무슨 일이 있었는지 감추지 않고 해당 화면에서 직접 하도록 안내합니다.
+ */
+export function actionResultAnswer(text: string, button: AssistantCardButton | null, failed = false): AssistantMessage {
+  return botMessage([text], {
+    card: button === null ? null : { rows: [], buttons: [button] },
+    tone: failed ? 'warn' : 'normal',
+    followUps: [otherQuestionReply],
+  })
 }
 
 /** 자유 질문에 답을 받지 못했을 때입니다. 같은 질문을 다시 보내는 알약을 붙입니다. */

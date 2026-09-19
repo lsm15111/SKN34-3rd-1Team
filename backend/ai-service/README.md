@@ -174,7 +174,9 @@ ANSWERED는 비어 있지 않은 answer와 빈 updates, null 질문을 반환합
 `ACCOUNT_STATE`의 `accountTopic`은 `SAVED_PROGRAMS`·`RECEIVED_PROPOSALS`·`COMPANY_PROFILE`·`APPLICATION_PREPARATIONS`·
 `COMBINATION_REVIEWS`·`DAILY_REPORT`이고, 각 영역마다 도구 하나만 부릅니다. `SEARCH`는 `find_programs`로 모집 중인 공고를 찾아
 `answer`와 공고 카드를 채우되 `searchQuery`는 항상 채웁니다(검색 실행은 화면이 합니다). 카드 종류는 `RECRUITMENT`·`PROGRAM`·
-`PREPARATION`·`REVIEW`입니다.
+`PREPARATION`·`REVIEW`입니다. `actions`에는 `{kind, targetId, stage?}`만 담고(최대 2개) 버튼 문구·권한은 Core가 정합니다.
+실행 제안의 대상도 카드와 같이 이번 실행의 도구 결과 안에 있어야 하며(`action_catalog`), 이미 담은 공고를 또 담거나
+지금과 같은 단계로 바꾸자는 제안, 실행 중인 검토를 다시 실행하자는 제안은 답 전체를 오류로 끝냅니다.
 
 ```text
 HTTP API → AssistantService → AssistantAgent(Runner.run, max_turns = 도구 상한 + 1)

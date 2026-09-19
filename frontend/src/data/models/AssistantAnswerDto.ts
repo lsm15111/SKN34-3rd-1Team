@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
-import type { AssistantAnswer } from '../../domain/entities/AssistantAnswer'
+import { applicationProgressStages } from '../../domain/entities/ApplicationPreparation'
+import type { AssistantAction, AssistantAnswer } from '../../domain/entities/AssistantAnswer'
 
 export const assistantIntentSchema = z.enum([
   'PRODUCT_HELP', 'ACCOUNT_STATE', 'SEARCH', 'PROGRAM_QUESTION', 'OUT_OF_SCOPE', 'UNCLEAR', 'PARTNER_MATCH', 'SAVED_PROGRAMS_QUESTION',
@@ -27,6 +28,48 @@ export const assistantCardDtoSchema = z.object({
   to: z.string().regex(/^\/app\/[A-Za-z0-9/_-]+(\?[A-Za-z0-9_=&%.:+-]*)?$/),
 })
 
+export const assistantActionKindSchema = z.enum([
+  'SAVE_PROGRAM', 'UNSAVE_PROGRAM', 'START_APPLICATION_PREPARATION', 'SET_PREPARATION_STAGE', 'RUN_COMBINATION_REVIEW',
+])
+
+/**
+ * 확인 버튼 하나입니다. Core가 종류마다 필요한 값만 채우므로 여기서는 느슨하게 받고, 종류에 맞지 않는 제안은
+ * [toAssistantAction]이 버립니다. 실행 대상은 화면이 기존 API에 그대로 넘깁니다.
+ */
+export const assistantActionDtoSchema = z.object({
+  kind: assistantActionKindSchema,
+  label: z.string().trim().min(1).max(80),
+  confirm: z.string().trim().min(1).max(200),
+  sourceCode: z.string().regex(/^[A-Z][A-Z0-9_]{0,39}$/).nullable(),
+  sourceProgramId: z.string().trim().min(1).max(255).nullable(),
+  preparationId: z.number().int().positive().nullable(),
+  stage: z.enum(applicationProgressStages).nullable(),
+  reviewId: z.number().int().positive().nullable(),
+  to: z.string().regex(/^\/app\/[A-Za-z0-9/_-]+(\?[A-Za-z0-9_=&%.:+-]*)?$/).nullable(),
+})
+
+export type AssistantActionDto = z.infer<typeof assistantActionDtoSchema>
+
+/** 종류에 필요한 값이 빠진 제안은 버튼을 만들지 않습니다. 눌러도 아무 일도 하지 않는 버튼을 두지 않기 위해서입니다. */
+export function toAssistantAction(dto: AssistantActionDto): AssistantAction | null {
+  const common = { label: dto.label, confirm: dto.confirm }
+  switch (dto.kind) {
+    case 'SAVE_PROGRAM':
+    case 'UNSAVE_PROGRAM':
+      return dto.sourceCode === null || dto.sourceProgramId === null
+        ? null
+        : { ...common, kind: dto.kind, sourceCode: dto.sourceCode, sourceProgramId: dto.sourceProgramId }
+    case 'START_APPLICATION_PREPARATION':
+      return dto.to === null ? null : { ...common, kind: dto.kind, to: dto.to }
+    case 'SET_PREPARATION_STAGE':
+      return dto.preparationId === null || dto.stage === null
+        ? null
+        : { ...common, kind: dto.kind, preparationId: dto.preparationId, stage: dto.stage }
+    case 'RUN_COMBINATION_REVIEW':
+      return dto.reviewId === null ? null : { ...common, kind: dto.kind, reviewId: dto.reviewId }
+  }
+}
+
 export const assistantAnswerDtoSchema = z.object({
   intent: assistantIntentSchema,
   answer: z.string().trim().min(1).max(600).nullable(),
@@ -36,6 +79,7 @@ export const assistantAnswerDtoSchema = z.object({
   accountTopic: assistantAccountTopicSchema.nullable(),
   navigation: assistantNavigationDtoSchema.nullable(),
   cards: z.array(assistantCardDtoSchema).max(5),
+  actions: z.array(assistantActionDtoSchema).max(2),
 })
 
 export type AssistantAnswerDto = z.infer<typeof assistantAnswerDtoSchema>
@@ -50,5 +94,6 @@ export function toAssistantAnswer(dto: AssistantAnswerDto): AssistantAnswer {
     accountTopic: dto.accountTopic,
     navigation: dto.navigation === null ? null : { label: dto.navigation.label, to: dto.navigation.to },
     cards: dto.cards.map((card) => ({ kind: card.kind, id: card.id, title: card.title, subtitle: card.subtitle, reason: card.reason, to: card.to })),
+    actions: dto.actions.map(toAssistantAction).filter((action): action is AssistantAction => action !== null),
   }
 }

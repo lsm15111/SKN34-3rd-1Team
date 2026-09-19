@@ -3,10 +3,10 @@ from pydantic import ValidationError
 from app.assistant.agent import AssistantAgent
 from app.assistant.errors import AssistantAnswerError
 from app.assistant.models import (
-    MAX_TOOL_CALL_REPORTS, NAVIGATIONS, SCHEMA_VERSION, TOOL_INTENTS, AssistantAnswerOutput, AssistantAnswerRequest,
-    AssistantAnswerResponse, AssistantCard, AssistantNavigation, AssistantToolCallReport,
+    MAX_TOOL_CALL_REPORTS, NAVIGATIONS, SCHEMA_VERSION, TOOL_INTENTS, AssistantActionChoice, AssistantAnswerOutput,
+    AssistantAnswerRequest, AssistantAnswerResponse, AssistantCard, AssistantNavigation, AssistantToolCallReport,
 )
-from app.assistant.tools import ToolResult, card_catalog
+from app.assistant.tools import ToolResult, action_catalog, card_catalog
 
 
 class AssistantService:
@@ -28,7 +28,7 @@ class AssistantService:
             output = AssistantAnswerOutput.model_validate(output.model_dump(by_alias=True))
             if not set(output.citations) <= request.help_entry_ids():
                 raise AssistantAnswerError("citation outside the help entries")
-            answer, cards, navigation = output.answer, [], None
+            answer, cards, navigation, actions = output.answer, [], None, []
             if output.intent in TOOL_INTENTS:
                 grounded = (
                     request.principal is not None and bool(results)
@@ -38,12 +38,14 @@ class AssistantService:
                 if grounded:
                     cards = verified_cards(output, results)
                     navigation = _navigation(output.navigation)
+                    actions = verified_actions(output, results)
                 else:
                     answer = None
             response = AssistantAnswerResponse(
                 schemaVersion=SCHEMA_VERSION, intent=output.intent, answer=answer, citations=output.citations,
                 clarificationQuestion=output.clarification_question, searchQuery=output.search_query,
                 accountTopic=output.account_topic, cards=cards, navigation=navigation if answer is not None else None,
+                actions=actions if answer is not None else [],
                 toolCalls=[AssistantToolCallReport(name=result.name, ms=result.ms) for result in results][:MAX_TOOL_CALL_REPORTS],
             )
             return AssistantAnswerResponse.model_validate(response.model_dump(by_alias=True))
@@ -61,6 +63,19 @@ def verified_cards(output: AssistantAnswerOutput, results: list[ToolResult]) -> 
             raise AssistantAnswerError("card outside the tool results")
         cards.append(AssistantCard(**base, reason=choice.reason))
     return cards
+
+
+def verified_actions(output: AssistantAnswerOutput, results: list[ToolResult]) -> list[AssistantActionChoice]:
+    """실행 제안의 대상이 전부 이번 실행의 도구 결과 안에 있어야 합니다. 하나라도 없으면 답 전체를 오류로 끝냅니다."""
+    catalog = action_catalog(results)
+    for action in output.actions:
+        target = catalog.get(action.kind, {}).get(action.target_id)
+        if target is None:
+            raise AssistantAnswerError("action outside the tool results")
+        # 지금과 같은 단계로 바꾸자는 제안은 아무 일도 하지 않는 버튼이 됩니다.
+        if action.kind == "SET_PREPARATION_STAGE" and action.stage == target.get("stage"):
+            raise AssistantAnswerError("stage action does not change the stage")
+    return list(output.actions)
 
 
 def _navigation(key: str) -> AssistantNavigation | None:
