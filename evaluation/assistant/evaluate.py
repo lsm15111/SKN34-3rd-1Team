@@ -220,7 +220,9 @@ async def run_live(prepared: list[tuple[dict, AssistantAnswerRequest]]) -> tuple
     from app.assistant.service import AssistantService
     from app.assistant.tools import CoreToolClient
     from app.config import Settings
-    from agent_fixtures import RECRUITMENT_IDS, SAVED_PROGRAM_IDS, SECRET, FakeCoreTools
+    from agent_fixtures import (
+        FOUND_PROGRAM_IDS, PREPARATION_IDS, RECRUITMENT_IDS, REVIEW_IDS, SAVED_PROGRAM_IDS, SECRET, FakeCoreTools,
+    )
 
     require(bool(os.environ.get("OPENAI_API_KEY")), "OPENAI_API_KEY is required for --live")
     settings = Settings.from_environment()
@@ -235,7 +237,7 @@ async def run_live(prepared: list[tuple[dict, AssistantAnswerRequest]]) -> tuple
         max_tool_calls=settings.assistant_agent_max_tool_calls,
         reasoning_effort=settings.openai_assistant_reasoning_effort,
     ))
-    valid_ids = RECRUITMENT_IDS | SAVED_PROGRAM_IDS
+    valid_ids = RECRUITMENT_IDS | SAVED_PROGRAM_IDS | FOUND_PROGRAM_IDS | PREPARATION_IDS | REVIEW_IDS
     results, latencies = [], []
     try:
         for case, request in prepared:

@@ -1,0 +1,421 @@
+{
+  "schemaVersion": "assistant-intent-eval-report-v2",
+  "generatedAt": "2026-09-19T06:52:21.997925+00:00",
+  "dataType": "synthetic",
+  "referenceSource": "ai-authored",
+  "questionsSha256": "7b14e7832fa1c7c3892b071617f6df4197b3535d3f14fb6e1d19cf25bea64de1",
+  "helpCatalogSha256": "ad2e7508e9b8a02a00f596aa2c8cf9f4b93255baf72156e1ebf8a77faebee898",
+  "helpEntryCount": 14,
+  "selectedCases": 14,
+  "mode": "live",
+  "model": "gpt-5.6-luna",
+  "reasoningEffort": "low",
+  "maxToolCalls": 3,
+  "meanLatencyMs": 3722,
+  "summary": {
+    "cases": 14,
+    "scored": 14,
+    "errors": 0,
+    "intentAccuracy": 1.0,
+    "helpCitationAccuracy": 1.0,
+    "accountTopicAccuracy": 1.0,
+    "abstainRateOnUnanswerable": null,
+    "falseAbstainRateOnAnswerable": 0.0,
+    "perIntent": {
+      "PRODUCT_HELP": {
+        "total": 1,
+        "correct": 1
+      },
+      "ACCOUNT_STATE": {
+        "total": 8,
+        "correct": 8
+      },
+      "SEARCH": {
+        "total": 3,
+        "correct": 3
+      },
+      "PROGRAM_QUESTION": {
+        "total": 0,
+        "correct": 0
+      },
+      "OUT_OF_SCOPE": {
+        "total": 0,
+        "correct": 0
+      },
+      "UNCLEAR": {
+        "total": 0,
+        "correct": 0
+      },
+      "PARTNER_MATCH": {
+        "total": 1,
+        "correct": 1
+      },
+      "SAVED_PROGRAMS_QUESTION": {
+        "total": 1,
+        "correct": 1
+      }
+    },
+    "perSplit": {
+      "dev": {
+        "total": 9,
+        "intentAccuracy": 1.0
+      },
+      "heldout": {
+        "total": 5,
+        "intentAccuracy": 1.0
+      }
+    },
+    "agentCases": 13,
+    "toolSelectionAccuracy": 1.0,
+    "cardValidityRate": 1.0,
+    "expectedCardsIncludedRate": 1.0,
+    "answeredRate": 1.0,
+    "actionAccuracy": 1.0
+  },
+  "confusion": {
+    "PRODUCT_HELP": {
+      "PRODUCT_HELP": 1
+    },
+    "SEARCH": {
+      "SEARCH": 3
+    },
+    "PARTNER_MATCH": {
+      "PARTNER_MATCH": 1
+    },
+    "SAVED_PROGRAMS_QUESTION": {
+      "SAVED_PROGRAMS_QUESTION": 1
+    },
+    "ACCOUNT_STATE": {
+      "ACCOUNT_STATE": 8
+    }
+  },
+  "results": [
+    {
+      "id": "H02-1",
+      "split": "dev",
+      "expectedIntent": "PRODUCT_HELP",
+      "intent": "PRODUCT_HELP",
+      "intentCorrect": true,
+      "citationCorrect": true,
+      "accountTopicCorrect": null,
+      "abstained": false,
+      "error": null,
+      "mode": "classify",
+      "tools": [],
+      "toolsCorrect": null,
+      "cardCount": 0,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [],
+      "actionsCorrect": null,
+      "latencyMs": 4427
+    },
+    {
+      "id": "S02",
+      "split": "dev",
+      "expectedIntent": "SEARCH",
+      "intent": "SEARCH",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": null,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "find_programs"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 2,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [],
+      "actionsCorrect": true,
+      "latencyMs": 5055
+    },
+    {
+      "id": "M01",
+      "split": "dev",
+      "expectedIntent": "PARTNER_MATCH",
+      "intent": "PARTNER_MATCH",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": null,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "get_my_company_profile",
+        "search_partner_recruitments"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 1,
+      "cardsValid": true,
+      "expectedCardsIncluded": true,
+      "answered": true,
+      "actions": [],
+      "actionsCorrect": true,
+      "latencyMs": 6234
+    },
+    {
+      "id": "D01",
+      "split": "dev",
+      "expectedIntent": "SAVED_PROGRAMS_QUESTION",
+      "intent": "SAVED_PROGRAMS_QUESTION",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": null,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "list_saved_programs"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 3,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [],
+      "actionsCorrect": true,
+      "latencyMs": 5435
+    },
+    {
+      "id": "T01",
+      "split": "dev",
+      "expectedIntent": "ACCOUNT_STATE",
+      "intent": "ACCOUNT_STATE",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": true,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "list_saved_programs"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 0,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [],
+      "actionsCorrect": true,
+      "latencyMs": 3293
+    },
+    {
+      "id": "T04",
+      "split": "heldout",
+      "expectedIntent": "ACCOUNT_STATE",
+      "intent": "ACCOUNT_STATE",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": true,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "get_proposals_summary"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 0,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [],
+      "actionsCorrect": true,
+      "latencyMs": 2517
+    },
+    {
+      "id": "T05",
+      "split": "dev",
+      "expectedIntent": "ACCOUNT_STATE",
+      "intent": "ACCOUNT_STATE",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": true,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "list_application_preparations"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 2,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [],
+      "actionsCorrect": true,
+      "latencyMs": 3024
+    },
+    {
+      "id": "T06",
+      "split": "heldout",
+      "expectedIntent": "ACCOUNT_STATE",
+      "intent": "ACCOUNT_STATE",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": true,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "list_application_preparations"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 2,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [],
+      "actionsCorrect": true,
+      "latencyMs": 2790
+    },
+    {
+      "id": "T07",
+      "split": "dev",
+      "expectedIntent": "ACCOUNT_STATE",
+      "intent": "ACCOUNT_STATE",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": true,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "list_combination_reviews"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 2,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [],
+      "actionsCorrect": true,
+      "latencyMs": 3900
+    },
+    {
+      "id": "T08",
+      "split": "heldout",
+      "expectedIntent": "ACCOUNT_STATE",
+      "intent": "ACCOUNT_STATE",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": true,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "get_daily_report_status"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 0,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [],
+      "actionsCorrect": true,
+      "latencyMs": 2613
+    },
+    {
+      "id": "S04",
+      "split": "heldout",
+      "expectedIntent": "SEARCH",
+      "intent": "SEARCH",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": null,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "find_programs"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 2,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [],
+      "actionsCorrect": true,
+      "latencyMs": 3218
+    },
+    {
+      "id": "X01",
+      "split": "dev",
+      "expectedIntent": "SEARCH",
+      "intent": "SEARCH",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": null,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "find_programs"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 2,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [
+        "SAVE_PROGRAM"
+      ],
+      "actionsCorrect": true,
+      "latencyMs": 3717
+    },
+    {
+      "id": "X02",
+      "split": "dev",
+      "expectedIntent": "ACCOUNT_STATE",
+      "intent": "ACCOUNT_STATE",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": true,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "list_application_preparations"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 1,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [
+        "SET_PREPARATION_STAGE"
+      ],
+      "actionsCorrect": true,
+      "latencyMs": 2891
+    },
+    {
+      "id": "X03",
+      "split": "heldout",
+      "expectedIntent": "ACCOUNT_STATE",
+      "intent": "ACCOUNT_STATE",
+      "intentCorrect": true,
+      "citationCorrect": null,
+      "accountTopicCorrect": true,
+      "abstained": false,
+      "error": null,
+      "mode": "agent",
+      "tools": [
+        "list_combination_reviews"
+      ],
+      "toolsCorrect": true,
+      "cardCount": 1,
+      "cardsValid": true,
+      "expectedCardsIncluded": null,
+      "answered": true,
+      "actions": [
+        "RUN_COMBINATION_REVIEW"
+      ],
+      "actionsCorrect": true,
+      "latencyMs": 3000
+    }
+  ]
+}
